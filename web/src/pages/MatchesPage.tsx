@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, type KeyboardEvent, type MouseEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 
@@ -11,6 +11,8 @@ import { formatCompactDateTime, formatDuration } from "../lib/format";
 import type { Match } from "../lib/types";
 
 const columnHelper = createColumnHelper<Match>();
+const ROW_INTERACTIVE_SELECTOR =
+  "a, button, input, select, textarea, summary, [role='button'], [role='link']";
 
 function formatBestOf(value?: Match["bestOf"]): string {
   if (value === "bo3") return "Bo3";
@@ -24,7 +26,14 @@ function formatPlayDraw(value?: Match["playDraw"]): string {
   return "-";
 }
 
+function targetIsInteractive(target: EventTarget | null, currentTarget: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  const interactiveTarget = target.closest(ROW_INTERACTIVE_SELECTOR);
+  return interactiveTarget != null && interactiveTarget !== currentTarget;
+}
+
 export function MatchesPage() {
+  const navigate = useNavigate();
   const { data, isLoading, error } = useQuery({
     queryKey: ["matches"],
     queryFn: () => api.matches(1000),
@@ -94,15 +103,6 @@ export function MatchesPage() {
         header: "Reason",
         cell: (info) => info.getValue() || "-",
       }),
-      columnHelper.display({
-        id: "details",
-        header: "Details",
-        cell: (info) => (
-          <Link className="text-link" to={`/matches/${info.row.original.id}`}>
-            View
-          </Link>
-        ),
-      }),
     ],
     [],
   );
@@ -112,6 +112,38 @@ export function MatchesPage() {
     columns,
     getCoreRowModel: getCoreRowModel(),
   });
+
+  function openMatchDetails(matchId: Match["id"], newTab = false) {
+    const href = `/matches/${matchId}`;
+    if (newTab) {
+      window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    navigate(href);
+  }
+
+  function handleRowClick(event: MouseEvent<HTMLTableRowElement>, matchId: Match["id"]) {
+    if (event.defaultPrevented || targetIsInteractive(event.target, event.currentTarget)) return;
+    openMatchDetails(matchId, event.metaKey || event.ctrlKey);
+  }
+
+  function handleRowAuxClick(event: MouseEvent<HTMLTableRowElement>, matchId: Match["id"]) {
+    if (
+      event.defaultPrevented ||
+      targetIsInteractive(event.target, event.currentTarget) ||
+      event.button !== 1
+    ) {
+      return;
+    }
+    openMatchDetails(matchId, true);
+  }
+
+  function handleRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, matchId: Match["id"]) {
+    if (event.defaultPrevented || targetIsInteractive(event.target, event.currentTarget)) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openMatchDetails(matchId);
+  }
 
   if (isLoading) return <StatusMessage>Loading matches…</StatusMessage>;
   if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
@@ -137,7 +169,15 @@ export function MatchesPage() {
           </thead>
           <tbody>
             {table.getRowModel().rows.map((row) => (
-              <tr key={row.id}>
+              <tr
+                key={row.id}
+                className="data-table-row-link"
+                onClick={(event) => handleRowClick(event, row.original.id)}
+                onAuxClick={(event) => handleRowAuxClick(event, row.original.id)}
+                onKeyDown={(event) => handleRowKeyDown(event, row.original.id)}
+                role="link"
+                tabIndex={0}
+              >
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
                 ))}

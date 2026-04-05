@@ -3,11 +3,26 @@ import { useQuery } from "@tanstack/react-query";
 
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
-import { formatDateTime, pct } from "../lib/format";
+import { pct } from "../lib/format";
+import type { DeckSummary, DraftSession } from "../lib/types";
 
 const DRAFT_EVENT_DATE_PATTERN = /_(\d{4})(\d{2})(\d{2})$/;
+const DRAFT_EVENT_PATTERN = /^(QuickDraft|PremierDraft|TraditionalDraft|BotDraft|Sealed|PremierSealed|TraditionalSealed|PlayerDraft)_([A-Z0-9]+)(?:_(\d{8}))?$/;
 
-function getDraftDeckDateValue(eventName?: string | null): number | null {
+function parseDateValue(timestamp?: string | null): number | null {
+  if (!timestamp) {
+    return null;
+  }
+
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.getTime();
+}
+
+function parseEventDateValue(eventName?: string | null): number | null {
   const match = eventName?.match(DRAFT_EVENT_DATE_PATTERN);
   if (!match) {
     return null;
@@ -17,16 +32,84 @@ function getDraftDeckDateValue(eventName?: string | null): number | null {
   return Date.UTC(Number(year), Number(month) - 1, Number(day));
 }
 
-function formatDraftDeckDate(eventName?: string | null): string {
-  const dateValue = getDraftDeckDateValue(eventName);
-  if (dateValue == null) {
+function parseDraftEvent(eventName?: string | null): { typeLabel: string; setCode: string } | null {
+  const match = eventName?.match(DRAFT_EVENT_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  const [, rawType, setCode] = match;
+  const typeLabel =
+    {
+      QuickDraft: "Quick",
+      PremierDraft: "Premier",
+      TraditionalDraft: "Traditional",
+      BotDraft: "Bot",
+      Sealed: "Sealed",
+      PremierSealed: "Premier Sealed",
+      TraditionalSealed: "Traditional Sealed",
+      PlayerDraft: "Player",
+    }[rawType] ?? rawType;
+
+  return {
+    typeLabel,
+    setCode,
+  };
+}
+
+function getDraftSessionDateValue(draft: DraftSession): number | null {
+  return parseDateValue(draft.startedAt) ?? parseDateValue(draft.completedAt) ?? parseEventDateValue(draft.eventName);
+}
+
+function formatDraftSessionDate(draft: DraftSession): string {
+  const timestamp = draft.startedAt || draft.completedAt;
+  const parsedTimestamp = parseDateValue(timestamp);
+  if (parsedTimestamp != null && timestamp) {
+    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(timestamp));
+  }
+
+  const eventDateValue = parseEventDateValue(draft.eventName);
+  if (eventDateValue != null) {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeZone: "UTC",
+    }).format(new Date(eventDateValue));
+  }
+
+  return "-";
+}
+
+function formatDraftSessionType(draft: DraftSession): string {
+  return parseDraftEvent(draft.eventName)?.typeLabel ?? (draft.isBotDraft ? "Bot" : "Player");
+}
+
+function formatDraftSessionSet(draft: DraftSession): string {
+  const parsed = parseDraftEvent(draft.eventName);
+  if (!parsed) {
+    return "-";
+  }
+
+  return parsed.setCode;
+}
+
+function getDraftDeckTimestamp(deck: DeckSummary): number | null {
+  return parseDateValue(deck.firstPlayedAt) ?? parseDateValue(deck.lastUpdatedAt);
+}
+
+function formatDraftDeckDate(deck: DeckSummary): string {
+  const timestamp = deck.firstPlayedAt || deck.lastUpdatedAt;
+  if (!timestamp) {
+    return "-";
+  }
+
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
     return "-";
   }
 
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
-    timeZone: "UTC",
-  }).format(new Date(dateValue));
+  }).format(date);
 }
 
 export function DraftsPage() {
@@ -40,8 +123,8 @@ export function DraftsPage() {
   });
 
   const draftDecks = [...(draftDecksQuery.data ?? [])].sort((a, b) => {
-    const aDate = getDraftDeckDateValue(a.eventName);
-    const bDate = getDraftDeckDateValue(b.eventName);
+    const aDate = getDraftDeckTimestamp(a);
+    const bDate = getDraftDeckTimestamp(b);
 
     if (aDate != null && bDate != null && aDate !== bDate) {
       return bDate - aDate;
@@ -60,7 +143,22 @@ export function DraftsPage() {
   if (draftsQuery.error) return <StatusMessage tone="error">{(draftsQuery.error as Error).message}</StatusMessage>;
   if (draftDecksQuery.error) return <StatusMessage tone="error">{(draftDecksQuery.error as Error).message}</StatusMessage>;
 
-  const drafts = draftsQuery.data ?? [];
+  const drafts = [...(draftsQuery.data ?? [])].sort((a, b) => {
+    const aDate = getDraftSessionDateValue(a);
+    const bDate = getDraftSessionDateValue(b);
+
+    if (aDate != null && bDate != null && aDate !== bDate) {
+      return bDate - aDate;
+    }
+    if (aDate != null) {
+      return -1;
+    }
+    if (bDate != null) {
+      return 1;
+    }
+
+    return b.id - a.id;
+  });
 
   return (
     <div className="stack-lg">
@@ -74,11 +172,11 @@ export function DraftsPage() {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Event</th>
-                <th>Mode</th>
-                <th>Picks</th>
-                <th>Started</th>
-                <th>Completed</th>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Set</th>
+                <th>Wins</th>
+                <th>Losses</th>
               </tr>
             </thead>
             <tbody>
@@ -89,11 +187,11 @@ export function DraftsPage() {
                       {draft.id}
                     </Link>
                   </td>
-                  <td>{draft.eventName || "-"}</td>
-                  <td>{draft.isBotDraft ? "Bot Draft" : "Player Draft"}</td>
-                  <td>{draft.picks}</td>
-                  <td>{formatDateTime(draft.startedAt)}</td>
-                  <td>{formatDateTime(draft.completedAt)}</td>
+                  <td>{formatDraftSessionDate(draft)}</td>
+                  <td>{formatDraftSessionType(draft)}</td>
+                  <td>{formatDraftSessionSet(draft)}</td>
+                  <td>{draft.wins ?? "-"}</td>
+                  <td>{draft.losses ?? "-"}</td>
                 </tr>
               ))}
             </tbody>
@@ -123,7 +221,7 @@ export function DraftsPage() {
             <tbody>
               {draftDecks.map((deck) => (
                 <tr key={deck.deckId}>
-                  <td>{formatDraftDeckDate(deck.eventName)}</td>
+                  <td>{formatDraftDeckDate(deck)}</td>
                   <td>
                     <Link to={`/decks/${deck.deckId}`} className="text-link">
                       {deck.deckName || `Deck ${deck.deckId}`}

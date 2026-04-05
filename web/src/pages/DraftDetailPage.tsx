@@ -261,7 +261,7 @@ export function DraftDetailPage() {
         <div className="stack-md">
           {[...picksByPack.entries()].map(([pack, picks]) => (
             <article className="panel inner decklist-panel" key={pack}>
-              <h4>Pack {pack + 1}</h4>
+              <h4>Pack {pack}</h4>
               <div className="table-wrap">
                 <table className="data-table compact">
                   <thead>
@@ -276,7 +276,7 @@ export function DraftDetailPage() {
                       .sort((a, b) => a.pickNumber - b.pickNumber)
                       .map((pick) => (
                         <tr key={`${pack}-${pick.pickNumber}`}>
-                          <td>{pick.pickNumber + 1}</td>
+                          <td>{pick.pickNumber}</td>
                           <td>
                             <DraftCardList cards={pick.pickedCards} />
                           </td>

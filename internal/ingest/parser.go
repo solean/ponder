@@ -498,17 +498,23 @@ type draftCompleteRequest struct {
 }
 
 type logBusinessEvent struct {
-	EventType     int64  `json:"EventType"`
-	EventTime     string `json:"EventTime"`
-	EventName     string `json:"EventName"`
-	EventID       string `json:"EventId"`
-	MatchID       string `json:"MatchId"`
-	SeatID        int64  `json:"SeatId"`
-	TeamID        int64  `json:"TeamId"`
-	WinningTeamID int64  `json:"WinningTeamId"`
-	WinningReason string `json:"WinningReason"`
-	TurnCount     int64  `json:"TurnCount"`
-	SecondsCount  int64  `json:"SecondsCount"`
+	EventType     int64   `json:"EventType"`
+	EventTime     string  `json:"EventTime"`
+	EventName     string  `json:"EventName"`
+	EventID       string  `json:"EventId"`
+	DraftID       string  `json:"DraftId"`
+	MatchID       string  `json:"MatchId"`
+	SeatID        int64   `json:"SeatId"`
+	SeatNumber    int64   `json:"SeatNumber"`
+	TeamID        int64   `json:"TeamId"`
+	WinningTeamID int64   `json:"WinningTeamId"`
+	WinningReason string  `json:"WinningReason"`
+	TurnCount     int64   `json:"TurnCount"`
+	SecondsCount  int64   `json:"SecondsCount"`
+	PackNumber    int64   `json:"PackNumber"`
+	PickNumber    int64   `json:"PickNumber"`
+	PickGrpID     int64   `json:"PickGrpId"`
+	CardsInPack   []int64 `json:"CardsInPack"`
 }
 
 type roomPlayer struct {
@@ -2145,6 +2151,7 @@ func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.Pa
 		return err
 	}
 	stats.RawEventsStored++
+	observedAt := state.lastUnityLogTimestamp
 
 	switch method {
 	case "EventJoin":
@@ -2155,7 +2162,7 @@ func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.Pa
 		if req.EventName == "" {
 			return nil
 		}
-		if err := p.store.UpsertEventRunJoin(ctx, tx, req.EventName, req.EntryCurrencyType, req.EntryCurrencyPaid, ""); err != nil {
+		if err := p.store.UpsertEventRunJoin(ctx, tx, req.EventName, req.EntryCurrencyType, req.EntryCurrencyPaid, observedAt); err != nil {
 			return err
 		}
 	case "EventClaimPrize":
@@ -2164,7 +2171,7 @@ func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.Pa
 			return nil
 		}
 		if req.EventName != "" {
-			if err := p.store.MarkEventRunClaimed(ctx, tx, req.EventName, ""); err != nil {
+			if err := p.store.MarkEventRunClaimed(ctx, tx, req.EventName, observedAt); err != nil {
 				return err
 			}
 		}
@@ -2205,11 +2212,11 @@ func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.Pa
 			return nil
 		}
 		draftID := req.DraftID
-		sessionID, err := p.store.EnsureDraftSession(ctx, tx, "", &draftID, false, "")
+		sessionID, err := p.store.EnsureDraftSession(ctx, tx, "", &draftID, false, observedAt)
 		if err != nil {
 			return err
 		}
-		if err := p.store.InsertDraftPick(ctx, tx, sessionID, req.Pack, req.Pick, req.GrpIDs, nil, ""); err != nil {
+		if err := p.store.InsertDraftPick(ctx, tx, sessionID, req.Pack, req.Pick, req.GrpIDs, nil, observedAt); err != nil {
 			return err
 		}
 		stats.DraftPicksAdded++
@@ -2221,12 +2228,12 @@ func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.Pa
 		if req.EventName == "" {
 			return nil
 		}
-		sessionID, err := p.store.EnsureDraftSession(ctx, tx, req.EventName, nil, true, "")
+		sessionID, err := p.store.EnsureDraftSession(ctx, tx, req.EventName, nil, true, observedAt)
 		if err != nil {
 			return err
 		}
 		picked := parseStringIDsToInt64(req.PickInfo.CardIDs)
-		if err := p.store.InsertDraftPick(ctx, tx, sessionID, req.PickInfo.PackNumber, req.PickInfo.PickNumber, picked, nil, ""); err != nil {
+		if err := p.store.InsertDraftPick(ctx, tx, sessionID, req.PickInfo.PackNumber, req.PickInfo.PickNumber, picked, nil, observedAt); err != nil {
 			return err
 		}
 		stats.DraftPicksAdded++
@@ -2235,7 +2242,7 @@ func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.Pa
 		if err := json.Unmarshal(requestPayload, &req); err != nil {
 			return nil
 		}
-		if err := p.store.CompleteDraftSession(ctx, tx, req.EventName, nil, req.IsBotDraft, ""); err != nil {
+		if err := p.store.CompleteDraftSession(ctx, tx, req.EventName, nil, req.IsBotDraft, observedAt); err != nil {
 			return err
 		}
 	case "LogBusinessEvents":
@@ -2244,6 +2251,33 @@ func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.Pa
 			return nil
 		}
 		switch evt.EventType {
+		case 24:
+			if evt.DraftID == "" || evt.PackNumber <= 0 || evt.PickNumber <= 0 {
+				return nil
+			}
+
+			eventName := evt.EventID
+			if eventName == "" {
+				eventName = evt.EventName
+			}
+			draftTS := evt.EventTime
+			if strings.TrimSpace(draftTS) == "" {
+				draftTS = observedAt
+			}
+
+			draftID := evt.DraftID
+			sessionID, err := p.store.EnsureDraftSession(ctx, tx, eventName, &draftID, false, draftTS)
+			if err != nil {
+				return err
+			}
+
+			var picked []int64
+			if evt.PickGrpID > 0 {
+				picked = []int64{evt.PickGrpID}
+			}
+			if err := p.store.InsertDraftPick(ctx, tx, sessionID, evt.PackNumber, evt.PickNumber, picked, evt.CardsInPack, draftTS); err != nil {
+				return err
+			}
 		case 3:
 			if evt.MatchID == "" {
 				return nil

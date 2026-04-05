@@ -145,6 +145,8 @@ export type DeckSummary = {
   wins: number;
   losses: number;
   winRate: number;
+  firstPlayedAt?: string;
+  lastUpdatedAt?: string;
 };
 
 export type DeckCard = {
@@ -172,6 +174,8 @@ export type DraftSession = {
   startedAt: string;
   completedAt: string;
   picks: number;
+  wins?: number | null;
+  losses?: number | null;
 };
 
 export type DraftPick = {

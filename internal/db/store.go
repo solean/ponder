@@ -805,9 +805,9 @@ func (s *Store) EnsureDraftSession(ctx context.Context, tx *sql.Tx, eventName st
 		if err == nil {
 			_, _ = tx.ExecContext(ctx, `
 				UPDATE draft_sessions
-				SET event_name = COALESCE(?, event_name), updated_at = ?
+				SET event_name = COALESCE(?, event_name), started_at = COALESCE(started_at, ?), updated_at = ?
 				WHERE id = ?
-			`, nullIfEmpty(eventName), nowUTC(), sessionID)
+			`, nullIfEmpty(eventName), nullIfEmpty(ts), nowUTC(), sessionID)
 			return sessionID, nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
@@ -825,6 +825,11 @@ func (s *Store) EnsureDraftSession(ctx context.Context, tx *sql.Tx, eventName st
 			LIMIT 1
 		`, eventName, isBotInt).Scan(&sessionID)
 		if err == nil {
+			_, _ = tx.ExecContext(ctx, `
+				UPDATE draft_sessions
+				SET started_at = COALESCE(started_at, ?), updated_at = ?
+				WHERE id = ?
+			`, nullIfEmpty(ts), nowUTC(), sessionID)
 			return sessionID, nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
@@ -894,7 +899,7 @@ func (s *Store) CompleteDraftSession(ctx context.Context, tx *sql.Tx, eventName 
 			UPDATE draft_sessions
 			SET completed_at = COALESCE(completed_at, ?), updated_at = ?
 			WHERE draft_id = ? AND is_bot_draft = ?
-		`, ts, nowUTC(), strings.TrimSpace(*draftID), isBotInt)
+		`, nullIfEmpty(ts), nowUTC(), strings.TrimSpace(*draftID), isBotInt)
 		if err != nil {
 			return fmt.Errorf("complete draft session by draft_id: %w", err)
 		}
@@ -902,18 +907,237 @@ func (s *Store) CompleteDraftSession(ctx context.Context, tx *sql.Tx, eventName 
 	}
 
 	if eventName != "" {
-		_, err := tx.ExecContext(ctx, `
+		res, err := tx.ExecContext(ctx, `
 			UPDATE draft_sessions
-			SET completed_at = COALESCE(completed_at, ?), updated_at = ?
+			SET event_name = COALESCE(?, event_name), completed_at = COALESCE(completed_at, ?), updated_at = ?
 			WHERE id = (
 				SELECT id FROM draft_sessions
-				WHERE event_name = ? AND is_bot_draft = ?
-				ORDER BY id DESC LIMIT 1
+				WHERE is_bot_draft = ?
+				  AND completed_at IS NULL
+				  AND (
+					event_name = ?
+					OR COALESCE(event_name, '') = ''
+				  )
+				ORDER BY CASE
+					WHEN event_name = ? THEN 0
+					WHEN COALESCE(event_name, '') = '' THEN 1
+					ELSE 2
+				END,
+				COALESCE(started_at, updated_at, created_at) DESC,
+				id DESC
+				LIMIT 1
 			)
-		`, ts, nowUTC(), eventName, isBotInt)
+		`, nullIfEmpty(eventName), nullIfEmpty(ts), nowUTC(), isBotInt, eventName, eventName)
 		if err != nil {
 			return fmt.Errorf("complete draft session by event_name: %w", err)
 		}
+		if rowsAffected, rowsErr := res.RowsAffected(); rowsErr == nil && rowsAffected > 0 {
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
+	now := nowUTC()
+
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE draft_sessions
+		SET
+			event_name = COALESCE(
+				NULLIF(draft_sessions.event_name, ''),
+				(
+					SELECT COALESCE(
+						NULLIF(json_extract(er.payload_json, '$.EventId'), ''),
+						NULLIF(json_extract(er.payload_json, '$.EventName'), '')
+					)
+					FROM events_raw er
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'LogBusinessEvents'
+					  AND json_extract(er.payload_json, '$.EventType') = 24
+					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
+					ORDER BY COALESCE(NULLIF(json_extract(er.payload_json, '$.EventTime'), ''), er.created_at) DESC, er.id DESC
+					LIMIT 1
+				),
+				(
+					SELECT NULLIF(json_extract(er.payload_json, '$.EventName'), '')
+					FROM events_raw er
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'DraftCompleteDraft'
+					  AND json_extract(er.payload_json, '$.IsBotDraft') = draft_sessions.is_bot_draft
+					  AND er.created_at >= draft_sessions.updated_at
+					ORDER BY er.created_at ASC, er.id ASC
+					LIMIT 1
+				),
+				(
+					SELECT NULLIF(json_extract(er.payload_json, '$.EventName'), '')
+					FROM events_raw er
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'EventSetDeckV2'
+					  AND LOWER(COALESCE(json_extract(er.payload_json, '$.EventName'), '')) LIKE '%draft%'
+					  AND er.created_at >= draft_sessions.updated_at
+					ORDER BY er.created_at ASC, er.id ASC
+					LIMIT 1
+				)
+			),
+			started_at = COALESCE(
+				NULLIF(draft_sessions.started_at, ''),
+				(
+					SELECT MIN(COALESCE(NULLIF(json_extract(er.payload_json, '$.EventTime'), ''), er.created_at))
+					FROM events_raw er
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'LogBusinessEvents'
+					  AND json_extract(er.payload_json, '$.EventType') = 24
+					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
+				),
+				(
+					SELECT MIN(er.created_at)
+					FROM events_raw er
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'EventPlayerDraftMakePick'
+					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
+				)
+			),
+			completed_at = COALESCE(
+				NULLIF(draft_sessions.completed_at, ''),
+				(
+					SELECT MAX(COALESCE(NULLIF(json_extract(er.payload_json, '$.EventTime'), ''), er.created_at))
+					FROM events_raw er
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'LogBusinessEvents'
+					  AND json_extract(er.payload_json, '$.EventType') = 24
+					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
+				),
+				(
+					SELECT er.created_at
+					FROM events_raw er
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'DraftCompleteDraft'
+					  AND json_extract(er.payload_json, '$.IsBotDraft') = draft_sessions.is_bot_draft
+					  AND er.created_at >= draft_sessions.updated_at
+					ORDER BY er.created_at ASC, er.id ASC
+					LIMIT 1
+				),
+				(
+					SELECT MAX(er.created_at)
+					FROM events_raw er
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'EventPlayerDraftMakePick'
+					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
+				)
+			),
+			updated_at = ?
+		WHERE draft_sessions.draft_id IS NOT NULL
+		  AND (
+			COALESCE(draft_sessions.event_name, '') = ''
+			OR COALESCE(draft_sessions.started_at, '') = ''
+			OR COALESCE(draft_sessions.completed_at, '') = ''
+		  )
+		  AND EXISTS (
+			SELECT 1
+			FROM events_raw er
+			WHERE er.kind = 'outgoing'
+			  AND (
+				(
+					er.method_name = 'LogBusinessEvents'
+					AND json_extract(er.payload_json, '$.EventType') = 24
+					AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
+				)
+				OR (
+					er.method_name = 'EventPlayerDraftMakePick'
+					AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
+				)
+				OR (
+					er.method_name = 'DraftCompleteDraft'
+					AND json_extract(er.payload_json, '$.IsBotDraft') = draft_sessions.is_bot_draft
+					AND er.created_at >= draft_sessions.updated_at
+				)
+			  )
+		  )
+	`, now)
+	if err != nil {
+		return fmt.Errorf("repair draft sessions from raw events: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, `
+		UPDATE draft_picks
+		SET
+			pick_ts = COALESCE(
+				NULLIF(draft_picks.pick_ts, ''),
+				(
+					SELECT COALESCE(NULLIF(json_extract(er.payload_json, '$.EventTime'), ''), er.created_at)
+					FROM events_raw er
+					JOIN draft_sessions ds ON ds.draft_id = json_extract(er.payload_json, '$.DraftId')
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'LogBusinessEvents'
+					  AND json_extract(er.payload_json, '$.EventType') = 24
+					  AND ds.id = draft_picks.draft_session_id
+					  AND CAST(json_extract(er.payload_json, '$.PackNumber') AS INTEGER) = draft_picks.pack_number
+					  AND CAST(json_extract(er.payload_json, '$.PickNumber') AS INTEGER) = draft_picks.pick_number
+					ORDER BY er.id DESC
+					LIMIT 1
+				),
+				(
+					SELECT er.created_at
+					FROM events_raw er
+					JOIN draft_sessions ds ON ds.draft_id = json_extract(er.payload_json, '$.DraftId')
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'EventPlayerDraftMakePick'
+					  AND ds.id = draft_picks.draft_session_id
+					  AND CAST(json_extract(er.payload_json, '$.Pack') AS INTEGER) = draft_picks.pack_number
+					  AND CAST(json_extract(er.payload_json, '$.Pick') AS INTEGER) = draft_picks.pick_number
+					ORDER BY er.id DESC
+					LIMIT 1
+				)
+			),
+			pack_card_ids = CASE
+				WHEN COALESCE(draft_picks.pack_card_ids, '') IN ('', '[]') THEN COALESCE(
+					(
+						SELECT json_extract(er.payload_json, '$.CardsInPack')
+						FROM events_raw er
+						JOIN draft_sessions ds ON ds.draft_id = json_extract(er.payload_json, '$.DraftId')
+						WHERE er.kind = 'outgoing'
+						  AND er.method_name = 'LogBusinessEvents'
+						  AND json_extract(er.payload_json, '$.EventType') = 24
+						  AND ds.id = draft_picks.draft_session_id
+						  AND CAST(json_extract(er.payload_json, '$.PackNumber') AS INTEGER) = draft_picks.pack_number
+						  AND CAST(json_extract(er.payload_json, '$.PickNumber') AS INTEGER) = draft_picks.pick_number
+						ORDER BY er.id DESC
+						LIMIT 1
+					),
+					draft_picks.pack_card_ids
+				)
+				ELSE draft_picks.pack_card_ids
+			END
+		WHERE (
+			COALESCE(draft_picks.pick_ts, '') = ''
+			OR COALESCE(draft_picks.pack_card_ids, '') IN ('', '[]')
+		)
+		  AND EXISTS (
+			SELECT 1
+			FROM events_raw er
+			JOIN draft_sessions ds ON ds.draft_id = json_extract(er.payload_json, '$.DraftId')
+			WHERE er.kind = 'outgoing'
+			  AND (
+				(
+					er.method_name = 'LogBusinessEvents'
+					AND json_extract(er.payload_json, '$.EventType') = 24
+					AND ds.id = draft_picks.draft_session_id
+					AND CAST(json_extract(er.payload_json, '$.PackNumber') AS INTEGER) = draft_picks.pack_number
+					AND CAST(json_extract(er.payload_json, '$.PickNumber') AS INTEGER) = draft_picks.pick_number
+				)
+				OR (
+					er.method_name = 'EventPlayerDraftMakePick'
+					AND ds.id = draft_picks.draft_session_id
+					AND CAST(json_extract(er.payload_json, '$.Pack') AS INTEGER) = draft_picks.pack_number
+					AND CAST(json_extract(er.payload_json, '$.Pick') AS INTEGER) = draft_picks.pick_number
+				)
+			  )
+		  )
+	`)
+	if err != nil {
+		return fmt.Errorf("repair draft picks from raw events: %w", err)
 	}
 
 	return nil
@@ -1258,11 +1482,13 @@ func (s *Store) ListDecksByScope(ctx context.Context, scope string) ([]model.Dec
 			COALESCE(d.event_name, ''),
 			COUNT(m.id) AS matches,
 			SUM(CASE WHEN m.result = 'win' THEN 1 ELSE 0 END) AS wins,
-			SUM(CASE WHEN m.result = 'loss' THEN 1 ELSE 0 END) AS losses
+			SUM(CASE WHEN m.result = 'loss' THEN 1 ELSE 0 END) AS losses,
+			COALESCE(MIN(COALESCE(m.started_at, m.ended_at)), '') AS first_played_at,
+			COALESCE(d.last_updated, d.created_at, '') AS last_updated_at
 		FROM decks d
 		LEFT JOIN match_decks md ON md.deck_id = d.id
 		LEFT JOIN matches m ON m.id = md.match_id
-		GROUP BY d.id, d.name, d.arena_deck_id, d.format, d.event_name
+		GROUP BY d.id, d.name, d.arena_deck_id, d.format, d.event_name, d.last_updated, d.created_at
 		ORDER BY matches DESC, deck_name ASC
 	`)
 	if err != nil {
@@ -1273,7 +1499,17 @@ func (s *Store) ListDecksByScope(ctx context.Context, scope string) ([]model.Dec
 	var out []model.DeckSummaryRow
 	for rows.Next() {
 		var r model.DeckSummaryRow
-		if err := rows.Scan(&r.DeckID, &r.DeckName, &r.Format, &r.EventName, &r.Matches, &r.Wins, &r.Losses); err != nil {
+		if err := rows.Scan(
+			&r.DeckID,
+			&r.DeckName,
+			&r.Format,
+			&r.EventName,
+			&r.Matches,
+			&r.Wins,
+			&r.Losses,
+			&r.FirstPlayedAt,
+			&r.LastUpdatedAt,
+		); err != nil {
 			return nil, fmt.Errorf("scan deck summary: %w", err)
 		}
 		if !deckInScope(scope, r.Format, r.EventName) {
@@ -1474,6 +1710,10 @@ func (s *Store) UpsertCardNames(ctx context.Context, names map[int64]string) err
 }
 
 func (s *Store) ListDraftSessions(ctx context.Context) ([]model.DraftSessionRow, error) {
+	if err := s.RepairDraftDataFromRawEvents(ctx); err != nil {
+		return nil, err
+	}
+
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT
 			ds.id,
@@ -1507,10 +1747,169 @@ func (s *Store) ListDraftSessions(ctx context.Context) ([]model.DraftSessionRow,
 		return nil, fmt.Errorf("iterate draft sessions: %w", err)
 	}
 
+	if err := s.enrichDraftSessionsWithDeckResults(ctx, out); err != nil {
+		return nil, err
+	}
+
 	return out, nil
 }
 
+type draftDeckCandidate struct {
+	DeckTS        time.Time
+	FirstPlayedAt time.Time
+	LastPlayedAt  time.Time
+	Wins          int64
+	Losses        int64
+}
+
+func (s *Store) enrichDraftSessionsWithDeckResults(ctx context.Context, sessions []model.DraftSessionRow) error {
+	for idx := range sessions {
+		wins, losses, ok, err := s.resolveDraftSessionDeckResults(ctx, sessions[idx].EventName, sessions[idx].StartedAt, sessions[idx].CompletedAt)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		sessions[idx].Wins = nullableInt64Ptr(wins)
+		sessions[idx].Losses = nullableInt64Ptr(losses)
+	}
+	return nil
+}
+
+func nullableInt64Ptr(value int64) *int64 {
+	out := value
+	return &out
+}
+
+func parseStoredTime(raw string) (time.Time, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, false
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return parsed, true
+}
+
+func chooseDraftDeckCandidate(candidates []draftDeckCandidate, startedAt, completedAt string) (draftDeckCandidate, bool) {
+	if len(candidates) == 0 {
+		return draftDeckCandidate{}, false
+	}
+	if len(candidates) == 1 {
+		return candidates[0], true
+	}
+
+	anchor, ok := parseStoredTime(completedAt)
+	if !ok {
+		anchor, ok = parseStoredTime(startedAt)
+	}
+	if !ok {
+		return draftDeckCandidate{}, false
+	}
+
+	bestIdx := -1
+	bestPriority := 99
+	var bestDiff time.Duration
+	for idx, candidate := range candidates {
+		reference := candidate.DeckTS
+		if reference.IsZero() && !candidate.FirstPlayedAt.IsZero() {
+			reference = candidate.FirstPlayedAt
+		}
+		if reference.IsZero() {
+			continue
+		}
+
+		priority := 2
+		if !candidate.DeckTS.IsZero() && !candidate.DeckTS.Before(anchor) {
+			priority = 0
+		} else if !candidate.FirstPlayedAt.IsZero() && !candidate.FirstPlayedAt.Before(anchor) {
+			priority = 1
+		}
+
+		diff := reference.Sub(anchor)
+		if diff < 0 {
+			diff = -diff
+		}
+
+		if bestIdx == -1 || priority < bestPriority || (priority == bestPriority && diff < bestDiff) {
+			bestIdx = idx
+			bestPriority = priority
+			bestDiff = diff
+		}
+	}
+
+	if bestIdx == -1 {
+		return draftDeckCandidate{}, false
+	}
+
+	return candidates[bestIdx], true
+}
+
+func (s *Store) resolveDraftSessionDeckResults(ctx context.Context, eventName, startedAt, completedAt string) (int64, int64, bool, error) {
+	eventName = strings.TrimSpace(eventName)
+	if eventName == "" {
+		return 0, 0, false, nil
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT
+			COALESCE(d.last_updated, d.created_at, ''),
+			COALESCE(MIN(COALESCE(m.started_at, m.ended_at)), ''),
+			COALESCE(MAX(COALESCE(m.started_at, m.ended_at)), ''),
+			COALESCE(SUM(CASE WHEN m.result = 'win' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN m.result = 'loss' THEN 1 ELSE 0 END), 0)
+		FROM decks d
+		LEFT JOIN match_decks md ON md.deck_id = d.id
+		LEFT JOIN matches m ON m.id = md.match_id
+		WHERE d.event_name = ?
+		  AND (
+			LOWER(COALESCE(d.format, '')) = 'draft'
+			OR LOWER(COALESCE(d.event_name, '')) LIKE '%draft%'
+		  )
+		GROUP BY d.id, d.last_updated, d.created_at
+	`, eventName)
+	if err != nil {
+		return 0, 0, false, fmt.Errorf("resolve draft session deck results: %w", err)
+	}
+	defer rows.Close()
+
+	var candidates []draftDeckCandidate
+	for rows.Next() {
+		var deckTSRaw, firstPlayedRaw, lastPlayedRaw string
+		var candidate draftDeckCandidate
+		if err := rows.Scan(&deckTSRaw, &firstPlayedRaw, &lastPlayedRaw, &candidate.Wins, &candidate.Losses); err != nil {
+			return 0, 0, false, fmt.Errorf("scan draft deck candidate: %w", err)
+		}
+		if parsed, ok := parseStoredTime(deckTSRaw); ok {
+			candidate.DeckTS = parsed
+		}
+		if parsed, ok := parseStoredTime(firstPlayedRaw); ok {
+			candidate.FirstPlayedAt = parsed
+		}
+		if parsed, ok := parseStoredTime(lastPlayedRaw); ok {
+			candidate.LastPlayedAt = parsed
+		}
+		candidates = append(candidates, candidate)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, 0, false, fmt.Errorf("iterate draft deck candidates: %w", err)
+	}
+
+	candidate, ok := chooseDraftDeckCandidate(candidates, startedAt, completedAt)
+	if !ok {
+		return 0, 0, false, nil
+	}
+	return candidate.Wins, candidate.Losses, true, nil
+}
+
 func (s *Store) ListDraftPicks(ctx context.Context, draftSessionID int64) ([]model.DraftPickRow, error) {
+	if err := s.RepairDraftDataFromRawEvents(ctx); err != nil {
+		return nil, err
+	}
+
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, pack_number, pick_number, picked_card_ids, COALESCE(pack_card_ids, '[]'), COALESCE(pick_ts, '')
 		FROM draft_picks

@@ -125,14 +125,16 @@ type MatchDetail struct {
 }
 
 type DeckSummaryRow struct {
-	DeckID    int64   `json:"deckId"`
-	DeckName  string  `json:"deckName"`
-	Format    string  `json:"format"`
-	EventName string  `json:"eventName"`
-	Matches   int64   `json:"matches"`
-	Wins      int64   `json:"wins"`
-	Losses    int64   `json:"losses"`
-	WinRate   float64 `json:"winRate"`
+	DeckID        int64   `json:"deckId"`
+	DeckName      string  `json:"deckName"`
+	Format        string  `json:"format"`
+	EventName     string  `json:"eventName"`
+	Matches       int64   `json:"matches"`
+	Wins          int64   `json:"wins"`
+	Losses        int64   `json:"losses"`
+	WinRate       float64 `json:"winRate"`
+	FirstPlayedAt string  `json:"firstPlayedAt,omitempty"`
+	LastUpdatedAt string  `json:"lastUpdatedAt,omitempty"`
 }
 
 type DeckCardRow struct {
@@ -160,6 +162,8 @@ type DraftSessionRow struct {
 	StartedAt   string  `json:"startedAt"`
 	CompletedAt string  `json:"completedAt"`
 	Picks       int64   `json:"picks"`
+	Wins        *int64  `json:"wins,omitempty"`
+	Losses      *int64  `json:"losses,omitempty"`
 }
 
 type DraftPickRow struct {

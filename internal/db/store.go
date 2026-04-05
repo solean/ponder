@@ -757,27 +757,98 @@ func (s *Store) LinkMatchToLatestDeckByEvent(ctx context.Context, tx *sql.Tx, ar
 		eventName = alias
 	}
 
-	var matchID int64
-	if err := tx.QueryRowContext(ctx, `SELECT id FROM matches WHERE arena_match_id = ?`, arenaMatchID).Scan(&matchID); err != nil {
+	var (
+		matchID   int64
+		startedAt sql.NullString
+	)
+	if err := tx.QueryRowContext(ctx, `SELECT id, started_at FROM matches WHERE arena_match_id = ?`, arenaMatchID).Scan(&matchID, &startedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
 		return fmt.Errorf("get match id: %w", err)
 	}
 
+	rows, err := tx.QueryContext(ctx, `
+		SELECT snapshot_reason
+		FROM match_decks
+		WHERE match_id = ?
+		ORDER BY id ASC
+	`, matchID)
+	if err != nil {
+		return fmt.Errorf("list existing match decks: %w", err)
+	}
+
+	hasLinks := false
+	hasSameReason := false
+	for rows.Next() {
+		hasLinks = true
+		var existingReason string
+		if err := rows.Scan(&existingReason); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan existing match deck reason: %w", err)
+		}
+		if strings.EqualFold(strings.TrimSpace(existingReason), strings.TrimSpace(reason)) {
+			hasSameReason = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("iterate existing match decks: %w", err)
+	}
+	rows.Close()
+
+	// Keep the first resolved room-state link stable across reparses.
+	if hasSameReason {
+		return nil
+	}
+	// Only room state is allowed to override an earlier pre-match guess.
+	if hasLinks && !strings.EqualFold(strings.TrimSpace(reason), "room_state") {
+		return nil
+	}
+
 	var deckID int64
-	err = tx.QueryRowContext(ctx, `
+	queryArgs := []any{eventName}
+	query := `
 		SELECT id
 		FROM decks
 		WHERE event_name = ?
-		ORDER BY COALESCE(last_updated, updated_at) DESC
+		ORDER BY updated_at DESC, id DESC
 		LIMIT 1
-	`, eventName).Scan(&deckID)
+	`
+	if startedAt.Valid && strings.TrimSpace(startedAt.String) != "" {
+		normalizedStartedAt := normalizeTS(startedAt.String)
+		query = `
+			SELECT id
+			FROM decks
+			WHERE event_name = ?
+			ORDER BY
+				CASE
+					WHEN julianday(updated_at) <= julianday(?) THEN 0
+					ELSE 1
+				END,
+				CASE
+					WHEN julianday(updated_at) <= julianday(?) THEN julianday(updated_at)
+					ELSE NULL
+				END DESC,
+				julianday(updated_at) DESC,
+				id DESC
+			LIMIT 1
+		`
+		queryArgs = append(queryArgs, normalizedStartedAt, normalizedStartedAt)
+	}
+
+	err = tx.QueryRowContext(ctx, query, queryArgs...).Scan(&deckID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("find deck for match: %w", err)
+	}
+
+	if hasLinks {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM match_decks WHERE match_id = ?`, matchID); err != nil {
+			return fmt.Errorf("clear prior match_decks: %w", err)
+		}
 	}
 
 	_, err = tx.ExecContext(ctx, `
@@ -1207,11 +1278,23 @@ func (s *Store) ListMatches(ctx context.Context, limit int64, eventName, result 
 					ELSE NULL
 				END
 			),
-			d.id,
-			d.name
+			(
+				SELECT d.id
+				FROM match_decks md
+				JOIN decks d ON d.id = md.deck_id
+				WHERE md.match_id = m.id
+				ORDER BY md.id ASC
+				LIMIT 1
+			),
+			(
+				SELECT d.name
+				FROM match_decks md
+				JOIN decks d ON d.id = md.deck_id
+				WHERE md.match_id = m.id
+				ORDER BY md.id ASC
+				LIMIT 1
+			)
 		FROM matches m
-		LEFT JOIN match_decks md ON md.match_id = m.id
-		LEFT JOIN decks d ON d.id = md.deck_id
 		WHERE (? = '' OR m.event_name = ?)
 		  AND (? = '' OR m.result = ?)
 		ORDER BY COALESCE(m.started_at, m.ended_at, m.updated_at) DESC
@@ -1264,12 +1347,18 @@ func (s *Store) ListMatchDeckCardQuantities(ctx context.Context, matchIDs []int6
 		}
 
 		query := fmt.Sprintf(`
-			SELECT md.match_id, dc.card_id, MAX(dc.quantity) AS quantity
-			FROM match_decks md
-			JOIN deck_cards dc ON dc.deck_id = md.deck_id
+			SELECT m.id, dc.card_id, MAX(dc.quantity) AS quantity
+			FROM matches m
+			JOIN deck_cards dc ON dc.deck_id = (
+				SELECT md.deck_id
+				FROM match_decks md
+				WHERE md.match_id = m.id
+				ORDER BY md.id ASC
+				LIMIT 1
+			)
 			WHERE dc.section = 'main'
-			  AND md.match_id IN (%s)
-			GROUP BY md.match_id, dc.card_id
+			  AND m.id IN (%s)
+			GROUP BY m.id, dc.card_id
 		`, strings.Join(placeholders, ","))
 
 		rows, err := s.db.QueryContext(ctx, query, args...)
@@ -1392,11 +1481,23 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 					ELSE NULL
 				END
 			),
-			d.id,
-			d.name
+			(
+				SELECT d.id
+				FROM match_decks md
+				JOIN decks d ON d.id = md.deck_id
+				WHERE md.match_id = m.id
+				ORDER BY md.id ASC
+				LIMIT 1
+			),
+			(
+				SELECT d.name
+				FROM match_decks md
+				JOIN decks d ON d.id = md.deck_id
+				WHERE md.match_id = m.id
+				ORDER BY md.id ASC
+				LIMIT 1
+			)
 		FROM matches m
-		LEFT JOIN match_decks md ON md.match_id = m.id
-		LEFT JOIN decks d ON d.id = md.deck_id
 		WHERE m.id = ?
 		LIMIT 1
 	`, matchBestOfSQL, matchPlayDrawSQL)

@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestMatchListDerivesBestOfAndPlayDraw(t *testing.T) {
@@ -79,5 +80,173 @@ func TestMatchListDerivesBestOfAndPlayDraw(t *testing.T) {
 	}
 	if detail.Match.BestOf != "bo3" || detail.Match.PlayDraw != "draw" {
 		t.Fatalf("match detail derived values = %+v, want bestOf=bo3 playDraw=draw", detail.Match)
+	}
+}
+
+func TestLinkMatchToLatestDeckByEventPrefersMostRecentlyObservedDeck(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database := openTempSQLiteDB(t)
+	if err := Init(ctx, database); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	store := NewStore(database)
+	tx, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+
+	if _, err := store.UpsertDeck(
+		ctx,
+		tx,
+		"deck-excruciator",
+		"Traditional_Ladder",
+		"Excruciator",
+		"TraditionalStandard",
+		"test",
+		"2026-03-30T05:11:08.475585Z",
+		nil,
+	); err != nil {
+		t.Fatalf("UpsertDeck(Excruciator): %v", err)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	if _, err := store.UpsertDeck(
+		ctx,
+		tx,
+		"deck-dimir",
+		"Traditional_Ladder",
+		"Dimir Mid 2026",
+		"TraditionalStandard",
+		"test",
+		"2026-03-13T02:13:30.379740Z",
+		nil,
+	); err != nil {
+		t.Fatalf("UpsertDeck(Dimir Mid 2026): %v", err)
+	}
+
+	startedAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+	if _, err := store.UpsertMatchStart(ctx, tx, "match-latest-deck", "Traditional_Ladder", 1, startedAt); err != nil {
+		t.Fatalf("UpsertMatchStart: %v", err)
+	}
+	if err := store.LinkMatchToLatestDeckByEvent(ctx, tx, "match-latest-deck", "Traditional_Ladder", "room_state"); err != nil {
+		t.Fatalf("LinkMatchToLatestDeckByEvent: %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	rows, err := store.ListMatches(ctx, 10, "", "")
+	if err != nil {
+		t.Fatalf("ListMatches: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("len(ListMatches) = %d, want 1", len(rows))
+	}
+	if rows[0].DeckName == nil || *rows[0].DeckName != "Dimir Mid 2026" {
+		t.Fatalf("DeckName = %v, want Dimir Mid 2026", rows[0].DeckName)
+	}
+}
+
+func TestLinkMatchToLatestDeckByEventRoomStateOverridesPreMatchOnlyOnce(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database := openTempSQLiteDB(t)
+	if err := Init(ctx, database); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	store := NewStore(database)
+	tx, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+
+	if _, err := store.UpsertDeck(
+		ctx,
+		tx,
+		"deck-one",
+		"Traditional_Ladder",
+		"Deck One",
+		"TraditionalStandard",
+		"test",
+		"2026-03-01T00:00:00Z",
+		nil,
+	); err != nil {
+		t.Fatalf("UpsertDeck(deck-one): %v", err)
+	}
+
+	startedAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+	if _, err := store.UpsertMatchStart(ctx, tx, "match-room-state", "Traditional_Ladder", 1, startedAt); err != nil {
+		t.Fatalf("UpsertMatchStart: %v", err)
+	}
+	if err := store.LinkMatchToLatestDeckByEvent(ctx, tx, "match-room-state", "Traditional_Ladder", "pre_match"); err != nil {
+		t.Fatalf("LinkMatchToLatestDeckByEvent(pre_match): %v", err)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	if _, err := store.UpsertDeck(
+		ctx,
+		tx,
+		"deck-two",
+		"Traditional_Ladder",
+		"Deck Two",
+		"TraditionalStandard",
+		"test",
+		"2026-02-01T00:00:00Z",
+		nil,
+	); err != nil {
+		t.Fatalf("UpsertDeck(deck-two): %v", err)
+	}
+	if err := store.LinkMatchToLatestDeckByEvent(ctx, tx, "match-room-state", "Traditional_Ladder", "room_state"); err != nil {
+		t.Fatalf("LinkMatchToLatestDeckByEvent(room_state override): %v", err)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	if _, err := store.UpsertDeck(
+		ctx,
+		tx,
+		"deck-three",
+		"Traditional_Ladder",
+		"Deck Three",
+		"TraditionalStandard",
+		"test",
+		"2026-01-01T00:00:00Z",
+		nil,
+	); err != nil {
+		t.Fatalf("UpsertDeck(deck-three): %v", err)
+	}
+	if err := store.LinkMatchToLatestDeckByEvent(ctx, tx, "match-room-state", "Traditional_Ladder", "room_state"); err != nil {
+		t.Fatalf("LinkMatchToLatestDeckByEvent(room_state replay): %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	rows, err := store.ListMatches(ctx, 10, "", "")
+	if err != nil {
+		t.Fatalf("ListMatches: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("len(ListMatches) = %d, want 1", len(rows))
+	}
+	if rows[0].DeckName == nil || *rows[0].DeckName != "Deck Two" {
+		t.Fatalf("DeckName = %v, want Deck Two", rows[0].DeckName)
+	}
+
+	var links int64
+	if err := database.QueryRowContext(ctx, `SELECT COUNT(*) FROM match_decks WHERE match_id = ?`, rows[0].ID).Scan(&links); err != nil {
+		t.Fatalf("count match_decks: %v", err)
+	}
+	if links != 1 {
+		t.Fatalf("match_decks rows = %d, want 1", links)
 	}
 }

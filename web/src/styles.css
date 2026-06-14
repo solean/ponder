@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Chakra+Petch:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&family=Chakra+Petch:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -10,6 +10,14 @@
 
 :root {
   color-scheme: dark;
+
+  /* Type system: humanist sans (Inter) for readable body/table/card content,
+     mono (IBM Plex Mono) for headers/stats/labels, Rajdhani for big display
+     headings, and Chakra Petch retained for the nav/brand chrome. */
+  --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Menlo", monospace;
+  --font-display: "Rajdhani", "Arial", sans-serif;
+  --font-brand: "Chakra Petch", "Segoe UI", sans-serif;
 
   --bg: #050302;
   --bg-mid: #0b0705;
@@ -251,7 +259,7 @@ html {
 body {
   margin: 0;
   color: var(--text);
-  font-family: "Chakra Petch", "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   background:
     radial-gradient(
       1300px 960px at -15% -10%,
@@ -317,9 +325,8 @@ button {
    ══════════════════════════════════════════ */
 
 code,
-.kicker,
 small {
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
 }
 
 h1,
@@ -333,7 +340,7 @@ h6 {
 
 h1 {
   margin: 0;
-  font-family: "Rajdhani", "Arial", sans-serif;
+  font-family: var(--font-display);
   font-size: clamp(2rem, 4.3vw, 3.2rem);
   font-weight: 700;
   line-height: 1.05;
@@ -475,6 +482,8 @@ body.has-wide-deck-curve .app-shell {
 .kicker {
   margin: 0;
   color: var(--kicker);
+  font-family: var(--font-brand);
+  font-weight: 600;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   font-size: 0.66rem;
@@ -523,9 +532,9 @@ body.has-wide-deck-curve .app-shell {
   display: inline-flex;
   align-items: center;
   padding: 0.44rem 0.92rem;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-brand);
   font-size: 0.78rem;
-  font-weight: 500;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   transition:
@@ -581,7 +590,7 @@ body.has-wide-deck-curve .app-shell {
   min-height: 2rem;
   padding: 0.33rem 0.58rem 0.33rem 0.45rem;
   font-size: 0.72rem;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
@@ -668,7 +677,7 @@ body.has-wide-deck-curve .app-shell {
 .overview-identity p {
   margin: 0;
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.72rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -677,7 +686,7 @@ body.has-wide-deck-curve .app-shell {
 .overview-identity h2 {
   margin: 0;
   color: var(--text-soft);
-  font-family: "Rajdhani", "Arial", sans-serif;
+  font-family: var(--font-display);
   font-size: clamp(1.5rem, 3vw, 2rem);
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -763,7 +772,7 @@ body.has-wide-deck-curve .app-shell {
 .metric-card p {
   margin: 0;
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -771,7 +780,7 @@ body.has-wide-deck-curve .app-shell {
 
 .metric-card h2 {
   margin: 0.52rem 0 0;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: clamp(1.9rem, 3.1vw, 2.4rem);
   font-weight: 500;
   line-height: 1;
@@ -862,7 +871,7 @@ body.has-wide-deck-curve .app-shell {
 .panel-head h3,
 .panel h4 {
   margin: 0;
-  font-family: "Rajdhani", "Arial", sans-serif;
+  font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -924,7 +933,7 @@ body.has-wide-deck-curve .app-shell {
 
 .rank-control-label {
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.68rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -963,7 +972,7 @@ body.has-wide-deck-curve .app-shell {
 .rank-chip span {
   display: block;
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.68rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -973,7 +982,7 @@ body.has-wide-deck-curve .app-shell {
   display: block;
   margin-top: 0.34rem;
   color: var(--text);
-  font-family: "Rajdhani", "Arial", sans-serif;
+  font-family: var(--font-display);
   font-size: clamp(1.18rem, 1.8vw, 1.46rem);
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -1006,7 +1015,7 @@ body.has-wide-deck-curve .app-shell {
 .panel-head p {
   margin: 0;
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.8rem;
   letter-spacing: 0.06em;
 }
@@ -1037,7 +1046,7 @@ body.has-wide-deck-curve .app-shell {
 .settings-status-card span,
 .settings-note {
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.76rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1101,7 +1110,7 @@ body.has-wide-deck-curve .app-shell {
     var(--tab-active-bg-b) 100%
   );
   color: var(--text-soft);
-  font-family: "Rajdhani", "Arial", sans-serif;
+  font-family: var(--font-display);
   font-size: 0.9rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -1152,7 +1161,7 @@ body.has-wide-deck-curve .app-shell {
 
 .settings-status-card strong {
   color: var(--text);
-  font-family: "Rajdhani", "Arial", sans-serif;
+  font-family: var(--font-display);
   font-size: 1rem;
   font-weight: 600;
   letter-spacing: 0.03em;
@@ -1170,7 +1179,7 @@ body.has-wide-deck-curve .app-shell {
   min-height: 1.5rem;
   color: var(--link);
   text-decoration: none;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.82rem;
   letter-spacing: 0.04em;
   border-bottom: 1px solid transparent;
@@ -1300,7 +1309,7 @@ body.has-wide-deck-curve .app-shell {
 .list-meta-item dt {
   margin: 0;
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.66rem;
   font-weight: 500;
   letter-spacing: 0.1em;
@@ -1354,7 +1363,7 @@ body.has-wide-deck-curve .app-shell {
 
 .match-deck-colors-label {
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.66rem;
   font-weight: 500;
   letter-spacing: 0.1em;
@@ -1373,7 +1382,7 @@ body.has-wide-deck-curve .app-shell {
 .deck-color-unknown {
   display: inline-flex;
   align-items: center;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.66rem;
   font-weight: 500;
   line-height: 1;
@@ -1421,7 +1430,7 @@ body.has-wide-deck-curve .app-shell {
   padding: 0.22rem 0.58rem;
   min-width: 3.45rem;
   text-align: center;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.66rem;
   font-weight: 500;
   text-transform: uppercase;
@@ -1476,7 +1485,7 @@ body.has-wide-deck-curve .app-shell {
 
 .data-table th {
   color: var(--table-head-text);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.68rem;
   font-weight: 500;
   text-transform: uppercase;
@@ -1548,7 +1557,7 @@ body.has-wide-deck-curve .app-shell {
 .match-detail-summary-item dt {
   margin: 0;
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.66rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1570,7 +1579,7 @@ body.has-wide-deck-curve .app-shell {
 }
 
 .match-detail-summary-item-mono dd {
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1659,7 +1668,7 @@ body.has-wide-deck-curve .app-shell {
 .match-replay-kicker {
   margin: 0;
   color: var(--muted-strong);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.7rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1750,7 +1759,7 @@ body.has-wide-deck-curve .app-shell {
 .match-replay-lane-title {
   margin: 0;
   color: var(--muted-strong);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.7rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1785,7 +1794,7 @@ body.has-wide-deck-curve .app-shell {
 .match-replay-sidebox-life-label,
 .match-replay-sidebox-life-value {
   margin: 0;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1826,7 +1835,7 @@ body.has-wide-deck-curve .app-shell {
 .match-replay-stat-term {
   margin: 0;
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.66rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1835,7 +1844,7 @@ body.has-wide-deck-curve .app-shell {
 .match-replay-stat-value {
   margin: 0;
   color: var(--text);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 1.12rem;
   font-weight: 500;
   line-height: 1;
@@ -1942,7 +1951,7 @@ body.has-wide-deck-curve .app-shell {
   border-radius: 6px;
   background: linear-gradient(160deg, var(--surface) 0%, var(--surface-strong) 100%);
   color: var(--text);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2036,7 +2045,7 @@ body.has-wide-deck-curve .app-shell {
 .match-replay-stack-slot-copy {
   margin: 0;
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.66rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2195,7 +2204,7 @@ body.has-wide-deck-curve .app-shell {
 .match-replay-zone-group-title,
 .match-replay-zone-group-count {
   margin: 0;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -2387,7 +2396,7 @@ body.has-wide-deck-curve .app-shell {
     var(--surface-faint) 100%
   );
   color: var(--text-soft);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.58rem;
   line-height: 1.2;
   text-align: center;
@@ -2547,7 +2556,7 @@ body.has-wide-deck-curve .app-shell {
   border-radius: 999px;
   background: rgba(6, 10, 16, 0.8);
   color: #fff;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.62rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2562,7 +2571,7 @@ body.has-wide-deck-curve .app-shell {
   border-radius: 0.48rem;
   background: rgba(6, 10, 16, 0.84);
   color: #fff;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.68rem;
   letter-spacing: 0.05em;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.24);
@@ -2583,7 +2592,7 @@ body.has-wide-deck-curve .app-shell {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: var(--muted-strong);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.62rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -2619,7 +2628,7 @@ body.has-wide-deck-curve .app-shell {
 .match-replay-centerline-title {
   margin: 0;
   color: var(--text);
-  font-family: "Rajdhani", "Arial", sans-serif;
+  font-family: var(--font-display);
   font-size: 1.02rem;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -2629,7 +2638,7 @@ body.has-wide-deck-curve .app-shell {
 .match-replay-statusbar-title {
   margin: 0;
   color: var(--text);
-  font-family: "Rajdhani", "Arial", sans-serif;
+  font-family: var(--font-display);
   font-size: 1.02rem;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -2733,7 +2742,7 @@ body.has-wide-deck-curve .app-shell {
 .match-replay-turn-pill-label,
 .match-replay-turn-pill-meta {
   margin: 0;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2767,7 +2776,7 @@ body.has-wide-deck-curve .app-shell {
     var(--surface) 100%
   );
   color: var(--text);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.76rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2841,7 +2850,7 @@ body.has-wide-deck-curve .app-shell {
 
 .deck-card h4 {
   margin: 0;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.8rem;
   font-weight: 500;
   text-transform: uppercase;
@@ -2868,7 +2877,7 @@ body.has-wide-deck-curve .app-shell {
 .deck-card-qty {
   color: var(--muted);
   min-width: 2.2rem;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.8rem;
 }
 
@@ -2916,7 +2925,7 @@ body.has-wide-deck-curve .app-shell {
 
 .deck-curve-panel-head h4 {
   color: var(--muted-strong);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.8rem;
   font-weight: 500;
   letter-spacing: 0.1em;
@@ -2925,7 +2934,7 @@ body.has-wide-deck-curve .app-shell {
 
 .deck-curve-panel-head p {
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2973,7 +2982,7 @@ body.has-wide-deck-curve .app-shell {
 
 .deck-curve-column-count {
   color: var(--text);
-  font-family: "Rajdhani", "Arial", sans-serif;
+  font-family: var(--font-display);
   font-size: 1.75rem;
   font-weight: 600;
   line-height: 1;
@@ -2982,7 +2991,7 @@ body.has-wide-deck-curve .app-shell {
 
 .deck-curve-column-label {
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.66rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -3051,7 +3060,7 @@ body.has-wide-deck-curve .app-shell {
   border-radius: 999px;
   background: rgba(6, 10, 16, 0.84);
   color: #fff;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.72rem;
   font-weight: 500;
   line-height: 1;
@@ -3330,7 +3339,7 @@ body.has-wide-deck-curve .app-shell {
   color: var(--muted);
   font-size: 0.78rem;
   padding: 1rem;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
 }
 
 /* ══════════════════════════════════════════
@@ -3438,7 +3447,7 @@ body.has-wide-deck-curve .app-shell {
 .state {
   margin: 0;
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.84rem;
   letter-spacing: 0.04em;
 }
@@ -3452,7 +3461,7 @@ select {
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 3px;
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
 }
 
 /* ══════════════════════════════════════════
@@ -3916,7 +3925,7 @@ select {
 
 .match-filter-field > span {
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.62rem;
   font-weight: 500;
   text-transform: uppercase;
@@ -4052,7 +4061,7 @@ select {
 
 .match-group-name {
   color: var(--text);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -4062,7 +4071,7 @@ select {
 .match-group-record {
   margin-left: 0.85rem;
   color: var(--tab-active-border);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -4071,7 +4080,7 @@ select {
 .match-group-count {
   margin-left: 0.85rem;
   color: var(--muted);
-  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-size: 0.62rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;

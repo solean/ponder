@@ -104,12 +104,9 @@ export function Layout() {
         ) : null}
         <div className="app-shell">
           <header className="topbar">
-          <div className="title-block">
-            <p className="kicker">Magic: The Gathering Arena</p>
-            <div className="title-row">
-              <span className="title-sigil" aria-hidden="true" />
-              <h1>MTGA Data Tracker</h1>
-            </div>
+          <div className="brand">
+            <span className="title-sigil" aria-hidden="true" />
+            <h1>MTGA Data Tracker</h1>
           </div>
           <div className="topbar-controls">
             <nav className="tabs" aria-label="Primary">

@@ -12,6 +12,7 @@ import type {
   RankHistoryPoint,
   RuntimeConfig,
   RuntimeOperation,
+  LiveMatch,
   RuntimeStatus,
   SetInfo,
   UpdateCheck,
@@ -57,6 +58,7 @@ export const api = {
   draftPicks: (draftId: number) => getJSON<DraftPick[]>(`/api/drafts/${draftId}/picks`),
   sets: (codes: string[]) =>
     getJSON<Record<string, SetInfo>>(`/api/sets?codes=${encodeURIComponent(codes.join(","))}`),
+  live: () => getJSON<{ live: LiveMatch | null }>("/api/live"),
   runtimeStatus: () => getJSON<RuntimeStatus>("/api/runtime/status"),
   saveRuntimeConfig: (config: RuntimeConfig) => postJSON<RuntimeStatus>("/api/runtime/config", config),
   runImport: (resume = true) => postJSON<RuntimeOperation>("/api/runtime/import", { resume }),

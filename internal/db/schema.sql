@@ -77,6 +77,14 @@ CREATE TABLE IF NOT EXISTS card_catalog (
 
 CREATE INDEX IF NOT EXISTS idx_card_catalog_name ON card_catalog(name);
 
+-- Card type lines (Scryfall `type_line`), resolved on demand and cached so the
+-- live banner can compute land odds without re-fetching every poll.
+CREATE TABLE IF NOT EXISTS card_types (
+  arena_id INTEGER PRIMARY KEY,
+  type_line TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- Friendly metadata for MTG sets, keyed by the lowercase set code embedded in
 -- Arena event names (e.g. "tmt" in "QuickDraft_TMT_20260313"). Resolved on
 -- demand from Scryfall and cached here so set names/symbols work offline.

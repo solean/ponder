@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigationType } from "react-router-dom";
 
 import { ThemeContext, type Theme } from "../lib/theme";
+import { AppErrorFallback, ErrorBoundary } from "./ErrorBoundary";
+import { LiveMatchBanner } from "./LiveMatchBanner";
 import { Plasma } from "./Plasma";
 
 const tabs = [
@@ -136,8 +138,19 @@ export function Layout() {
             </button>
           </div>
         </header>
+          {location.pathname === "/settings" ? null : (
+            <ErrorBoundary label="LiveMatchBanner">
+              <LiveMatchBanner />
+            </ErrorBoundary>
+          )}
           <main id="main-content" className="content" tabIndex={-1}>
-            <Outlet />
+            <ErrorBoundary
+              key={location.pathname}
+              label="page"
+              fallback={(error, reset) => <AppErrorFallback error={error} onRetry={reset} scope="page" />}
+            >
+              <Outlet />
+            </ErrorBoundary>
           </main>
         </div>
       </>

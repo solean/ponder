@@ -293,27 +293,9 @@ func (s *Store) GetDeckDetail(ctx context.Context, deckID int64, matchLimit int6
 		return out, fmt.Errorf("get deck: %w", err)
 	}
 
-	cardRows, err := s.db.QueryContext(ctx, `
-		SELECT dc.section, dc.card_id, dc.quantity, COALESCE(cc.name, '')
-		FROM deck_cards dc
-		LEFT JOIN card_catalog cc ON cc.arena_id = dc.card_id
-		WHERE deck_id = ?
-		ORDER BY dc.section, dc.card_id
-	`, deckID)
+	out.Cards, err = s.ListDeckCards(ctx, deckID)
 	if err != nil {
-		return out, fmt.Errorf("get deck cards: %w", err)
-	}
-	defer cardRows.Close()
-
-	for cardRows.Next() {
-		var c model.DeckCardRow
-		if err := cardRows.Scan(&c.Section, &c.CardID, &c.Quantity, &c.CardName); err != nil {
-			return out, fmt.Errorf("scan deck card: %w", err)
-		}
-		out.Cards = append(out.Cards, c)
-	}
-	if err := cardRows.Err(); err != nil {
-		return out, fmt.Errorf("iterate deck cards: %w", err)
+		return out, err
 	}
 
 	matchRows, err := s.db.QueryContext(ctx, `

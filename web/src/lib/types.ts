@@ -1,3 +1,14 @@
+export type LiveMatch = {
+  match: Match;
+  opponentObservedCards: OpponentObservedCard[];
+  deck: DeckCard[];
+  deckTotal: number;
+  landCount: number;
+  gameNumber: number;
+  turnNumber: number;
+  libraryEstimate: number;
+};
+
 export type SetInfo = {
   code: string;
   name: string;

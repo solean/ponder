@@ -182,6 +182,17 @@ type DraftPickCard struct {
 	CardName string `json:"cardName,omitempty"`
 }
 
+type LiveMatch struct {
+	Match                 MatchRow                  `json:"match"`
+	OpponentObservedCards []OpponentObservedCardRow `json:"opponentObservedCards"`
+	Deck                  []DeckCardRow             `json:"deck"`
+	DeckTotal             int64                     `json:"deckTotal"`
+	LandCount             int64                     `json:"landCount"`
+	GameNumber            int64                     `json:"gameNumber"`
+	TurnNumber            int64                     `json:"turnNumber"`
+	LibraryEstimate       int64                     `json:"libraryEstimate"`
+}
+
 type SetInfo struct {
 	Code       string `json:"code"`
 	Name       string `json:"name"`

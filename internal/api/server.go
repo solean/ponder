@@ -54,6 +54,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/drafts", s.handleDrafts)
 	mux.HandleFunc("/api/drafts/", s.handleDraftPicks)
 	mux.HandleFunc("/api/sets", s.handleSets)
+	mux.HandleFunc("/api/live", s.handleLive)
 	if s.appState != nil {
 		mux.HandleFunc("/api/runtime/status", s.handleRuntimeStatus)
 		mux.HandleFunc("/api/runtime/config", s.handleRuntimeConfig)

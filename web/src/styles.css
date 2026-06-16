@@ -480,6 +480,301 @@ body.has-wide-deck-curve .app-shell {
 }
 
 /* ══════════════════════════════════════════
+   LIVE MATCH BANNER — "NOW PLAYING"
+   ══════════════════════════════════════════ */
+
+.live-banner {
+  margin-bottom: 1.35rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background:
+    linear-gradient(160deg, var(--accent-soft) 0%, transparent 60%),
+    var(--surface);
+  box-shadow: 0 0 0 1px var(--accent-soft), inset 0 1px 0 var(--card-inner-border);
+  overflow: hidden;
+}
+
+.live-banner-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  user-select: none;
+}
+
+.live-banner-head:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.live-banner.is-minimized .live-banner-head {
+  border-bottom: 0;
+}
+
+.live-minimize {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  line-height: 1;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.live-banner-head:hover .live-minimize,
+.live-banner-head:focus-visible .live-minimize {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.live-badge::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--win);
+  box-shadow: 0 0 8px var(--win);
+  animation: pulse-sigil 1.6s ease-in-out infinite;
+}
+
+.live-vs {
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.live-vs strong {
+  color: var(--text);
+}
+
+.live-progress,
+.live-deck {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.live-deck {
+  margin-left: auto;
+  color: var(--text);
+}
+
+.live-banner-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+  padding: 0.75rem 0.85rem;
+}
+
+.live-col h4 {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--table-head-text);
+}
+
+.live-est {
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.live-empty {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.live-card-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.live-card-list li {
+  padding: 0.16rem 0.46rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface-faint);
+  font-size: 0.8rem;
+}
+
+.live-library {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.live-odds {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-odds th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--table-head-text);
+  padding: 0 0.5rem 0.2rem 0;
+}
+
+.live-odds th:not(:first-child),
+.live-odds td:not(:first-child) {
+  text-align: right;
+  width: 3.4rem;
+  font-family: var(--font-mono);
+}
+
+.live-odds td {
+  padding: 0.14rem 0.5rem 0.14rem 0;
+  border-top: 1px solid var(--table-row-border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 0;
+}
+
+.live-odds-land td {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .live-banner-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ══════════════════════════════════════════
+   ERROR FALLBACK — VISIBLE CRASH GUARD
+   ══════════════════════════════════════════ */
+
+.app-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  padding: 2rem 1rem;
+}
+
+.app-error-card {
+  width: 100%;
+  max-width: 40rem;
+  padding: 1.4rem 1.5rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background:
+    linear-gradient(160deg, var(--accent-soft) 0%, transparent 60%),
+    var(--surface);
+  box-shadow: inset 0 1px 0 var(--card-inner-border);
+}
+
+.app-error-kicker {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.app-error-card h2 {
+  margin: 0 0 0.7rem;
+  font-size: 1.3rem;
+  letter-spacing: 0.04em;
+}
+
+.app-error-message {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-faint);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.app-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.app-error-button {
+  padding: 0.46rem 0.95rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-brand);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.app-error-button:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.app-error-button.is-primary {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.app-error-hint {
+  margin: 0.85rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* ══════════════════════════════════════════
    TABS — SEGMENTED TACTICAL SELECTOR
    ══════════════════════════════════════════ */
 

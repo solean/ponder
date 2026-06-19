@@ -29,8 +29,54 @@ Status markers: ✅ done · 🔲 open · 🟡 in progress
 > `buildReplayLifeSeries` / `replayLifeSeriesDomain` / `replayFrameTickKind` /
 > `buildReplayTickKinds`. **26 tests pass**; verified live on match 675 — sparkline
 > traces both life totals, T?–T13 labels render, clicking 75% jumps to step 67
-> (Turn 11) with the HUD in sync, no console errors. Next up: **Phase 3**
-> (mirrored arena layout).
+> (Turn 11) with the HUD in sync, no console errors.
+>
+> ✅ **Phase 3 complete.** The board became a mirrored arena (opponent on top,
+> you at the foot, stack centered) on a full-width single column;
+> `MatchReplayFrameSideSummary` gained a `variant="rail"` mode. *(Superseded by
+> the Phase 4 layout realignment below — see note.)*
+>
+> ✅ **Phase 4 + layout realignment complete.** Course-corrected to match the
+> original concept mockup, which the single-column Phase 3 had drifted from:
+> - **Two-column layout** — the mirrored arena on the left, a **play-by-play
+>   rail** on the right (`MatchReplayMoveList`: turn-grouped beats, current beat
+>   highlighted + auto-scrolled, click-to-jump). The stack moved from the center
+>   line to the **top-right** of the board; the rail is sticky while the board
+>   scrolls.
+> - **Humanized, coalesced narration** (`buildReplayBeat`) feeds both the rail and
+>   the HUD headline: attacks/blocks with P/T ("You attack with Floodpits Drowner
+>   (2/1) and 1 more"), casts, plays (with "tapped" notes), tap/untap counts, and
+>   life swings ("Life change · opponent 16 → 11"). GRE no-op "noise moves"
+>   (Hand→Hand, Limbo→Limbo) are now dropped from the timeline
+>   (`replayChangeIsNoiseMove`), and board-resync battlefield entries no longer
+>   masquerade as plays.
+> - **HUD avatars** (OP / YOU) flanking the life pods.
+>
+> **32 tests pass**; verified live on match 675 — two-column board + rail render,
+> avatars present, narration is clean (no "Limbo", no resync "and N more"), the
+> rail tracks the playhead, no console errors. Remaining narration polish (a few
+> raw GRE phrasings like "lost public visibility of X") is a follow-up.
+>
+> ✅ **Board density pass.** The arena was still too tall to take in without
+> scrolling (~1900px). Shrank board cards (108→56px) and hand cards (116→74px),
+> tightened lane/section spacing, dropped the redundant "Tapped"/"Attacking" text
+> pills (already shown by the 90° rotation / red border), and — the big one —
+> laid each battlefield's type-sections **side-by-side** (lands | creatures |
+> artifacts) instead of stacking them. Result: arena **~1900px → ~800px**, so the
+> whole board (both battlefields + hand) now fits one screen. Verified live on
+> match 675.
+>
+> ✅ **Phase 5 (story + polish).** Auto-detected **key-moment pins** on the
+> scrubber (`findReplayKeyMoments`: the decisive 0-life step + the biggest life
+> swings) — clickable diamonds that jump straight there. **Narration polish**:
+> friendly phrasings for permanents leaving play ("X leaves the battlefield / is
+> put into the graveyard / is exiled / returns to hand"), spells ("X resolves"),
+> reveals ("You reveal X"), and hidden info ("X is no longer revealed"), plus
+> **"T?" → "Pre" / "Pre-game"**. **36 tests pass**; verified live on match 675 —
+> 3 swing pins render and a pin click jumps to step 28, narration is clean, no
+> console errors. *Deferred from Phase 5: combat "moments" and FLIP card-motion
+> animations — the former is data-limited (no block-link IDs in sample logs) and
+> the latter is hard to verify reliably here; both are good future work.*
 
 ---
 
@@ -86,18 +132,14 @@ What's holding it back:
 
 ## The five big moves
 
-### 1. A fixed-height mirrored "arena," not a scroll 🔲
-Collapse the sidebar + three vertical lanes into one board taken in at a glance:
-opponent's permanents on top, yours on the bottom, hand fanned at the foot, stack
-floating top-right, life pods at the poles.
-
-- Change `.match-replay-canvas` (`styles.css` ~1948) from
-  `sidebar + board-column` to a single arena; make the lanes share a row instead
-  of stacking.
-- The per-side components already exist (`MatchReplayFrameBattlefield`,
-  `MatchReplayHand`, `MatchReplayStack`) — they need to be composed spatially,
-  not in a column.
-- Biggest perceptual jump; mostly layout/CSS.
+### 1. A mirrored "arena" that fits one screen ✅
+Collapse the sidebar + vertical lanes into one board taken in at a glance:
+opponent on top, you at the foot, hand below, stack top-right, life in the HUD.
+*Done across Phase 3/4 + the density pass: the arena is the left column of a
+two-column canvas (board + play-by-play rail); off-board zones are compact rails;
+and each battlefield's type-sections sit side-by-side. With small board cards the
+whole board now fits ~one screen (arena ~800px, down from ~1900px) — no more long
+vertical scroll. The connection overlay stays wired to the arena surface.*
 
 ### 2. A persistent HUD strip ✅
 Both players' life **big**, a Δ flash on change (reuse `replayFrameHasLifeDelta`,
@@ -115,10 +157,11 @@ clickable. *Done in Phase 2 (`MatchReplayScrubber`); replaced
 series + tick kinds; the observed timeline board gets the track + turn markers
 without the sparkline (no life data on plays).*
 
-### 4. A turn-grouped play-by-play rail 🔲
-The "List" view reborn as a chess-style move list that co-pilots the board
-instead of living in a separate tab. Current beat highlighted, click any line to
-jump, turns as group headers. Where the narration improvements pay off.
+### 4. A turn-grouped play-by-play rail ✅
+The "List" view reborn as a chess-style move list that co-pilots the board.
+Current beat highlighted + auto-scrolled, click any line to jump, turns as group
+headers. *Done in Phase 4 (`MatchReplayMoveList`), in a two-column layout beside
+the arena.*
 
 ### 5. Keyboard + speed ✅
 `←/→` step, `Shift+←/→` turn, `Space` play/pause, `Home/End`, and a
@@ -130,12 +173,13 @@ listener ignores focused inputs/buttons/tabs so it never double-fires.*
 
 ## Polish wins that punch above their weight
 
-- **Coalesce GRE noise and humanize narration** (REVIEW item 4) 🔲 —
-  `filterMeaningfulReplayFrames` (~1016) drops empty frames but doesn't *merge* a
-  cast→target→resolve, or roll all attackers into one "attacks with Otter + 2
-  others" beat. Narration should fold in P/T and the life swing: *"Otter (2/2)
-  blocks Tarmogoyf (4/4) — attacker survives, you take 0."* All inputs exist
-  (`replayObjectPTLabel`, block-attacker IDs, life deltas).
+- **Coalesce GRE noise and humanize narration** (REVIEW item 4) ✅ — *Done in
+  Phase 4–5 (`buildReplayBeat`): no-op moves (Hand→Hand, Limbo→Limbo) are dropped
+  from the timeline; attackers/blockers fold into one beat with P/T; plays note
+  "tapped"; life swings show before→after; permanents leaving play, spells
+  resolving, reveals, and hidden info all read in plain English. Remaining: a rare
+  hand→Limbo bookkeeping move still shows raw, and cast→resolve spans separate
+  beats rather than merging.*
 - **Make combat a moment** 🔲 — the attack/block arrows
   (`MatchReplayConnectionOverlay`, ~1674) are nice and underused. In an arena
   layout, highlight the combat step, advance attackers toward the defender, show
@@ -144,12 +188,13 @@ listener ignores focused inputs/buttons/tabs so it never double-fires.*
   stable across frames, so a FLIP transition can slide a card
   hand→stack→battlefield→graveyard as you step. Converts "stepping through
   snapshots" into "watching a replay." Big effort, biggest wow.
-- **Auto-detected key moments** 🔲 — chapter pins on the scrubber: biggest life
-  swing, the turn the game was decided (derive from existing
-  `terminalReplayFrameConfidence`), each mulligan. Turns a 66-step replay into a
-  skimmable story.
-- **Rename "T?" → "Pre-game"** and fix "G1: Play/Draw reads as a result"
-  (REVIEW item 3) while in here. 🔲
+- **Auto-detected key moments** ✅ — *Done in Phase 5 (`findReplayKeyMoments` +
+  scrubber pins): clickable diamonds mark the decisive 0-life step and the biggest
+  life swings, turning a long replay into a skimmable story. (Mulligan detection
+  not yet included.)*
+- **Rename "T?" → "Pre-game"** ✅ — *Done in Phase 5 (`boardTurnLabel` → "Pre",
+  `replayTurnLabel` → "Pre-game").* Still open: "G1: Play/Draw reads as a result"
+  (REVIEW item 3).
 
 ---
 
@@ -197,9 +242,9 @@ calls this *"the highest-value refactor in the repo."*
 | 0 ✅ | Extract `lib/replay/` + `useReplayPlayer` + wire up `bun test` | M | Done — unblocks everything; no behavior change (typecheck + build + 21 tests green) |
 | 1 ✅ | HUD strip + keyboard + speed | S | Done — verified live against match 675 (HUD, turn jumps, −7 delta flash, 2× speed) |
 | 2 ✅ | Scrubber + life sparkline (retire turn pills) | M | Done — dual sparkline, colored ticks, click-seek; verified live (75% → step 67) |
-| 3 | Mirrored arena layout | M | Biggest visual jump |
-| 4 | Coalesced beats + humanized play-by-play rail | M | |
-| 5 | Combat moments, card motion, key-moment pins | L | The "wow" tier |
+| 3 ✅ | Mirrored arena layout | M | Done — arena (realigned to two-column in Phase 4) |
+| 4 ✅ | Coalesced beats + humanized play-by-play rail | M | Done — two-column board+rail, avatars, clean narration; verified live |
+| 5 🟡 | Key-moment pins + narration polish done; combat moments & card motion deferred | L | Pins + clean narration shipped; FLIP animation is future work |
 
 Phases 1–3 get ~80% of the perceived "100×."
 

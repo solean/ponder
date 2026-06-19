@@ -2385,8 +2385,8 @@ body.has-wide-deck-curve .app-shell {
 
 .match-replay-lane {
   display: grid;
-  gap: 0.72rem;
-  padding: 0.78rem;
+  gap: 0.45rem;
+  padding: 0.55rem 0.6rem;
 }
 
 .match-replay-board > .match-replay-lane,
@@ -2403,6 +2403,300 @@ body.has-wide-deck-curve .app-shell {
   height: 100%;
   pointer-events: none;
   overflow: visible;
+}
+
+/* ── Mirrored arena (left) + play-by-play move list (right) ── */
+.match-replay-canvas.is-arena {
+  grid-template-columns: minmax(0, 1.62fr) minmax(15rem, 22rem);
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.match-replay-arena-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+}
+
+.match-replay-arena-top > .match-replay-zonerail {
+  flex: 1 1 auto;
+}
+
+.match-replay-arena-stack {
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 18rem;
+}
+
+.match-replay-arena-stack .match-replay-stackbox {
+  padding: 0.5rem 0.6rem;
+}
+
+.match-replay-movelist {
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(100vh - 2rem);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: linear-gradient(
+    165deg,
+    var(--surface) 0%,
+    var(--surface-faint) 100%
+  );
+  box-shadow: inset 0 1px 0 var(--card-inner-border);
+  overflow: hidden;
+}
+
+.match-replay-movelist-title {
+  margin: 0;
+  padding: 0.7rem 0.8rem 0.55rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.match-replay-movelist-scroll {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.4rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.match-replay-movelist-turn + .match-replay-movelist-turn {
+  margin-top: 0.35rem;
+}
+
+.match-replay-movelist-turn-label {
+  margin: 0;
+  padding: 0.22rem 0.42rem;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.match-replay-movelist-beat {
+  display: block;
+  width: 100%;
+  appearance: none;
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: 0 3px 3px 0;
+  background: transparent;
+  padding: 0.34rem 0.5rem;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.match-replay-movelist-beat:hover {
+  background: var(--table-row-hover);
+  color: var(--text);
+}
+
+.match-replay-movelist-beat.is-current {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-soft);
+}
+
+.match-replay-movelist-beat.is-current .match-replay-movelist-beat-text {
+  font-weight: 600;
+}
+
+.match-replay-movelist-beat-note {
+  color: var(--win);
+}
+
+.match-replay-movelist-beat:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-glow) inset;
+}
+
+.match-replay-arena {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background:
+    radial-gradient(circle at 50% 50%, var(--accent-soft) 0%, transparent 60%),
+    linear-gradient(
+      180deg,
+      rgba(255, 82, 82, 0.05) 0%,
+      transparent 22%,
+      transparent 78%,
+      rgba(0, 230, 118, 0.05) 100%
+    ),
+    linear-gradient(
+      90deg,
+      var(--grid-line) 0,
+      var(--grid-line) 1px,
+      transparent 1px,
+      transparent 104px
+    ),
+    linear-gradient(
+      0deg,
+      var(--grid-line) 0,
+      var(--grid-line) 1px,
+      transparent 1px,
+      transparent 104px
+    ),
+    linear-gradient(160deg, rgba(10, 14, 20, 0.42) 0%, var(--surface-faint) 100%);
+  overflow: hidden;
+}
+
+.match-replay-arena > .match-replay-lane:not(.is-hand) {
+  min-height: 0;
+}
+
+.match-replay-arena > .match-replay-lane.is-opponent {
+  border-left: 2px solid rgba(255, 82, 82, 0.28);
+}
+
+.match-replay-arena > .match-replay-lane.is-self {
+  border-left: 2px solid rgba(0, 230, 118, 0.28);
+}
+
+.match-replay-arena > .match-replay-lane.is-hand {
+  margin-top: 0.15rem;
+  padding-top: 0.82rem;
+  border-top: 1px dashed var(--line);
+}
+
+/* Compact off-board zone rails (graveyard / exile / revealed). */
+.match-replay-zonerail {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.6rem;
+  padding: 0.18rem 0.1rem;
+}
+
+.match-replay-zonerail-label {
+  min-width: 4.6rem;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.match-replay-zonerail.is-opponent .match-replay-zonerail-label {
+  color: var(--metric-negative-text);
+}
+
+.match-replay-zonerail.is-self .match-replay-zonerail-label {
+  color: var(--metric-positive-text);
+}
+
+.match-replay-zonerail-empty {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.match-replay-zonechip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.36rem;
+  padding: 0.22rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: linear-gradient(
+    160deg,
+    var(--list-bg-a) 0%,
+    var(--list-bg-b) 100%
+  );
+}
+
+.match-replay-zonechip-term {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.match-replay-zonechip-value {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+}
+
+button.match-replay-zonechip.is-button {
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.match-replay-zonechip.is-button:hover {
+  border-color: var(--tab-active-border);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.16);
+  transform: translateY(-1px);
+}
+
+.match-replay-zonechip.is-button:focus-visible {
+  outline: none;
+  border-color: var(--tab-active-border);
+  box-shadow:
+    0 0 0 1px var(--accent-soft) inset,
+    0 0 0 3px var(--accent-glow);
+}
+
+/* Center mirror axis carrying the stack. */
+.match-replay-arena-midline {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.4rem;
+  margin: 0.05rem 0;
+}
+
+.match-replay-arena-midline::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--line-strong) 16%,
+    var(--line-strong) 84%,
+    transparent 100%
+  );
+}
+
+.match-replay-arena-midline .match-replay-stackbox {
+  position: relative;
+  z-index: 1;
+  width: auto;
+  max-width: min(42rem, 100%);
 }
 
 .match-replay-connection-overlay.is-muted .match-replay-connection-path {
@@ -2450,19 +2744,22 @@ body.has-wide-deck-curve .app-shell {
 }
 
 .match-replay-zone-groups {
-  display: grid;
-  gap: 0.78rem;
-  min-height: 9.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem 0.85rem;
+  min-height: 0;
 }
 
 .match-replay-zone-group {
   display: grid;
-  gap: 0.58rem;
+  gap: 0.34rem;
+  align-content: start;
 }
 
 .match-replay-zone-group + .match-replay-zone-group {
-  padding-top: 0.78rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-left: 0.85rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .match-replay-zone-group-head {
@@ -2495,7 +2792,7 @@ body.has-wide-deck-curve .app-shell {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 0.7rem;
+  gap: 0.42rem;
   min-height: 0;
 }
 
@@ -2518,7 +2815,7 @@ body.has-wide-deck-curve .app-shell {
 }
 
 .match-replay-object {
-  --match-replay-board-card-width: 108px;
+  --match-replay-board-card-width: 56px;
   --match-replay-board-card-height: calc(
     var(--match-replay-board-card-width) * 88 / 63
   );
@@ -2781,7 +3078,7 @@ body.has-wide-deck-curve .app-shell {
 }
 
 .match-replay-card.is-hand {
-  width: 116px;
+  width: 74px;
   height: auto;
   flex: 0 0 auto;
 }
@@ -2851,21 +3148,21 @@ body.has-wide-deck-curve .app-shell {
 .match-replay-card-statusrow {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
+  gap: 0.22rem;
 }
 
 .match-replay-state-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 1.3rem;
-  padding: 0.16rem 0.42rem;
+  min-height: 1rem;
+  padding: 0.08rem 0.3rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: var(--muted-strong);
   font-family: var(--font-mono);
-  font-size: 0.62rem;
-  letter-spacing: 0.05em;
+  font-size: 0.54rem;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -2971,12 +3268,11 @@ body.has-wide-deck-curve .app-shell {
 }
 
 .match-replay-hud-life {
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 0.16rem;
-  min-width: 5.4rem;
-  padding: 0.35rem 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 7rem;
+  padding: 0.32rem 0.6rem;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: linear-gradient(
@@ -2986,12 +3282,51 @@ body.has-wide-deck-curve .app-shell {
   );
 }
 
+.match-replay-hud-life.is-self {
+  flex-direction: row-reverse;
+}
+
+.match-replay-hud-life-body {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.match-replay-hud-life.is-self .match-replay-hud-life-body {
+  justify-items: end;
+  text-align: right;
+}
+
+.match-replay-hud-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.03em;
+}
+
 .match-replay-hud-life.is-opponent {
   border-color: rgba(255, 82, 82, 0.34);
 }
 
 .match-replay-hud-life.is-self {
   border-color: rgba(0, 230, 118, 0.34);
+}
+
+.match-replay-hud-life.is-opponent .match-replay-hud-avatar {
+  border: 1px solid var(--pill-loss-border);
+  background: var(--pill-loss-bg);
+  color: var(--pill-loss-text);
+}
+
+.match-replay-hud-life.is-self .match-replay-hud-avatar {
+  border: 1px solid var(--pill-win-border);
+  background: var(--pill-win-bg);
+  color: var(--pill-win-text);
 }
 
 .match-replay-hud-life-label {
@@ -3084,8 +3419,12 @@ body.has-wide-deck-curve .app-shell {
 .match-replay-hud-headline {
   margin: 0;
   color: var(--text-soft);
-  font-size: 0.92rem;
+  font-size: 0.96rem;
   line-height: 1.4;
+}
+
+.match-replay-hud-headline-note {
+  color: var(--win);
 }
 
 .match-replay-change-list.is-hud {
@@ -3315,6 +3654,40 @@ body.has-wide-deck-curve .app-shell {
   background: var(--accent);
   box-shadow: 0 0 8px var(--accent-glow);
   transform: translateX(-50%);
+}
+
+.match-replay-scrubber-pin {
+  position: absolute;
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  padding: 0;
+  border: 1px solid var(--bg);
+  border-radius: 2px;
+  background: var(--muted-strong);
+  transform: rotate(45deg);
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    background-color 140ms ease;
+}
+
+.match-replay-scrubber-pin:hover {
+  transform: rotate(45deg) scale(1.25);
+}
+
+.match-replay-scrubber-pin.is-swing {
+  background: var(--combat-connection-line);
+}
+
+.match-replay-scrubber-pin.is-decisive {
+  background: var(--loss);
+}
+
+.match-replay-scrubber-pin:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-glow);
 }
 
 .match-replay-scrubber-legend {
@@ -4274,6 +4647,15 @@ select {
     grid-template-columns: 1fr;
   }
 
+  .match-replay-canvas.is-arena {
+    grid-template-columns: 1fr;
+  }
+
+  .match-replay-movelist {
+    position: static;
+    max-height: 22rem;
+  }
+
   .match-replay-sidebar {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: start;
@@ -4432,15 +4814,15 @@ select {
   }
 
   .match-replay-card {
-    --match-replay-card-width: 92px;
+    --match-replay-card-width: 64px;
   }
 
   .match-replay-card.is-hand {
-    width: 104px;
+    width: 78px;
   }
 
   .match-replay-object {
-    --match-replay-board-card-width: 92px;
+    --match-replay-board-card-width: 64px;
   }
 
   .match-replay-button {
@@ -4535,15 +4917,15 @@ select {
   }
 
   .match-replay-card {
-    --match-replay-card-width: 78px;
+    --match-replay-card-width: 60px;
   }
 
   .match-replay-card.is-hand {
-    width: 90px;
+    width: 72px;
   }
 
   .match-replay-object {
-    --match-replay-board-card-width: 78px;
+    --match-replay-board-card-width: 60px;
   }
 
   .match-replay-card.is-stack {

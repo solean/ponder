@@ -4,9 +4,11 @@ import {
   battlefieldSectionKind,
   boardZoneKind,
   boardZoneLabel,
+  buildReplayBeat,
   buildReplayLifeSeries,
   buildReplayTickKinds,
   buildReplayTurnBoundaries,
+  findReplayKeyMoments,
   describeReplayChange,
   filterMeaningfulReplayFrames,
   formatReplayWinReason,
@@ -49,8 +51,11 @@ function object(
     frameId: values.frameId ?? 1,
     instanceId: values.instanceId ?? 1,
     cardId: values.cardId ?? 100,
+    cardName: values.cardName,
     playerSide: values.playerSide ?? "self",
     zoneType: values.zoneType ?? "Battlefield",
+    power: values.power,
+    toughness: values.toughness,
     isToken: values.isToken ?? false,
     isTapped: values.isTapped ?? false,
     hasSummoningSickness: values.hasSummoningSickness ?? false,
@@ -129,6 +134,22 @@ describe("meaningful frame filtering", () => {
     const f1 = frame({ id: 2 });
     expect(filterMeaningfulReplayFrames([f0, f1])).toEqual([f1]);
   });
+
+  test("drops GRE noise moves (same-zone shuffles like Limbo to Limbo)", () => {
+    const noise = change({
+      action: "move_public",
+      fromZoneType: "Limbo",
+      toZoneType: "Limbo",
+    });
+    const real = frame({ id: 2, changes: [change({ action: "tap" })] });
+    expect(
+      filterMeaningfulReplayFrames([
+        frame({ id: 1, changes: [noise] }),
+        real,
+        frame({ id: 3, changes: [noise] }),
+      ]),
+    ).toEqual([real]);
+  });
 });
 
 describe("life series", () => {
@@ -197,6 +218,142 @@ describe("scrubber tick classification", () => {
       frame({ id: 3, selfLifeTotal: 18, opponentLifeTotal: 20 }),
     ]);
     expect(kinds).toEqual(["other", "combat", "life"]);
+  });
+});
+
+describe("play-by-play beats", () => {
+  test("renders an attack with the creature's power/toughness", () => {
+    const f = frame({
+      id: 2,
+      changes: [change({ action: "attack", playerSide: "opponent", cardName: "Otter", instanceId: 7 })],
+      objects: [object({ instanceId: 7, power: 2, toughness: 2 })],
+    });
+    expect(buildReplayBeat(f, null)).toEqual({
+      text: "Opponent attacks with Otter (2/2)",
+    });
+  });
+
+  test("notes creature deaths on a block", () => {
+    const f = frame({
+      id: 2,
+      changes: [
+        change({ action: "block", playerSide: "self", cardName: "Tarmogoyf", instanceId: 3 }),
+        change({
+          action: "move_public",
+          fromZoneType: "Battlefield",
+          toZoneType: "Graveyard",
+          cardName: "Otter",
+        }),
+      ],
+      objects: [object({ instanceId: 3, power: 4, toughness: 4 })],
+    });
+    expect(buildReplayBeat(f, null)).toEqual({
+      text: "You block with Tarmogoyf (4/4)",
+      note: "a creature dies",
+    });
+  });
+
+  test("summarizes a life swing with before/after totals", () => {
+    const prev = frame({ id: 1, selfLifeTotal: 20, opponentLifeTotal: 20 });
+    const f = frame({ id: 2, selfLifeTotal: 20, opponentLifeTotal: 18 });
+    expect(buildReplayBeat(f, prev)).toEqual({
+      text: "Life change · opponent 20 → 18",
+    });
+  });
+
+  test("ignores noise moves when picking the fallback beat", () => {
+    const f = frame({
+      id: 2,
+      changes: [
+        change({ action: "move_public", fromZoneType: "Limbo", toZoneType: "Limbo", cardName: "Kaito" }),
+        change({ action: "tap", playerSide: "opponent", cardName: "Island" }),
+      ],
+    });
+    expect(buildReplayBeat(f, null)).toEqual({ text: "Opponent taps Island" });
+  });
+
+  test("uses friendly phrasing when a permanent leaves the battlefield", () => {
+    expect(
+      buildReplayBeat(
+        frame({
+          id: 2,
+          changes: [
+            change({
+              action: "move_public",
+              cardName: "Wistfulness",
+              fromZoneType: "Battlefield",
+              toZoneType: "Graveyard",
+            }),
+          ],
+        }),
+        null,
+      ),
+    ).toEqual({ text: "Wistfulness is put into the graveyard" });
+  });
+
+  test("narrates a card revealed in hand", () => {
+    expect(
+      buildReplayBeat(
+        frame({
+          id: 2,
+          changes: [
+            change({
+              action: "enter_public",
+              playerSide: "self",
+              cardName: "Kaito",
+              toZoneType: "Hand",
+            }),
+          ],
+        }),
+        null,
+      ),
+    ).toEqual({ text: "You reveal Kaito" });
+  });
+
+  test("marks a tapped land as it enters", () => {
+    const f = frame({
+      id: 2,
+      changes: [
+        change({
+          action: "move_public",
+          playerSide: "opponent",
+          cardName: "Steam Vents",
+          fromZoneType: "Hand",
+          toZoneType: "Battlefield",
+          instanceId: 9,
+        }),
+      ],
+      objects: [object({ instanceId: 9, isTapped: true })],
+    });
+    expect(buildReplayBeat(f, null)).toEqual({
+      text: "Opponent plays Steam Vents",
+      note: "tapped",
+    });
+  });
+});
+
+describe("key moments", () => {
+  test("flags the decisive lethal step and the biggest life swings", () => {
+    const frames = [
+      frame({ id: 1, selfLifeTotal: 20, opponentLifeTotal: 20 }),
+      frame({ id: 2, selfLifeTotal: 20, opponentLifeTotal: 13 }), // -7 swing
+      frame({ id: 3, selfLifeTotal: 18, opponentLifeTotal: 13 }), // -2 (below threshold)
+      frame({ id: 4, selfLifeTotal: 18, opponentLifeTotal: 0 }), // lethal
+    ];
+    const moments = findReplayKeyMoments(frames);
+    expect(moments).toEqual([
+      { index: 1, kind: "swing", label: "Life swing · opponent -7" },
+      { index: 3, kind: "decisive", label: "Opponent hit 0 life" },
+    ]);
+  });
+
+  test("returns nothing when life never moves", () => {
+    expect(
+      findReplayKeyMoments([
+        frame({ id: 1, selfLifeTotal: 20, opponentLifeTotal: 20 }),
+        frame({ id: 2, selfLifeTotal: 20, opponentLifeTotal: 20 }),
+      ]),
+    ).toEqual([]);
   });
 });
 

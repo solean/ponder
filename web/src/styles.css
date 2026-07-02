@@ -1804,32 +1804,27 @@ body.has-wide-deck-curve .app-shell {
 }
 
 .match-detail-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
-  gap: 0.58rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 1.5rem;
+  row-gap: 0.5rem;
   margin: 0;
 }
 
 .match-detail-summary-item {
-  display: grid;
-  gap: 0.24rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
   min-width: 0;
-  padding: 0.62rem 0.72rem;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: linear-gradient(
-    160deg,
-    var(--list-bg-a) 0%,
-    var(--list-bg-b) 100%
-  );
-  box-shadow: inset 0 1px 0 var(--card-inner-border);
 }
 
 .match-detail-summary-item dt {
   margin: 0;
+  flex: none;
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 0.66rem;
+  font-size: 0.6rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -1837,11 +1832,14 @@ body.has-wide-deck-curve .app-shell {
 .match-detail-summary-item dd {
   margin: 0;
   min-width: 0;
+  max-width: 24rem;
   color: var(--text);
-  font-size: 0.98rem;
+  font-size: 0.85rem;
   font-weight: 500;
-  line-height: 1.28;
-  overflow-wrap: anywhere;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .match-detail-summary-item .text-link {
@@ -2534,6 +2532,7 @@ body.has-wide-deck-curve .app-shell {
 .match-replay-arena {
   position: relative;
   z-index: 2;
+  container-type: inline-size;
   display: grid;
   gap: 0.5rem;
   padding: 0.7rem;
@@ -2815,7 +2814,7 @@ button.match-replay-zonechip.is-button {
 }
 
 .match-replay-object {
-  --match-replay-board-card-width: 56px;
+  --match-replay-board-card-width: clamp(64px, 10.5cqw, 116px);
   --match-replay-board-card-height: calc(
     var(--match-replay-board-card-width) * 88 / 63
   );
@@ -3078,7 +3077,7 @@ button.match-replay-zonechip.is-button {
 }
 
 .match-replay-card.is-hand {
-  width: 74px;
+  width: clamp(82px, 12cqw, 138px);
   height: auto;
   flex: 0 0 auto;
 }
@@ -4302,9 +4301,11 @@ button.match-replay-zonechip.is-button {
   align-items: center;
   gap: 0.4em;
   min-width: 0;
+  max-width: 100%;
 }
 
 .event-label-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

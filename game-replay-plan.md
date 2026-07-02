@@ -66,6 +66,20 @@ Status markers: ✅ done · 🔲 open · 🟡 in progress
 > whole board (both battlefields + hand) now fits one screen. Verified live on
 > match 675.
 >
+> ✅ **Adaptive card width.** The fixed 56px cards left lots of empty horizontal
+> space on sparse boards. The arena is now a CSS container (`container-type:
+> inline-size`) and board/hand cards size with `clamp(…, cqw, …)`, so they grow to
+> use the available board-column width — ~56px → ~83px on the standard 1280px
+> layout, capped so a full board still fits (arena ~925px when full). Verified
+> live on matches 428 (sparse) and 675 (full).
+>
+> ✅ **Compact match overview + overflow fix.** The match-detail header was a
+> 9-box "spec sheet" (~250px) of secondary metadata sitting above the replay.
+> Collapsed it into a wrapping inline `LABEL value` strip (~130px), and fixed a
+> bug where a long event name overflowed its cell into the Deck field
+> (`.event-label` now `max-width: 100%`, text child `min-width: 0`). Pulls the
+> replay higher with no info lost.
+>
 > ✅ **Phase 5 (story + polish).** Auto-detected **key-moment pins** on the
 > scrubber (`findReplayKeyMoments`: the decisive 0-life step + the biggest life
 > swings) — clickable diamonds that jump straight there. **Narration polish**:

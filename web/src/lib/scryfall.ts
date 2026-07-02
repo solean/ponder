@@ -1,6 +1,7 @@
 export type CardPreview = {
   name: string;
   imageUrl: string;
+  artCropUrl?: string;
   scryfallUrl?: string;
   manaCost?: string;
   manaValue?: number;
@@ -12,6 +13,7 @@ type ScryfallImageURIs = {
   large?: string;
   normal?: string;
   small?: string;
+  art_crop?: string;
 };
 
 type ScryfallCardFace = {
@@ -49,6 +51,22 @@ function pickImageURL(card: ScryfallCard): string {
     const faceURL = faceImage.normal ?? faceImage.large ?? faceImage.small ?? faceImage.png;
     if (faceURL) {
       return faceURL;
+    }
+  }
+
+  return "";
+}
+
+function pickArtCropURL(card: ScryfallCard): string {
+  const rootArtCrop = card.image_uris?.art_crop;
+  if (rootArtCrop) {
+    return rootArtCrop;
+  }
+
+  for (const face of card.card_faces ?? []) {
+    const faceArtCrop = face.image_uris?.art_crop;
+    if (faceArtCrop) {
+      return faceArtCrop;
     }
   }
 
@@ -145,6 +163,7 @@ export async function fetchCardPreview(cardID: number, cardName?: string): Promi
   return {
     name: card.name?.trim() || cardName?.trim() || `Card ${cardID}`,
     imageUrl: imageURL,
+    artCropUrl: pickArtCropURL(card) || undefined,
     scryfallUrl: card.scryfall_uri,
     manaCost: pickManaCost(card),
     manaValue: typeof card.cmc === "number" && Number.isFinite(card.cmc) ? card.cmc : undefined,

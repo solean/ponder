@@ -2270,54 +2270,156 @@ body.has-wide-deck-curve .app-shell {
   align-items: start;
 }
 
-.match-replay-stackbox-body.is-replay-stack {
-  grid-template-columns: 1fr;
-  gap: 0.5rem;
-}
-
-.match-replay-stackbox-body.is-replay-stack.is-empty {
-  gap: 0;
-}
-
 .match-replay-stackbox-body.is-live-stack {
   grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr);
 }
 
-.match-replay-stack-cards {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.72rem;
-  min-width: 0;
-  overflow-x: auto;
-  padding-bottom: 0.22rem;
-}
-
-.match-replay-stack-slot {
+/* Compact stack strip: one slim "spell ticket" per stack object, top first. */
+.match-replay-stackstrip {
   display: grid;
   gap: 0.32rem;
-  flex: 0 0 auto;
+  justify-items: end;
 }
 
-.match-replay-stack-card-shell {
-  display: flex;
-  justify-content: center;
-}
-
-.match-replay-stack-cards .match-replay-card.is-stack {
-  width: 132px;
-}
-
-.match-replay-stack-slot.is-connection-highlighted .match-replay-stack-slot-copy {
-  color: var(--text-soft);
-}
-
-.match-replay-stack-slot-copy {
+.match-replay-stackstrip-label {
   margin: 0;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.match-replay-stack-tickets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+  justify-items: end;
+}
+
+.match-replay-stack-ticket {
+  margin-right: calc(var(--stack-depth, 0) * 0.6rem);
+  opacity: clamp(0.42, 1 - var(--stack-depth, 0) * 0.19, 1);
+  transition: opacity 160ms ease;
+}
+
+.match-replay-stack-ticket.is-connection-highlighted,
+.match-replay-stack-ticket:hover,
+.match-replay-stack-ticket:focus-within {
+  opacity: 1;
+}
+
+.match-replay-stack-ticket-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.28rem 0.56rem 0.28rem 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: linear-gradient(
+    160deg,
+    var(--surface-strong) 0%,
+    var(--surface-faint) 100%
+  );
+  box-shadow: inset 0 1px 0 var(--card-inner-border);
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.match-replay-stack-ticket.is-top .match-replay-stack-ticket-link,
+.match-replay-stack-ticket.is-active .match-replay-stack-ticket-link {
+  border-color: var(--tab-active-border);
+  box-shadow:
+    inset 0 1px 0 var(--card-inner-border),
+    0 0 14px var(--accent-glow);
+}
+
+.match-replay-stack-ticket-link:hover,
+.match-replay-stack-ticket.is-connection-highlighted .match-replay-stack-ticket-link {
+  border-color: var(--tab-active-border);
+}
+
+.match-replay-stack-ticket-link:focus-visible {
+  outline: none;
+  border-color: var(--tab-active-border);
+  box-shadow:
+    0 0 0 1px var(--accent-soft) inset,
+    0 0 0 3px var(--accent-glow);
+}
+
+.match-replay-stack-ticket-edge {
+  align-self: stretch;
+  width: 3px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.match-replay-stack-ticket.is-self .match-replay-stack-ticket-edge {
+  background: var(--metric-positive-border);
+}
+
+.match-replay-stack-ticket.is-opponent .match-replay-stack-ticket-edge {
+  background: var(--metric-negative-border);
+}
+
+.match-replay-stack-ticket-art {
+  width: 2.5rem;
+  height: 1.75rem;
+  border-radius: 3px;
+  border: 1px solid var(--line-strong);
+  object-fit: cover;
+  flex: none;
+}
+
+.match-replay-stack-ticket-name {
+  max-width: 13rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.match-replay-stack-ticket-owner {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.match-replay-stack-ticket.is-self .match-replay-stack-ticket-owner {
+  color: var(--metric-positive-text);
+}
+
+.match-replay-stack-ticket.is-opponent .match-replay-stack-ticket-owner {
+  color: var(--metric-negative-text);
+}
+
+.match-replay-stack-ticket-tag {
+  padding: 0.08rem 0.32rem;
+  border: 1px solid var(--accent-glow);
+  border-radius: 3px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.match-replay-stack-ticket-index {
+  min-width: 1rem;
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 0.66rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .match-replay-stackbox-copy {
@@ -2414,6 +2516,7 @@ body.has-wide-deck-curve .app-shell {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 0.6rem 1rem;
 }
 
@@ -2424,11 +2527,11 @@ body.has-wide-deck-curve .app-shell {
 .match-replay-arena-stack {
   flex: 0 0 auto;
   width: max-content;
-  max-width: 18rem;
+  max-width: min(26rem, 100%);
 }
 
-.match-replay-arena-stack .match-replay-stackbox {
-  padding: 0.5rem 0.6rem;
+.match-replay-arena-stack:empty {
+  display: none;
 }
 
 .match-replay-movelist {
@@ -2663,39 +2766,6 @@ button.match-replay-zonechip.is-button {
   box-shadow:
     0 0 0 1px var(--accent-soft) inset,
     0 0 0 3px var(--accent-glow);
-}
-
-/* Center mirror axis carrying the stack. */
-.match-replay-arena-midline {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 1.4rem;
-  margin: 0.05rem 0;
-}
-
-.match-replay-arena-midline::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    var(--line-strong) 16%,
-    var(--line-strong) 84%,
-    transparent 100%
-  );
-}
-
-.match-replay-arena-midline .match-replay-stackbox {
-  position: relative;
-  z-index: 1;
-  width: auto;
-  max-width: min(42rem, 100%);
 }
 
 .match-replay-connection-overlay.is-muted .match-replay-connection-path {
@@ -4666,7 +4736,7 @@ select {
     grid-column: span 3;
   }
 
-  .match-replay-stackbox-body:not(.is-replay-stack) {
+  .match-replay-stackbox-body {
     grid-template-columns: minmax(140px, 180px) minmax(0, 1fr);
   }
 
@@ -4800,6 +4870,20 @@ select {
 
   .match-replay-stackbox-body.is-live-stack {
     grid-template-columns: 1fr;
+  }
+
+  .match-replay-stackstrip,
+  .match-replay-stack-tickets {
+    justify-items: start;
+  }
+
+  .match-replay-stack-ticket {
+    margin-right: 0;
+    margin-left: calc(var(--stack-depth, 0) * 0.6rem);
+  }
+
+  .match-replay-stack-ticket-name {
+    max-width: 8rem;
   }
 
   .match-replay-card-row {

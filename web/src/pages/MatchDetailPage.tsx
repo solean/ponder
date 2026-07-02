@@ -1413,6 +1413,8 @@ function MatchReplayStack({
   connectionInteractiveInstanceIDs?: Set<number>;
   onConnectionFocusChange?: (instanceId: number | null) => void;
 }) {
+  // Stack zone positions count down from the top: position 1 is the spell
+  // that resolves next, so ascending order is already top-first.
   const stackObjects = useMemo(
     () =>
       [...(frame.objects ?? [])]
@@ -1420,106 +1422,117 @@ function MatchReplayStack({
         .sort(sortReplayObjects),
     [frame],
   );
-  const topObject = stackObjects[stackObjects.length - 1] ?? null;
+
+  if (stackObjects.length === 0) {
+    return null;
+  }
 
   return (
-    <section className="match-replay-stackbox" aria-label="Current stack">
-      <div className="match-replay-stackbox-head">
-        <div>
-          <p className="match-replay-sidebox-label">Stack</p>
-          <p className="match-replay-sidebox-total">
-            {stackObjects.length === 0
-              ? "Empty"
-              : `${stackObjects.length} public card${stackObjects.length === 1 ? "" : "s"}`}
-          </p>
-        </div>
-        {topObject ? (
-          <p className="match-replay-stackbox-player">
-            Top • {timelinePlayerLabel(topObject.playerSide)}
-          </p>
-        ) : null}
-      </div>
-      <div
-        className={`match-replay-stackbox-body is-replay-stack ${stackObjects.length === 0 ? "is-empty" : ""}`}
+    <section className="match-replay-stackstrip" aria-label="Current stack">
+      <p className="match-replay-stackstrip-label">
+        Stack
+        {stackObjects.length > 1 ? ` · ${stackObjects.length}` : ""}
+      </p>
+      <ol
+        className="match-replay-stack-tickets"
+        aria-label="Current stack ordered top to bottom"
       >
-        <div
-          className="match-replay-stack-cards"
-          aria-label="Current stack ordered bottom to top"
-        >
-          {stackObjects.length === 0 ? (
-            <p className="match-replay-empty">
-              No public stack in this step.
-            </p>
-          ) : (
-            stackObjects.map((object, index) => (
+        {stackObjects.map((object, index) => {
+          const preview = previewByCardID.get(object.cardId) ?? null;
+          const card = { cardId: object.cardId, cardName: object.cardName };
+          const name = preview?.name ?? cardDisplayName(card);
+          const isTop = index === 0;
+          const manaCost = preview?.manaCost?.trim() ?? "";
+          const connectionFocusable =
+            connectionInteractiveInstanceIDs?.has(object.instanceId) &&
+            onConnectionFocusChange;
+
+          return (
+            <li
+              className={`match-replay-stack-ticket is-${object.playerSide} ${isTop ? "is-top" : ""} ${
+                highlightedInstanceIDs.has(object.instanceId) ? "is-active" : ""
+              } ${
+                connectionHighlightedInstanceIDs?.has(object.instanceId)
+                  ? "is-connection-highlighted"
+                  : ""
+              }`}
+              style={{ "--stack-depth": index } as CSSProperties}
+              key={object.instanceId}
+              onMouseEnter={
+                connectionFocusable
+                  ? () => onConnectionFocusChange(object.instanceId)
+                  : undefined
+              }
+              onMouseLeave={
+                connectionFocusable
+                  ? () => onConnectionFocusChange(null)
+                  : undefined
+              }
+              onFocus={
+                connectionFocusable
+                  ? () => onConnectionFocusChange(object.instanceId)
+                  : undefined
+              }
+              onBlur={
+                connectionFocusable
+                  ? () => onConnectionFocusChange(null)
+                  : undefined
+              }
+            >
               <div
-                className={`match-replay-stack-slot ${
-                  connectionHighlightedInstanceIDs?.has(object.instanceId)
-                    ? "is-connection-highlighted"
-                    : ""
-                }`}
-                key={object.instanceId}
-                onMouseEnter={
-                  connectionInteractiveInstanceIDs?.has(object.instanceId) &&
-                  onConnectionFocusChange
-                    ? () => onConnectionFocusChange(object.instanceId)
-                    : undefined
-                }
-                onMouseLeave={
-                  connectionInteractiveInstanceIDs?.has(object.instanceId) &&
-                  onConnectionFocusChange
-                    ? () => onConnectionFocusChange(null)
-                    : undefined
-                }
-                onFocus={
-                  connectionInteractiveInstanceIDs?.has(object.instanceId) &&
-                  onConnectionFocusChange
-                    ? () => onConnectionFocusChange(object.instanceId)
-                    : undefined
-                }
-                onBlur={
-                  connectionInteractiveInstanceIDs?.has(object.instanceId) &&
-                  onConnectionFocusChange
-                    ? () => onConnectionFocusChange(null)
+                className="match-replay-stack-ticket-shell"
+                ref={
+                  onRegisterCardShell
+                    ? (element) =>
+                        onRegisterCardShell(object.instanceId, element)
                     : undefined
                 }
               >
-                <div
-                  className="match-replay-stack-card-shell"
-                  ref={
-                    onRegisterCardShell
-                      ? (element) =>
-                          onRegisterCardShell(object.instanceId, element)
-                      : undefined
-                  }
-                >
-                  <MatchReplayObjectCard
-                    object={object}
-                    preview={previewByCardID.get(object.cardId) ?? null}
-                    active={
-                      highlightedInstanceIDs.has(object.instanceId) ||
-                      index === stackObjects.length - 1
-                    }
-                    size="stack"
-                    chipLabel={
-                      index === stackObjects.length - 1
-                        ? "Top"
-                        : `${index + 1}`
-                    }
-                    connectionHighlighted={
-                      connectionHighlightedInstanceIDs?.has(object.instanceId) ??
-                      false
-                    }
-                  />
-                </div>
-                <p className="match-replay-stack-slot-copy">
-                  {timelinePlayerLabel(object.playerSide)}
-                </p>
+                <ReplayCardPreviewAnchor preview={preview}>
+                  <a
+                    className="match-replay-stack-ticket-link"
+                    href={preview?.scryfallUrl ?? cardFallbackHref(card)}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Open ${name} on Scryfall`}
+                    title={`${name} • ${timelinePlayerLabel(object.playerSide)}${isTop ? " • Top of stack" : ""}`}
+                  >
+                    <span
+                      className="match-replay-stack-ticket-edge"
+                      aria-hidden="true"
+                    />
+                    {preview?.artCropUrl ? (
+                      <img
+                        className="match-replay-stack-ticket-art"
+                        src={preview.artCropUrl}
+                        alt=""
+                        loading="eager"
+                        decoding="async"
+                        width={48}
+                        height={34}
+                      />
+                    ) : null}
+                    <span className="match-replay-stack-ticket-name">
+                      {name}
+                    </span>
+                    {manaCost ? <ManaCostDisplay manaCost={manaCost} /> : null}
+                    <span className="match-replay-stack-ticket-owner">
+                      {object.playerSide === "self" ? "You" : "Opp"}
+                    </span>
+                    {isTop ? (
+                      <span className="match-replay-stack-ticket-tag">Top</span>
+                    ) : (
+                      <span className="match-replay-stack-ticket-index">
+                        {index + 1}
+                      </span>
+                    )}
+                  </a>
+                </ReplayCardPreviewAnchor>
               </div>
-            ))
-          )}
-        </div>
-      </div>
+            </li>
+          );
+        })}
+      </ol>
     </section>
   );
 }

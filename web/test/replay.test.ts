@@ -5,6 +5,7 @@ import {
   boardZoneKind,
   boardZoneLabel,
   buildReplayBeat,
+  buildReplayBoardCensus,
   buildReplayLifeSeries,
   buildReplayTickKinds,
   buildReplayTurnBoundaries,
@@ -59,6 +60,7 @@ function object(
     toughness: values.toughness,
     attackState: values.attackState,
     counterSummaryJson: values.counterSummaryJson,
+    detailsJson: values.detailsJson,
     isToken: values.isToken ?? false,
     isTapped: values.isTapped ?? false,
     hasSummoningSickness: values.hasSummoningSickness ?? false,
@@ -547,5 +549,96 @@ describe("game result inference", () => {
       { isFinalGame: true, matchResult: "win" },
     );
     expect(summary?.result).toBe("win");
+  });
+});
+
+describe("board census", () => {
+  test("counts creatures with power, lands, hand, and graveyard per side", () => {
+    const snapshot = buildReplayBoardCensus(
+      frame({
+        objects: [
+          // Your side: 2 creatures (3 + 2 power), 2 lands, 1 hand, 1 graveyard.
+          object({ instanceId: 1, power: 3, toughness: 3 }),
+          object({
+            instanceId: 2,
+            power: 2,
+            toughness: 2,
+            detailsJson: JSON.stringify({ cardTypes: ["CardType_Creature"] }),
+          }),
+          object({
+            instanceId: 3,
+            detailsJson: JSON.stringify({ cardTypes: ["CardType_Land"] }),
+          }),
+          object({
+            instanceId: 4,
+            detailsJson: JSON.stringify({ cardTypes: ["CardType_Land"] }),
+          }),
+          object({ instanceId: 5, zoneType: "ZoneType_Hand" }),
+          object({ instanceId: 6, zoneType: "ZoneType_Graveyard" }),
+          // Opponent: 1 creature, 1 land, plus a stack object that must not count.
+          object({
+            instanceId: 7,
+            playerSide: "opponent",
+            power: 4,
+            toughness: 4,
+          }),
+          object({
+            instanceId: 8,
+            playerSide: "opponent",
+            detailsJson: JSON.stringify({ cardTypes: ["CardType_Land"] }),
+          }),
+          object({
+            instanceId: 9,
+            playerSide: "opponent",
+            zoneType: "ZoneType_Stack",
+          }),
+          // Unknown side is ignored.
+          object({ instanceId: 10, playerSide: "unknown" }),
+        ],
+      }),
+    );
+
+    expect(snapshot.self).toEqual({
+      creatures: 2,
+      power: 5,
+      lands: 2,
+      hand: 1,
+      graveyard: 1,
+    });
+    expect(snapshot.opponent).toEqual({
+      creatures: 1,
+      power: 4,
+      lands: 1,
+      // Hidden zone with no revealed cards reads as unknown, not empty.
+      hand: null,
+      graveyard: 0,
+    });
+  });
+
+  test("animated lands count as creatures, not lands", () => {
+    const snapshot = buildReplayBoardCensus(
+      frame({
+        objects: [
+          object({
+            instanceId: 1,
+            power: 2,
+            toughness: 2,
+            detailsJson: JSON.stringify({
+              cardTypes: ["CardType_Land", "CardType_Creature"],
+            }),
+          }),
+        ],
+      }),
+    );
+    expect(snapshot.self.creatures).toBe(1);
+    expect(snapshot.self.lands).toBe(0);
+    expect(snapshot.self.power).toBe(2);
+  });
+
+  test("handles frames without objects", () => {
+    const snapshot = buildReplayBoardCensus(frame({}));
+    expect(snapshot.self.creatures).toBe(0);
+    expect(snapshot.self.hand).toBe(0);
+    expect(snapshot.opponent.hand).toBeNull();
   });
 });

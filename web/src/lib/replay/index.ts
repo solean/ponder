@@ -1242,6 +1242,92 @@ export function replayLifeSeriesDomain(
   return { min, max };
 }
 
+export type ReplaySideCensus = {
+  creatures: number;
+  /** Combined power of the counted creatures. */
+  power: number;
+  lands: number;
+  /** Null when the hand is a hidden zone (opponent with no revealed cards). */
+  hand: number | null;
+  graveyard: number;
+};
+
+export type ReplayBoardCensus = {
+  self: ReplaySideCensus;
+  opponent: ReplaySideCensus;
+};
+
+function emptySideCensus(): ReplaySideCensus {
+  return { creatures: 0, power: 0, lands: 0, hand: 0, graveyard: 0 };
+}
+
+function objectTypeIncludes(object: MatchReplayFrameObject, type: string): boolean {
+  return replayObjectCardTypes(object).some((value) =>
+    value.toLowerCase().includes(type),
+  );
+}
+
+/**
+ * Head count of each player's public state in a frame: battlefield creatures
+ * (with combined power) and lands, plus hand and graveyard sizes. Creatures are
+ * recognized by card type or by carrying power/toughness, so animated lands
+ * count as creatures rather than lands. Drives the scrubber hover snapshot.
+ */
+export function buildReplayBoardCensus(frame: MatchReplayFrame): ReplayBoardCensus {
+  const census: ReplayBoardCensus = {
+    self: emptySideCensus(),
+    opponent: emptySideCensus(),
+  };
+
+  for (const object of frame.objects ?? []) {
+    const side =
+      object.playerSide === "self"
+        ? census.self
+        : object.playerSide === "opponent"
+          ? census.opponent
+          : null;
+    if (!side) {
+      continue;
+    }
+
+    const kind = boardZoneKind(object.zoneType);
+    if (kind === "hand") {
+      side.hand = (side.hand ?? 0) + 1;
+      continue;
+    }
+    if (kind === "graveyard") {
+      side.graveyard += 1;
+      continue;
+    }
+    if (kind !== "battlefield") {
+      continue;
+    }
+
+    const isCreature =
+      objectTypeIncludes(object, "creature") ||
+      (typeof object.power === "number" && typeof object.toughness === "number");
+    if (isCreature) {
+      side.creatures += 1;
+      if (typeof object.power === "number") {
+        side.power += object.power;
+      }
+      continue;
+    }
+    if (objectTypeIncludes(object, "land")) {
+      side.lands += 1;
+    }
+  }
+
+  // Replay frames only carry public objects, so the opponent's hand is
+  // invisible unless cards were revealed; zero visible cards means "unknown",
+  // not "empty". Your own hand is always fully visible.
+  if (census.opponent.hand === 0) {
+    census.opponent.hand = null;
+  }
+
+  return census;
+}
+
 /** Classifies a frame's primary event for scrubber tick coloring. */
 export function replayFrameTickKind(
   frame: MatchReplayFrame,

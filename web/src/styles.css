@@ -5724,3 +5724,176 @@ select {
     animation: none;
   }
 }
+
+/* ══════════════════════════════════════════
+   REPLAY SCRUBBER — HOVER SNAPSHOT
+   ══════════════════════════════════════════ */
+
+.match-replay-scrubber-ghost {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 1px;
+  background: var(--line-strong);
+  pointer-events: none;
+}
+
+.match-replay-scrubber-tooltip {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  transform: translateX(-50%);
+  width: 18rem;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.62rem 0.72rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--popover-bg);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  z-index: 40;
+}
+
+.match-replay-scrubber-tooltip.is-align-start {
+  transform: translateX(-1.2rem);
+}
+
+.match-replay-scrubber-tooltip.is-align-end {
+  transform: translateX(calc(-100% + 1.2rem));
+}
+
+.match-replay-scrubber-tooltip-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.match-replay-scrubber-tooltip-head strong {
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.match-replay-scrubber-tooltip-head span {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.match-replay-scrubber-tooltip-lifes {
+  display: flex;
+  gap: 1rem;
+}
+
+.match-replay-scrubber-tooltip-life {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.32rem;
+  font-family: var(--font-mono);
+}
+
+.match-replay-scrubber-tooltip-life-label {
+  color: var(--muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.match-replay-scrubber-tooltip-life strong {
+  font-size: 1.08rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.match-replay-scrubber-tooltip-life.is-self strong {
+  color: var(--win);
+}
+
+.match-replay-scrubber-tooltip-life.is-opponent strong {
+  color: var(--loss);
+}
+
+.match-replay-scrubber-tooltip-delta {
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-replay-scrubber-tooltip-delta.is-up {
+  color: var(--win);
+}
+
+.match-replay-scrubber-tooltip-delta.is-down {
+  color: var(--loss);
+}
+
+.match-replay-scrubber-tooltip-census {
+  display: grid;
+  grid-template-columns: 2.1rem repeat(5, minmax(0, 1fr));
+  gap: 0.18rem 0.3rem;
+  padding: 0.42rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: linear-gradient(
+    160deg,
+    var(--panel-inner-a) 0%,
+    var(--panel-inner-b) 100%
+  );
+  font-family: var(--font-mono);
+}
+
+.match-replay-scrubber-tooltip-cell {
+  min-width: 0;
+  text-align: right;
+  color: var(--text-soft);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-replay-scrubber-tooltip-cell.is-head {
+  color: var(--muted);
+  font-size: 0.56rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.match-replay-scrubber-tooltip-cell.is-side {
+  text-align: left;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.match-replay-scrubber-tooltip-cell.is-side.is-self {
+  color: var(--win);
+}
+
+.match-replay-scrubber-tooltip-cell.is-side.is-opponent {
+  color: var(--loss);
+}
+
+.match-replay-scrubber-tooltip-beat {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Touch devices scrub instead of hovering; never show the preview there. */
+@media (hover: none) {
+  .match-replay-scrubber-ghost,
+  .match-replay-scrubber-tooltip {
+    display: none;
+  }
+}

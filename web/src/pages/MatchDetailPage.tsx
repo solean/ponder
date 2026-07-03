@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  Fragment,
   useEffect,
   useId,
   useMemo,
@@ -39,6 +40,7 @@ import {
   boardZoneKind,
   boardZoneLabel,
   buildReplayBeat,
+  buildReplayBoardCensus,
   buildReplayLifeSeries,
   buildReplayTickKinds,
   buildReplayTurnBoundaries,
@@ -80,6 +82,7 @@ import {
   type BoardZoneKind,
   type InspectableZoneKind,
   type PreviewCard,
+  type ReplayBoardCensus,
   type ReplayBoardConnection,
   type ReplayConnectionKind,
   type ReplayBeat,
@@ -1666,6 +1669,119 @@ const SCRUBBER_LIFE_H = 31;
 const SCRUBBER_TICK_TOP = 43;
 const SCRUBBER_TICK_BOTTOM = 51;
 
+/** Game-state summary shown while hovering the scrubber. */
+type ReplayScrubberSnapshot = {
+  momentLabel: string;
+  stepLabel: string;
+  selfLife: number | null;
+  opponentLife: number | null;
+  selfLifeDelta: number | null;
+  opponentLifeDelta: number | null;
+  census: ReplayBoardCensus;
+  beat: ReplayBeat;
+};
+
+function scrubberSnapshotAriaText(snapshot: ReplayScrubberSnapshot): string {
+  const life = (value: number | null) => (value == null ? "unknown" : `${value}`);
+  return `${snapshot.momentLabel} — you ${life(snapshot.selfLife)} life, opponent ${life(snapshot.opponentLife)} life`;
+}
+
+function MatchReplayScrubberLife({
+  side,
+  life,
+  delta,
+}: {
+  side: "self" | "opponent";
+  life: number | null;
+  delta: number | null;
+}) {
+  return (
+    <span className={`match-replay-scrubber-tooltip-life is-${side}`}>
+      <span className="match-replay-scrubber-tooltip-life-label">
+        {side === "self" ? "You" : "Opp"}
+      </span>
+      <strong>{life ?? "—"}</strong>
+      {delta !== null ? (
+        <span
+          className={`match-replay-scrubber-tooltip-delta ${delta > 0 ? "is-up" : "is-down"}`}
+        >
+          {delta > 0 ? `+${delta}` : delta}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+const SCRUBBER_CENSUS_COLUMNS = [
+  { key: "creatures", label: "Crea" },
+  { key: "power", label: "Pwr" },
+  { key: "lands", label: "Land" },
+  { key: "hand", label: "Hand" },
+  { key: "graveyard", label: "Grave" },
+] as const;
+
+function MatchReplayScrubberTooltip({
+  snapshot,
+}: {
+  snapshot: ReplayScrubberSnapshot;
+}) {
+  return (
+    <>
+      <p className="match-replay-scrubber-tooltip-head">
+        <strong>{snapshot.momentLabel}</strong>
+        <span>{snapshot.stepLabel}</span>
+      </p>
+      <div className="match-replay-scrubber-tooltip-lifes">
+        <MatchReplayScrubberLife
+          side="self"
+          life={snapshot.selfLife}
+          delta={snapshot.selfLifeDelta}
+        />
+        <MatchReplayScrubberLife
+          side="opponent"
+          life={snapshot.opponentLife}
+          delta={snapshot.opponentLifeDelta}
+        />
+      </div>
+      <div
+        className="match-replay-scrubber-tooltip-census"
+        role="presentation"
+      >
+        <span className="match-replay-scrubber-tooltip-cell is-head" />
+        {SCRUBBER_CENSUS_COLUMNS.map((column) => (
+          <span
+            key={`head-${column.key}`}
+            className="match-replay-scrubber-tooltip-cell is-head"
+          >
+            {column.label}
+          </span>
+        ))}
+        {(["self", "opponent"] as const).map((side) => (
+          <Fragment key={side}>
+            <span
+              className={`match-replay-scrubber-tooltip-cell is-side is-${side}`}
+            >
+              {side === "self" ? "You" : "Opp"}
+            </span>
+            {SCRUBBER_CENSUS_COLUMNS.map((column) => (
+              <span
+                key={`${side}-${column.key}`}
+                className="match-replay-scrubber-tooltip-cell"
+              >
+                {snapshot.census[side][column.key] ?? "—"}
+              </span>
+            ))}
+          </Fragment>
+        ))}
+      </div>
+      <p className="match-replay-scrubber-tooltip-beat">
+        {snapshot.beat.text}
+        {snapshot.beat.note ? ` · ${snapshot.beat.note}` : ""}
+      </p>
+    </>
+  );
+}
+
 function MatchReplayScrubber({
   length,
   index,
@@ -1675,6 +1791,7 @@ function MatchReplayScrubber({
   lifeSeries,
   tickKinds,
   keyMoments,
+  snapshotForIndex,
 }: {
   length: number;
   index: number;
@@ -1684,9 +1801,11 @@ function MatchReplayScrubber({
   lifeSeries?: ReplayLifePoint[];
   tickKinds?: ReplayTickKind[];
   keyMoments?: ReplayKeyMoment[];
+  snapshotForIndex?: (index: number) => ReplayScrubberSnapshot | null;
 }) {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [isScrubbing, setIsScrubbing] = useState(false);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const lastIndex = length > 0 ? length - 1 : 0;
 
   const xOf = (i: number) =>
@@ -1718,21 +1837,39 @@ function MatchReplayScrubber({
     return points.join(" ");
   };
 
-  const seekFromClientX = (clientX: number) => {
+  const indexFromClientX = (clientX: number): number | null => {
     const element = trackRef.current;
     if (!element) {
-      return;
+      return null;
     }
     const rect = element.getBoundingClientRect();
     if (rect.width <= 0) {
-      return;
+      return null;
     }
     const fraction = Math.max(
       0,
       Math.min(1, (clientX - rect.left) / rect.width),
     );
-    onSeek(Math.round(fraction * lastIndex));
+    return Math.round(fraction * lastIndex);
   };
+
+  const seekFromClientX = (clientX: number) => {
+    const nextIndex = indexFromClientX(clientX);
+    if (nextIndex !== null) {
+      onSeek(nextIndex);
+    }
+  };
+
+  // Hover previews without seeking; hidden mid-drag because the real board
+  // below is already following the pointer.
+  const hoverSnapshot =
+    snapshotForIndex && hoverIndex !== null && !isScrubbing
+      ? snapshotForIndex(hoverIndex)
+      : null;
+  const hoverPct = hoverIndex !== null ? pctOf(hoverIndex) : 0;
+  const hoverAlign =
+    hoverPct < 14 ? "is-align-start" : hoverPct > 86 ? "is-align-end" : "";
+  const currentSnapshot = snapshotForIndex ? snapshotForIndex(index) : null;
 
   return (
     <div className="match-replay-scrubber">
@@ -1745,7 +1882,9 @@ function MatchReplayScrubber({
         aria-valuemin={1}
         aria-valuemax={Math.max(length, 1)}
         aria-valuenow={index + 1}
-        aria-valuetext={`${itemLabel} ${index + 1} of ${length}`}
+        aria-valuetext={`${itemLabel} ${index + 1} of ${length}${
+          currentSnapshot ? ` — ${scrubberSnapshotAriaText(currentSnapshot)}` : ""
+        }`}
         onPointerDown={(event) => {
           event.preventDefault();
           try {
@@ -1760,6 +1899,9 @@ function MatchReplayScrubber({
           if (isScrubbing) {
             seekFromClientX(event.clientX);
           }
+          if (snapshotForIndex) {
+            setHoverIndex(indexFromClientX(event.clientX));
+          }
         }}
         onPointerUp={(event) => {
           setIsScrubbing(false);
@@ -1770,6 +1912,7 @@ function MatchReplayScrubber({
           }
         }}
         onPointerCancel={() => setIsScrubbing(false)}
+        onPointerLeave={() => setHoverIndex(null)}
       >
         <svg
           className="match-replay-scrubber-svg"
@@ -1847,6 +1990,23 @@ function MatchReplayScrubber({
           style={{ left: `${pctOf(index)}%` }}
           aria-hidden="true"
         />
+
+        {hoverSnapshot ? (
+          <>
+            <div
+              className="match-replay-scrubber-ghost"
+              style={{ left: `${hoverPct}%` }}
+              aria-hidden="true"
+            />
+            <div
+              className={`match-replay-scrubber-tooltip ${hoverAlign}`}
+              style={{ left: `${hoverPct}%` }}
+              aria-hidden="true"
+            >
+              <MatchReplayScrubberTooltip snapshot={hoverSnapshot} />
+            </div>
+          </>
+        ) : null}
       </div>
 
       {lifeSeries ? (
@@ -2086,6 +2246,36 @@ function MatchReplayFrameBoard({
   const lifeSeries = useMemo(() => buildReplayLifeSeries(frames), [frames]);
   const tickKinds = useMemo(() => buildReplayTickKinds(frames), [frames]);
   const keyMoments = useMemo(() => findReplayKeyMoments(frames), [frames]);
+
+  // Lazily-built, cached per index: users sweep the scrubber back and forth
+  // over the same frames, so each snapshot is computed at most once.
+  const scrubberSnapshotForIndex = useMemo(() => {
+    const cache = new Map<number, ReplayScrubberSnapshot>();
+    return (frameIndex: number): ReplayScrubberSnapshot | null => {
+      const frame = frames[frameIndex];
+      if (!frame) {
+        return null;
+      }
+      const cached = cache.get(frameIndex);
+      if (cached) {
+        return cached;
+      }
+      const prev = frameIndex > 0 ? frames[frameIndex - 1] ?? null : null;
+      const life = lifeSeries[frameIndex];
+      const snapshot: ReplayScrubberSnapshot = {
+        momentLabel: replayFrameMomentLabel(frame),
+        stepLabel: `Step ${frameIndex + 1}/${frames.length}`,
+        selfLife: life?.self ?? null,
+        opponentLife: life?.opponent ?? null,
+        selfLifeDelta: replayLifeDelta(prev, frame, "self"),
+        opponentLifeDelta: replayLifeDelta(prev, frame, "opponent"),
+        census: buildReplayBoardCensus(frame),
+        beat: buildReplayBeat(frame, prev),
+      };
+      cache.set(frameIndex, snapshot);
+      return snapshot;
+    };
+  }, [frames, lifeSeries]);
 
   const currentTurnBoundaryIndex = currentFrame
     ? turnBoundaries.findIndex(
@@ -2452,6 +2642,7 @@ function MatchReplayFrameBoard({
             lifeSeries={lifeSeries}
             tickKinds={tickKinds}
             keyMoments={keyMoments}
+            snapshotForIndex={scrubberSnapshotForIndex}
           />
         </div>
       </div>

@@ -17,6 +17,8 @@ type MatchDeckColorsProps = {
   opponentDeckColors?: string[] | null;
   opponentDeckColorsKnown?: boolean;
   className?: string;
+  /** Skip sides whose colors are unknown instead of rendering "Unknown". */
+  hideUnknown?: boolean;
 };
 
 type DeckColorIdentityProps = {
@@ -83,8 +85,15 @@ export function MatchDeckColors({
   opponentDeckColors,
   opponentDeckColorsKnown,
   className = "",
+  hideUnknown = false,
 }: MatchDeckColorsProps) {
   const classes = ["match-deck-colors", className].filter(Boolean).join(" ");
+  const showSelf = !hideUnknown || deckColorsKnown;
+  const showOpponent = !hideUnknown || opponentDeckColorsKnown;
+
+  if (!showSelf && !showOpponent) {
+    return <span className="deck-color-unknown">—</span>;
+  }
 
   return (
     <div
@@ -94,14 +103,18 @@ export function MatchDeckColors({
         opponentDeckColorsKnown,
       )}.`}
     >
-      <span className="match-deck-colors-group">
-        <span className="match-deck-colors-label">You</span>
-        <DeckColorIdentity colors={deckColors} known={deckColorsKnown} />
-      </span>
-      <span className="match-deck-colors-group">
-        <span className="match-deck-colors-label">Opp.</span>
-        <DeckColorIdentity colors={opponentDeckColors} known={opponentDeckColorsKnown} />
-      </span>
+      {showSelf ? (
+        <span className="match-deck-colors-group">
+          <span className="match-deck-colors-label">You</span>
+          <DeckColorIdentity colors={deckColors} known={deckColorsKnown} />
+        </span>
+      ) : null}
+      {showOpponent ? (
+        <span className="match-deck-colors-group">
+          <span className="match-deck-colors-label">Opp.</span>
+          <DeckColorIdentity colors={opponentDeckColors} known={opponentDeckColorsKnown} />
+        </span>
+      ) : null}
     </div>
   );
 }

@@ -168,7 +168,20 @@ export function RankProgressPanel() {
   const firstPoint = series?.points[0];
   const currentRank = latestPoint ? latestPoint.rankLabel : "Unranked";
   const currentRecord = series?.record ? `${series.record.wins}W-${series.record.losses}L` : null;
+  const rankMoved = firstPoint != null && latestPoint != null && firstPoint.rankLabel !== latestPoint.rankLabel;
   const chartTheme = CHART_THEME_TOKENS[theme];
+
+  // Current standing on the ladder that is not selected, so both ranks are
+  // visible without toggling.
+  const otherLadder: Ladder = ladder === "constructed" ? "limited" : "constructed";
+  const otherLadderRank = useMemo(() => {
+    if (!data) return null;
+    const otherSeries = buildGraphPoints(data, otherLadder, "current");
+    return otherSeries?.points[otherSeries.points.length - 1]?.rankLabel ?? null;
+  }, [data, otherLadder]);
+
+  // A one- or two-point line reads as noise; below this we show chips only.
+  const hasChartableTrend = (series?.points.length ?? 0) >= 3;
 
   const chartOption = useMemo(
     () =>
@@ -375,17 +388,21 @@ export function RankProgressPanel() {
       {readyState ? (
         <div className="rank-summary">
           <div className="rank-chip">
-            <span>Rank</span>
+            <span>{LADDER_CONFIG[ladder].label}</span>
             <strong>{currentRank}</strong>
           </div>
           <div className="rank-chip">
-            <span>{seasonView === "all" ? "Span" : "Path"}</span>
-            <strong>
-              {readyState.firstPoint
-                ? `${readyState.firstPoint.rankLabel} to ${readyState.latestPoint.rankLabel}`
-                : currentRank}
-            </strong>
+            <span>{LADDER_CONFIG[otherLadder].label}</span>
+            <strong>{otherLadderRank ?? "Unranked"}</strong>
           </div>
+          {rankMoved ? (
+            <div className="rank-chip">
+              <span>{seasonView === "all" ? "Span" : "Path"}</span>
+              <strong>
+                {`${readyState.firstPoint?.rankLabel} to ${readyState.latestPoint.rankLabel}`}
+              </strong>
+            </div>
+          ) : null}
           {currentRecord ? (
             <div className="rank-chip">
               <span>{seasonView === "all" ? "Total Record" : "Season Record"}</span>
@@ -396,7 +413,7 @@ export function RankProgressPanel() {
       ) : null}
 
       <div
-        className="rank-chart-frame"
+        className={`rank-chart-frame ${readyState && !hasChartableTrend ? "rank-chart-frame--sparse" : ""}`}
         id={panelId}
         role="region"
         aria-labelledby={headingId}
@@ -406,7 +423,12 @@ export function RankProgressPanel() {
         {!isLoading && !error && !readyState ? (
           <p className="state">{emptyStateMessage(seasonView)}</p>
         ) : null}
-        {readyState ? (
+        {readyState && !hasChartableTrend ? (
+          <p className="state">
+            {`Only ${formatSnapshotLabel(readyState.series.points.length)} so far — the trend chart unlocks at 3.`}
+          </p>
+        ) : null}
+        {readyState && hasChartableTrend ? (
           <ReactECharts
             key={`${ladder}-${seasonView}-${theme}`}
             option={readyState.chartOption}

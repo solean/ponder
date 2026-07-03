@@ -257,8 +257,10 @@ func (s *Store) Overview(ctx context.Context, recentLimit int64) (model.Overview
 	if err != nil {
 		return out, fmt.Errorf("overview aggregate: %w", err)
 	}
-	if out.TotalMatches > 0 {
-		out.WinRate = float64(out.Wins) / float64(out.TotalMatches)
+	// Win rate is over decided matches only; unknown results don't count
+	// against the player.
+	if decided := out.Wins + out.Losses; decided > 0 {
+		out.WinRate = float64(out.Wins) / float64(decided)
 	}
 
 	recent, err := s.ListMatches(ctx, recentLimit, "", "")

@@ -57,6 +57,55 @@ func TestOverviewIncludesPlayerName(t *testing.T) {
 	}
 }
 
+func TestOverviewWinRateIgnoresUnknownResults(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database := openTempSQLiteDB(t)
+	if err := Init(ctx, database); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	store := NewStore(database)
+	tx, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+
+	if _, err := store.UpsertMatchStart(ctx, tx, "match-win", "Traditional_Ladder", 1, "2026-03-12T19:06:52Z"); err != nil {
+		t.Fatalf("UpsertMatchStart(match-win): %v", err)
+	}
+	if _, _, _, err := store.UpdateMatchEnd(ctx, tx, "match-win", 1, 1, 9, 420, "Concede", "2026-03-12T19:13:52Z"); err != nil {
+		t.Fatalf("UpdateMatchEnd(match-win): %v", err)
+	}
+	if _, err := store.UpsertMatchStart(ctx, tx, "match-loss", "Traditional_Ladder", 1, "2026-03-12T20:06:52Z"); err != nil {
+		t.Fatalf("UpsertMatchStart(match-loss): %v", err)
+	}
+	if _, _, _, err := store.UpdateMatchEnd(ctx, tx, "match-loss", 1, 2, 11, 540, "Game", "2026-03-12T20:15:52Z"); err != nil {
+		t.Fatalf("UpdateMatchEnd(match-loss): %v", err)
+	}
+	// No UpdateMatchEnd: this match stays at result "unknown".
+	if _, err := store.UpsertMatchStart(ctx, tx, "match-unknown", "Traditional_Ladder", 1, "2026-03-12T21:06:52Z"); err != nil {
+		t.Fatalf("UpsertMatchStart(match-unknown): %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	overview, err := store.Overview(ctx, 10)
+	if err != nil {
+		t.Fatalf("Overview: %v", err)
+	}
+
+	if overview.TotalMatches != 3 || overview.Wins != 1 || overview.Losses != 1 {
+		t.Fatalf("overview counters = %+v, want total=3 wins=1 losses=1", overview)
+	}
+	if overview.WinRate != 0.5 {
+		t.Fatalf("WinRate = %v, want 0.5 (unknown results excluded)", overview.WinRate)
+	}
+}
+
 func TestMatchListDerivesBestOfAndPlayDraw(t *testing.T) {
 	t.Parallel()
 

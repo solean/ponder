@@ -20,10 +20,11 @@ This MVP includes:
 From `/Users/cschnabel/dev/mtgdata`:
 
 ```bash
-./scripts/start-web.sh
-./scripts/start-backend.sh
-./scripts/start-parse.sh
-./scripts/start-tail.sh
+./scripts/start-backend.sh      # go run ./cmd/mtgdata serve
+./scripts/start-backend-dev.sh  # serve with hot reload via air (go install github.com/air-verse/air@latest)
+./scripts/start-parse.sh        # go run ./cmd/mtgdata parse -resume=true
+./scripts/start-tail.sh         # go run ./cmd/mtgdata tail -interval=2s
+./scripts/start-web.sh          # bun run dev (in web/)
 ```
 
 Each script also forwards any additional CLI flags you pass through to the underlying command.

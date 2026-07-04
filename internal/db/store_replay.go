@@ -694,22 +694,23 @@ func populateReplayFrameChanges(frames []model.MatchReplayFrameRow) {
 					frames[i].Changes = append(frames[i].Changes, replayStateChangeRow(obj, action))
 				}
 				if !sameReplayCombatState(prev, obj) {
-					action := "combat_change"
+					// Only role transitions are narrated; substate shifts on a
+					// creature already in combat (declared -> attacking, or an
+					// attacker becoming blocked/unblocked) are bookkeeping.
+					action := ""
 					switch {
-					case !replayHasCombatRole(prev) && replayHasCombatRole(obj) && replayIsBlocking(obj):
+					case replayIsBlocking(obj) && !replayIsBlocking(prev):
 						action = "block"
-					case !replayHasCombatRole(prev) && replayHasCombatRole(obj):
+					case replayIsAttacking(obj) && !replayIsAttacking(prev):
 						action = "attack"
-					case replayHasCombatRole(prev) && !replayHasCombatRole(obj) && replayIsBlocking(prev):
+					case replayIsBlocking(prev) && !replayIsBlocking(obj):
 						action = "stop_block"
-					case replayHasCombatRole(prev) && !replayHasCombatRole(obj):
+					case replayIsAttacking(prev) && !replayIsAttacking(obj):
 						action = "stop_attack"
-					case replayIsBlocking(obj):
-						action = "block"
-					default:
-						action = "attack"
 					}
-					frames[i].Changes = append(frames[i].Changes, replayStateChangeRow(obj, action))
+					if action != "" {
+						frames[i].Changes = append(frames[i].Changes, replayStateChangeRow(obj, action))
+					}
 				}
 				if prev.HasSummoningSickness != obj.HasSummoningSickness {
 					frames[i].Changes = append(frames[i].Changes, replayStateChangeRow(obj, "summoning_sickness_change"))
@@ -762,16 +763,15 @@ func sameReplayCombatState(a, b model.MatchReplayFrameObjectRow) bool {
 		sameReplayText(a.BlockAttackerIDsJSON, b.BlockAttackerIDsJSON)
 }
 
-func replayHasCombatRole(object model.MatchReplayFrameObjectRow) bool {
-	return replayIsAttacking(object) || replayIsBlocking(object)
-}
-
 func replayIsAttacking(object model.MatchReplayFrameObjectRow) bool {
 	return strings.TrimSpace(object.AttackState) != ""
 }
 
 func replayIsBlocking(object model.MatchReplayFrameObjectRow) bool {
-	return strings.TrimSpace(object.BlockState) != ""
+	// Attackers also carry a blockState ("blocked"/"unblocked" once blockers
+	// are declared); only "declared"/"blocking" mark an actual blocker.
+	state := strings.ToLower(strings.TrimSpace(object.BlockState))
+	return state == "blocking" || state == "declared"
 }
 
 func replayStateChangeRow(object model.MatchReplayFrameObjectRow, action string) model.MatchReplayChangeRow {

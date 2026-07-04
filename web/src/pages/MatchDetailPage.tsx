@@ -48,7 +48,7 @@ import {
   cardFallbackHref,
   filterMeaningfulReplayFrames,
   findReplayKeyMoments,
-  groupBattlefieldLandStacks,
+  groupBattlefieldCardStacks,
   isInspectableZoneKind,
   parseManaCostParts,
   preferredReplayFrameIndex,
@@ -1313,8 +1313,9 @@ function MatchReplayFrameBattlefield({
                   {section.objects.length}
                 </p>
               </div>
-              {section.kind === "lands" ? (
-                <MatchReplayLandStackRow
+              {section.kind === "lands" ||
+              section.kind === "artifacts_enchantments" ? (
+                <MatchReplayCardStackRow
                   objects={section.objects}
                   previewByCardID={previewByCardID}
                   highlightedInstanceIDs={highlightedInstanceIDs}
@@ -1327,6 +1328,11 @@ function MatchReplayFrameBattlefield({
                   }
                   onConnectionFocusChange={onConnectionFocusChange}
                   linkedExileObjectsByParentId={linkedExileObjectsByParentId}
+                  stackEligible={
+                    // Lands stack whenever identical; other permanents only
+                    // consolidate duplicate tokens (e.g. a row of Mutagens).
+                    section.kind === "lands" ? undefined : stackTokensOnly
+                  }
                 />
               ) : (
                 <div className="match-replay-card-row is-sectioned">
@@ -1369,7 +1375,9 @@ function MatchReplayFrameBattlefield({
   );
 }
 
-function MatchReplayLandStackRow({
+const stackTokensOnly = (object: MatchReplayFrameObject) => object.isToken;
+
+function MatchReplayCardStackRow({
   objects,
   previewByCardID,
   highlightedInstanceIDs,
@@ -1378,6 +1386,7 @@ function MatchReplayLandStackRow({
   connectionInteractiveInstanceIDs,
   onConnectionFocusChange,
   linkedExileObjectsByParentId,
+  stackEligible,
 }: {
   objects: MatchReplayFrameObject[];
   previewByCardID: Map<number, CardPreview | null>;
@@ -1387,17 +1396,18 @@ function MatchReplayLandStackRow({
   connectionInteractiveInstanceIDs?: Set<number>;
   onConnectionFocusChange?: (instanceId: number | null) => void;
   linkedExileObjectsByParentId?: Map<number, MatchReplayFrameObject[]>;
+  stackEligible?: (object: MatchReplayFrameObject) => boolean;
 }) {
   const stacks = useMemo(
     () =>
-      groupBattlefieldLandStacks(
+      groupBattlefieldCardStacks(
         objects,
         previewByCardID,
         (object) =>
-          (linkedExileObjectsByParentId?.get(object.instanceId) ?? []).length ===
-          0,
+          (linkedExileObjectsByParentId?.get(object.instanceId) ?? [])
+            .length === 0 && (stackEligible?.(object) ?? true),
       ),
-    [objects, previewByCardID, linkedExileObjectsByParentId],
+    [objects, previewByCardID, linkedExileObjectsByParentId, stackEligible],
   );
 
   const renderObjectCard = (object: MatchReplayFrameObject) => (

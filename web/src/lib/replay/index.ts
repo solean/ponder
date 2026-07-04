@@ -362,7 +362,10 @@ export function replayObjectIsAttacking(object: MatchReplayFrameObject): boolean
 }
 
 export function replayObjectIsBlocking(object: MatchReplayFrameObject): boolean {
-  return Boolean(object.blockState?.trim());
+  // Attackers also carry a blockState ("blocked"/"unblocked" once blockers
+  // are declared); only "declared"/"blocking" mark an actual blocker.
+  const state = object.blockState?.trim().toLowerCase() ?? "";
+  return state === "blocking" || state === "declared";
 }
 
 export function replayObjectPTLabel(
@@ -628,16 +631,16 @@ export function sortBattlefieldSectionObjects(
   });
 }
 
-export type ReplayLandStack = {
+export type ReplayCardStack = {
   key: string;
   objects: MatchReplayFrameObject[];
 };
 
-export function replayObjectCanStackAsLand(
+export function replayObjectCanStack(
   object: MatchReplayFrameObject,
   preview: CardPreview | null,
 ): boolean {
-  // Lands carrying extra state (combat, counters, stolen, summoning sick,
+  // Cards carrying extra state (combat, counters, stolen, summoning sick,
   // animated with stats) stay standalone so that state remains visible.
   if (replayObjectIsAttacking(object) || replayObjectIsBlocking(object)) {
     return false;
@@ -662,25 +665,24 @@ export function replayObjectCanStackAsLand(
 }
 
 /**
- * Collapse duplicate lands (same name, same tapped state) into stacks so a
- * board with six Islands reads as one pile instead of six full cards. Order
- * follows the first occurrence of each stack in the input; lands that fail
- * `replayObjectCanStackAsLand` (or the optional extra predicate) come through
- * as single-card stacks.
+ * Collapse duplicate cards (same name, same tapped state) into stacks so a
+ * board with six Islands or three Mutagen tokens reads as one pile instead of
+ * six full cards. Order follows the first occurrence of each stack in the
+ * input; cards that fail `replayObjectCanStack` (or the optional extra
+ * predicate) come through as single-card stacks.
  */
-export function groupBattlefieldLandStacks(
+export function groupBattlefieldCardStacks(
   objects: MatchReplayFrameObject[],
   previewByCardID: Map<number, CardPreview | null>,
   canStack?: (object: MatchReplayFrameObject) => boolean,
-): ReplayLandStack[] {
-  const stacks: ReplayLandStack[] = [];
-  const stacksByKey = new Map<string, ReplayLandStack>();
+): ReplayCardStack[] {
+  const stacks: ReplayCardStack[] = [];
+  const stacksByKey = new Map<string, ReplayCardStack>();
 
   for (const object of objects) {
     const preview = previewByCardID.get(object.cardId) ?? null;
     const stackable =
-      replayObjectCanStackAsLand(object, preview) &&
-      (canStack?.(object) ?? true);
+      replayObjectCanStack(object, preview) && (canStack?.(object) ?? true);
     if (!stackable) {
       stacks.push({ key: `single-${object.instanceId}`, objects: [object] });
       continue;
@@ -692,7 +694,7 @@ export function groupBattlefieldLandStacks(
     if (existing) {
       existing.objects.push(object);
     } else {
-      const stack: ReplayLandStack = { key, objects: [object] };
+      const stack: ReplayCardStack = { key, objects: [object] };
       stacksByKey.set(key, stack);
       stacks.push(stack);
     }

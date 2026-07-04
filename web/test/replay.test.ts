@@ -13,7 +13,7 @@ import {
   describeReplayChange,
   filterMeaningfulReplayFrames,
   formatReplayWinReason,
-  groupBattlefieldLandStacks,
+  groupBattlefieldCardStacks,
   normalizeReplayWinReason,
   preferredReplayFrameIndex,
   replayFrameHasLifeDelta,
@@ -97,7 +97,7 @@ describe("zone classification", () => {
   });
 });
 
-describe("land stacks", () => {
+describe("battlefield card stacks", () => {
   const islandPreview: CardPreview = {
     name: "Island",
     imageUrl: "",
@@ -121,7 +121,7 @@ describe("land stacks", () => {
       object({ instanceId: 13, cardId: 2 }),
     ];
 
-    const stacks = groupBattlefieldLandStacks(objects, previews);
+    const stacks = groupBattlefieldCardStacks(objects, previews);
 
     expect(stacks).toHaveLength(3);
     expect(stacks[0]?.objects.map((o) => o.instanceId)).toEqual([10, 11]);
@@ -139,7 +139,7 @@ describe("land stacks", () => {
       object({ instanceId: 11, cardId: 2 }),
     ];
 
-    const stacks = groupBattlefieldLandStacks(objects, previews);
+    const stacks = groupBattlefieldCardStacks(objects, previews);
 
     expect(stacks).toHaveLength(1);
     expect(stacks[0]?.objects.map((o) => o.instanceId)).toEqual([10, 11]);
@@ -159,13 +159,44 @@ describe("land stacks", () => {
       object({ instanceId: 14, cardId: 1 }),
     ];
 
-    const stacks = groupBattlefieldLandStacks(objects, previews);
+    const stacks = groupBattlefieldCardStacks(objects, previews);
 
     expect(stacks).toHaveLength(4);
     expect(stacks[0]?.objects.map((o) => o.instanceId)).toEqual([10, 14]);
     expect(stacks[1]?.objects.map((o) => o.instanceId)).toEqual([11]);
     expect(stacks[2]?.objects.map((o) => o.instanceId)).toEqual([12]);
     expect(stacks[3]?.objects.map((o) => o.instanceId)).toEqual([13]);
+  });
+
+  test("consolidates duplicate tokens under a tokens-only predicate", () => {
+    const mutagenPreview: CardPreview = {
+      name: "Mutagen",
+      imageUrl: "",
+      typeLine: "Token Artifact — Mutagen",
+    };
+    const previews = new Map<number, CardPreview | null>([
+      [1, mutagenPreview],
+      [2, { name: "Sol Ring", imageUrl: "", typeLine: "Artifact" }],
+    ]);
+    const objects = [
+      object({ instanceId: 10, cardId: 1, isToken: true }),
+      object({ instanceId: 11, cardId: 1, isToken: true }),
+      object({ instanceId: 12, cardId: 1, isToken: true, isTapped: true }),
+      object({ instanceId: 13, cardId: 2 }),
+      object({ instanceId: 14, cardId: 2 }),
+    ];
+
+    const stacks = groupBattlefieldCardStacks(
+      objects,
+      previews,
+      (o) => o.isToken,
+    );
+
+    expect(stacks).toHaveLength(4);
+    expect(stacks[0]?.objects.map((o) => o.instanceId)).toEqual([10, 11]);
+    expect(stacks[1]?.objects.map((o) => o.instanceId)).toEqual([12]);
+    expect(stacks[2]?.objects.map((o) => o.instanceId)).toEqual([13]);
+    expect(stacks[3]?.objects.map((o) => o.instanceId)).toEqual([14]);
   });
 
   test("honors the extra canStack predicate", () => {
@@ -175,7 +206,7 @@ describe("land stacks", () => {
       object({ instanceId: 11, cardId: 1 }),
     ];
 
-    const stacks = groupBattlefieldLandStacks(
+    const stacks = groupBattlefieldCardStacks(
       objects,
       previews,
       (o) => o.instanceId !== 11,

@@ -857,71 +857,6 @@ body.has-wide-deck-curve .app-shell {
 }
 
 /* ══════════════════════════════════════════
-   THEME TOGGLE
-   ══════════════════════════════════════════ */
-
-.theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.46rem;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--tabs-bg);
-  color: var(--muted-strong);
-  min-height: 2rem;
-  padding: 0.33rem 0.58rem 0.33rem 0.45rem;
-  font-size: 0.72rem;
-  font-family: var(--font-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition:
-    border-color 160ms ease,
-    background-color 160ms ease,
-    color 160ms ease,
-    box-shadow 160ms ease;
-}
-
-.theme-toggle:hover {
-  border-color: var(--tab-active-border);
-  color: var(--text-soft);
-  box-shadow: 0 0 10px var(--accent-soft);
-}
-
-.theme-toggle:focus-visible {
-  border-color: var(--tab-active-border);
-}
-
-.theme-toggle-track {
-  width: 1.85rem;
-  height: 1.03rem;
-  border-radius: 3px;
-  border: 1px solid var(--line-strong);
-  background: var(--surface-faint);
-  display: inline-flex;
-  align-items: center;
-  padding: 0.12rem;
-}
-
-.theme-toggle-thumb {
-  width: 0.72rem;
-  height: 0.72rem;
-  border-radius: 2px;
-  background: var(--accent);
-  box-shadow: 0 0 6px var(--accent-glow);
-  transform: translateX(0);
-  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.theme-toggle.is-light .theme-toggle-thumb {
-  transform: translateX(0.82rem);
-}
-
-.theme-toggle-label {
-  line-height: 1;
-}
-
-/* ══════════════════════════════════════════
    CONTENT LAYOUT
    ══════════════════════════════════════════ */
 
@@ -5061,8 +4996,6 @@ select {
   .metric-card,
   .panel,
   .tab,
-  .theme-toggle,
-  .theme-toggle-thumb,
   .list-row,
   .data-table tbody tr,
   .match-replay-card,
@@ -5188,12 +5121,6 @@ select {
     flex: 1 1 100%;
     width: 100%;
     justify-content: flex-start;
-  }
-
-  .theme-toggle {
-    order: 1;
-    margin-left: auto;
-    min-height: 2.75rem;
   }
 
   .deck-detail-actions {

@@ -140,19 +140,6 @@ export function Layout() {
                 </NavLink>
               ))}
             </nav>
-            <button
-              type="button"
-              className={`theme-toggle ${theme === "light" ? "is-light" : ""}`}
-              onClick={() => setPreference(theme === "dark" ? "light" : "dark")}
-              aria-pressed={theme === "light"}
-              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            >
-              <span className="theme-toggle-track" aria-hidden="true">
-                <span className="theme-toggle-thumb" />
-              </span>
-              <span className="theme-toggle-label">{theme === "dark" ? "Dark" : "Light"}</span>
-            </button>
           </div>
         </header>
           {location.pathname === "/settings" ? null : (

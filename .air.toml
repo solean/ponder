@@ -1,0 +1,18 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/mtgdata ./cmd/mtgdata"
+  bin = "./tmp/mtgdata"
+  args_bin = ["serve", "-db", "data/mtgdata.db", "-addr", ":8080"]
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "web", "frontend", "build", "data", "docs"]
+  delay = 200
+  send_interrupt = true
+  kill_delay = "2s"
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true

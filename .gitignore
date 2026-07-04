@@ -1,4 +1,5 @@
 data/
+tmp/
 build/bin/
 frontend/
 web/node_modules/

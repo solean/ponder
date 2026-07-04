@@ -1,10 +1,31 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
-import { formatDateTime } from "../lib/format";
+import { formatDateTime, shortenHomePath } from "../lib/format";
 import type { RuntimeConfig, RuntimeOperation, RuntimeStatus, UpdateCheck } from "../lib/types";
+
+function StatusPill({
+  tone,
+  pulsing,
+  children,
+}: {
+  tone: "positive" | "negative" | "neutral";
+  pulsing?: boolean;
+  children: ReactNode;
+}) {
+  const toneClass = tone === "neutral" ? "" : tone === "positive" ? " is-positive" : " is-negative";
+  return <span className={`settings-status-pill${toneClass}${pulsing ? " is-pulsing" : ""}`}>{children}</span>;
+}
+
+function PathValue({ path }: { path: string }) {
+  return (
+    <code className="settings-path" title={path}>
+      {shortenHomePath(path)}
+    </code>
+  );
+}
 
 const runtimeStatusKey = ["runtime-status"] as const;
 const autostartKey = ["autostart-status"] as const;
@@ -176,22 +197,28 @@ export function SettingsPage() {
         <div className="settings-status-grid" aria-label="Runtime status">
           <article className="settings-status-card">
             <span>Database</span>
-            <strong>{data.dbPath}</strong>
+            <PathValue path={data.dbPath} />
           </article>
           <article className="settings-status-card">
             <span>Active Log</span>
-            <strong>{data.activeLogPath}</strong>
-            <small>{data.activeLogPathExists ? "Found" : "Missing"}</small>
+            <PathValue path={data.activeLogPath} />
+            <StatusPill tone={data.activeLogPathExists ? "positive" : "negative"}>
+              {data.activeLogPathExists ? "Found" : "Missing"}
+            </StatusPill>
           </article>
           <article className="settings-status-card">
             <span>Live State</span>
-            <strong>{data.liveRunning ? "Running" : "Stopped"}</strong>
-            <small>{data.liveLastTickAt ? `Last tick ${formatDateTime(data.liveLastTickAt)}` : "No ticks yet"}</small>
+            <StatusPill tone={data.liveRunning ? "positive" : "neutral"} pulsing={data.liveRunning}>
+              {data.liveRunning ? "Running" : "Stopped"}
+            </StatusPill>
+            <small>
+              {data.liveLastTickAt ? `Last update ${formatDateTime(data.liveLastTickAt)}` : "Waiting for first update"}
+            </small>
           </article>
           <article className="settings-status-card">
             <span>Config File</span>
-            <strong>{data.configPath}</strong>
-            <small>{data.supportDir}</small>
+            <PathValue path={data.configPath} />
+            <small title={data.supportDir}>{shortenHomePath(data.supportDir)}</small>
           </article>
         </div>
       </section>
@@ -216,7 +243,9 @@ export function SettingsPage() {
               placeholder={data.defaultLogPath}
               spellCheck={false}
             />
-            <small>Current effective path: {effectiveActivePath}</small>
+            <small title={effectiveActivePath}>
+              Current effective path: {shortenHomePath(effectiveActivePath)}
+            </small>
           </label>
 
           <label className="settings-field">
@@ -249,13 +278,18 @@ export function SettingsPage() {
             }}
             disabled={form.logPath.trim().length > 0}
           />
-          <span>Include `Player-prev.log` during full imports when using the default MTGA log location.</span>
+          <span>
+            Include <code>Player-prev.log</code> during full imports when using the default MTGA log location.
+          </span>
         </label>
+        {form.logPath.trim().length > 0 ? (
+          <p className="settings-checkbox-hint">Disabled while a custom log path is set.</p>
+        ) : null}
 
         <div className="settings-action-row">
           <button
             type="button"
-            className="control-button"
+            className={`control-button${hasLocalEdits ? " control-button--primary" : ""}`}
             onClick={() => saveMutation.mutate()}
             disabled={saveDisabled}
           >
@@ -271,7 +305,9 @@ export function SettingsPage() {
           </button>
           <button
             type="button"
-            className="control-button"
+            className={`control-button${
+              data.liveRunning ? " control-button--quiet" : hasLocalEdits ? "" : " control-button--primary"
+            }`}
             onClick={() => (data.liveRunning ? stopLiveMutation.mutate() : startLiveMutation.mutate())}
             disabled={liveMutationPending}
           >
@@ -315,8 +351,10 @@ export function SettingsPage() {
           </article>
           <article className="settings-status-card">
             <span>Default Previous Log</span>
-            <strong>{data.previousLogPath || data.defaultPrevLogPath}</strong>
-            <small>{data.previousLogPathExists ? "Found" : "Missing"}</small>
+            <PathValue path={data.previousLogPath || data.defaultPrevLogPath} />
+            <StatusPill tone={data.previousLogPathExists ? "positive" : "negative"}>
+              {data.previousLogPathExists ? "Found" : "Missing"}
+            </StatusPill>
           </article>
         </div>
       </section>

@@ -70,3 +70,8 @@ export function formatDuration(seconds?: number | null): string {
 export function pct(v: number): string {
   return `${(v * 100).toFixed(1)}%`;
 }
+
+/** Abbreviate a macOS home-directory prefix: /Users/name/… → ~/… */
+export function shortenHomePath(path: string): string {
+  return path.replace(/^\/Users\/[^/]+(?=\/)/, "~");
+}

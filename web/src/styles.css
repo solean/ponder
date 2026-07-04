@@ -1323,9 +1323,8 @@ body.has-wide-deck-curve .app-shell {
   gap: 0.42rem;
 }
 
-.settings-field span,
-.settings-status-card span,
-.settings-note {
+.settings-field > span,
+.settings-status-card > span {
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 0.76rem;
@@ -1370,6 +1369,15 @@ body.has-wide-deck-curve .app-shell {
 
 .settings-checkbox input {
   margin-top: 0.18rem;
+  accent-color: var(--accent);
+}
+
+.settings-checkbox-hint {
+  margin: 0.3rem 0 0 1.9rem;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .settings-action-row {
@@ -1414,9 +1422,107 @@ body.has-wide-deck-curve .app-shell {
   transform: none;
 }
 
+.control-button--primary:not(:disabled) {
+  border-color: var(--tab-active-border);
+  background: linear-gradient(155deg, var(--accent) 0%, #d96a10 100%);
+  color: #140b06;
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.control-button--primary:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  filter: brightness(1.08);
+}
+
+.control-button--quiet {
+  border-color: var(--line);
+  background: linear-gradient(
+    155deg,
+    var(--panel-inner-a) 0%,
+    var(--panel-inner-b) 100%
+  );
+  color: var(--muted-strong);
+}
+
 .settings-note {
   margin: 0.95rem 0 0;
+  color: var(--muted-strong);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
   line-height: 1.5;
+}
+
+.settings-note code,
+.settings-checkbox code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  padding: 0.08em 0.32em;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--accent-soft);
+}
+
+.settings-path {
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+span.settings-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.22rem 0.58rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted-strong);
+  background: var(--pill-bg);
+}
+
+.settings-status-pill::before {
+  content: "";
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.settings-status-pill.is-positive {
+  border-color: var(--pill-win-border);
+  color: var(--pill-win-text);
+  background: var(--pill-win-bg);
+  box-shadow: 0 0 8px rgba(0, 230, 118, 0.08);
+}
+
+.settings-status-pill.is-negative {
+  border-color: var(--pill-loss-border);
+  color: var(--pill-loss-text);
+  background: var(--pill-loss-bg);
+  box-shadow: 0 0 8px rgba(255, 82, 82, 0.08);
+}
+
+.settings-status-pill.is-pulsing::before {
+  animation: settings-pill-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes settings-pill-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 6px 1px currentColor;
+  }
 }
 
 .settings-status-grid {

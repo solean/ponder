@@ -1,8 +1,10 @@
 # Settings Page Improvements — Plan
 
 Status: Phases 1–3 implemented (2026-07-04); Phase 4 in progress — items 1 (copyable
-paths) and 5 (database size) done 2026-07-04, plus a three-way dark/light/system theme
-control replacing both the settings checkbox and the navbar toggle
+paths), 2 (capabilities), 3 (file picker), 4 (reveal), and 5 (database size) done
+2026-07-04, plus a three-way dark/light/system theme control replacing both the settings
+checkbox and the navbar toggle. Remaining: 6 (auto-start live), 7 (auto-check updates),
+8 (data management, needs spec)
 Scope: `web/src/pages/SettingsPage.tsx`, `web/src/styles.css`, `web/src/lib/{api,types}.ts`,
 `internal/appstate/service.go`, `internal/api/server.go`, `app.go` (desktop-only features)
 
@@ -162,16 +164,20 @@ Each item is independent; ordered by value/effort.
    `SettingsPage.tsx`: clipboard API with `execCommand` fallback, icon flips to a green
    check for 1.5s on success only (no false feedback if the write is denied). Buttons on
    database, config, effective log, and previous log paths.
-2. **Capabilities in RuntimeStatus.** Add `capabilities: { pickFile: bool, reveal: bool }`
-   to the status payload (`internal/appstate/service.go` Status struct + `web/src/lib/types.ts`).
-   Desktop sets both true; serve mode false. Gates the two features below.
-3. **Browse… for the log path.** Desktop: `POST /api/runtime/pick-log` → handler invokes
-   Wails `runtime.OpenFileDialog` (needs the Wails context plumbed from `app.go` into the
-   API server, e.g. a `DialogProvider` interface the desktop app implements) → returns the
-   chosen path → frontend fills the input (still requires Save). Hidden in serve mode.
-4. **Reveal in Finder.** `POST /api/runtime/reveal {path}` — desktop uses Wails/`open -R`;
-   restrict to the known paths from status (db, config, logs), never arbitrary client
-   input. Hidden when capability is false.
+2. ✅ **Capabilities in RuntimeStatus.** (2026-07-04) `appstate.Capabilities` on
+   `Options`/`Status`; desktop passes both true in `app.go`, serve mode gets the zero
+   value. Frontend type is `RuntimeCapabilities`, optional on `RuntimeStatus`.
+3. ✅ **Browse… for the log path.** (2026-07-04) `api.Desktop` interface
+   (`internal/api/desktop.go`) with `POST /api/runtime/pick-log`; `App` implements it
+   via Wails `OpenFileDialog` (defaults to the MTGA log directory, *.log filter).
+   Browse… button beside the log path input fills the form (still requires Save);
+   hidden in serve mode, and the endpoint 400s without a desktop.
+4. ✅ **Reveal in Finder.** (2026-07-04) `POST /api/runtime/reveal {path}` → `open -R`
+   (files) / `open` (dirs; missing files fall back to parent dir). `revealablePath()`
+   allows only paths advertised by the current status (unit-tested in
+   `internal/api/desktop_test.go`, incl. traversal and empty-entry cases). Folder icon
+   buttons on path rows, hidden without the capability; failures turn the icon red with
+   the error in the tooltip.
 5. ✅ **Database size.** (2026-07-04) `databaseSize()` in
    `internal/appstate/service.go` sums the db file + `-wal` + `-shm`; `dbSizeBytes` on
    Status, rendered via new `formatBytes()` (unit-tested in `web/test/format.test.ts`)

@@ -1455,6 +1455,58 @@ small.settings-path-row,
   border-color: var(--pill-win-border);
 }
 
+.settings-copy-button.is-failed {
+  color: var(--pill-loss-text);
+  border-color: var(--pill-loss-border);
+}
+
+/* Element selector for the same reason as span.settings-path-row: neutralize
+   the `.settings-field > span` label styling on direct-child instances. */
+span.settings-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+  font-size: 1rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.settings-input-row .settings-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.settings-browse-button {
+  appearance: none;
+  flex: 0 0 auto;
+  min-height: 2.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  padding: 0 0.9rem;
+  background: linear-gradient(
+    155deg,
+    var(--tab-active-bg-a) 0%,
+    var(--tab-active-bg-b) 100%
+  );
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 160ms ease;
+}
+
+.settings-browse-button:hover:not(:disabled) {
+  border-color: var(--tab-active-border);
+}
+
+.settings-browse-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .settings-copy-button svg {
   width: 0.82rem;
   height: 0.82rem;

@@ -83,13 +83,50 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   );
 }
 
-function PathValue({ path, copyLabel = "path" }: { path: string; copyLabel?: string }) {
+function FolderIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+      <path d="M1.8 4.2a1 1 0 0 1 1-1h3.4l1.5 1.6h5.5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H2.8a1 1 0 0 1-1-1v-7.6Z" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function RevealButton({ path }: { path: string }) {
+  const revealMutation = useMutation({ mutationFn: () => api.revealPath(path) });
+  const failed = Boolean(revealMutation.error);
+  return (
+    <button
+      type="button"
+      className={`settings-copy-button${failed ? " is-failed" : ""}`}
+      onClick={(event) => {
+        event.preventDefault();
+        revealMutation.mutate();
+      }}
+      disabled={revealMutation.isPending}
+      aria-label="Reveal in Finder"
+      title={failed ? `Reveal failed: ${(revealMutation.error as Error).message}` : "Reveal in Finder"}
+    >
+      <FolderIcon />
+    </button>
+  );
+}
+
+function PathValue({
+  path,
+  copyLabel = "path",
+  canReveal = false,
+}: {
+  path: string;
+  copyLabel?: string;
+  canReveal?: boolean;
+}) {
   return (
     <span className="settings-path-row">
       <code className="settings-path" title={path}>
         {shortenHomePath(path)}
       </code>
       <CopyButton text={path} label={copyLabel} />
+      {canReveal ? <RevealButton path={path} /> : null}
     </span>
   );
 }
@@ -269,6 +306,16 @@ export function SettingsPage() {
     mutationFn: api.checkForUpdate,
   });
 
+  const pickLogMutation = useMutation({
+    mutationFn: api.pickLogFile,
+    onSuccess: (result) => {
+      if (result.path) {
+        setForm((current) => ({ ...current, logPath: result.path }));
+        setHasLocalEdits(true);
+      }
+    },
+  });
+
   const pollOptions = useMemo(() => {
     const base = [1, 2, 5, 10];
     if (!base.includes(form.pollIntervalSeconds)) {
@@ -282,6 +329,8 @@ export function SettingsPage() {
   if (!data) return <StatusMessage>No runtime status available.</StatusMessage>;
 
   const effectiveActivePath = form.logPath.trim() || data.defaultLogPath;
+  const canPickFile = Boolean(data.capabilities?.pickFile);
+  const canReveal = Boolean(data.capabilities?.reveal);
   const saveDisabled = saveMutation.isPending || !hasLocalEdits;
   const liveMutationPending = startLiveMutation.isPending || stopLiveMutation.isPending;
   const importDisabled = importMutation.isPending || data.liveRunning;
@@ -384,20 +433,36 @@ export function SettingsPage() {
                 </button>
               ) : null}
             </span>
-            <input
-              className="settings-input"
-              type="text"
-              value={form.logPath}
-              onChange={(event) => {
-                setForm((current) => ({ ...current, logPath: event.target.value }));
-                setHasLocalEdits(true);
-              }}
-              placeholder={data.defaultLogPath}
-              spellCheck={false}
-            />
+            <span className="settings-input-row">
+              <input
+                className="settings-input"
+                type="text"
+                value={form.logPath}
+                onChange={(event) => {
+                  setForm((current) => ({ ...current, logPath: event.target.value }));
+                  setHasLocalEdits(true);
+                }}
+                placeholder={data.defaultLogPath}
+                spellCheck={false}
+              />
+              {canPickFile ? (
+                <button
+                  type="button"
+                  className="settings-browse-button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    pickLogMutation.mutate();
+                  }}
+                  disabled={pickLogMutation.isPending}
+                >
+                  {pickLogMutation.isPending ? "Choosing…" : "Browse…"}
+                </button>
+              ) : null}
+            </span>
             <small className="settings-path-row" title={effectiveActivePath}>
               Current effective path: {shortenHomePath(effectiveActivePath)}
               <CopyButton text={effectiveActivePath} label="log path" />
+              {canReveal ? <RevealButton path={effectiveActivePath} /> : null}
             </small>
           </label>
 
@@ -443,7 +508,11 @@ export function SettingsPage() {
         ) : (
           <p className="settings-prevlog">
             Default previous log:{" "}
-            <PathValue path={data.previousLogPath || data.defaultPrevLogPath} copyLabel="previous log path" />{" "}
+            <PathValue
+              path={data.previousLogPath || data.defaultPrevLogPath}
+              copyLabel="previous log path"
+              canReveal={canReveal}
+            />{" "}
             <StatusPill tone={data.previousLogPathExists ? "positive" : "negative"}>
               {data.previousLogPathExists ? "Found" : "Missing"}
             </StatusPill>
@@ -493,6 +562,9 @@ export function SettingsPage() {
           <StatusMessage tone="error">Save failed: {(saveMutation.error as Error).message}</StatusMessage>
         ) : null}
         {liveError ? <StatusMessage tone="error">Live tracking: {liveError.message}</StatusMessage> : null}
+        {pickLogMutation.error ? (
+          <StatusMessage tone="error">File picker: {(pickLogMutation.error as Error).message}</StatusMessage>
+        ) : null}
       </section>
 
       <section className="panel">
@@ -504,12 +576,12 @@ export function SettingsPage() {
         <div className="settings-status-grid">
           <article className="settings-status-card">
             <span>Database</span>
-            <PathValue path={data.dbPath} copyLabel="database path" />
+            <PathValue path={data.dbPath} copyLabel="database path" canReveal={canReveal} />
             <small>{data.dbSizeBytes > 0 ? `${formatBytes(data.dbSizeBytes)} on disk` : "Not created yet"}</small>
           </article>
           <article className="settings-status-card">
             <span>Config File</span>
-            <PathValue path={data.configPath} copyLabel="config path" />
+            <PathValue path={data.configPath} copyLabel="config path" canReveal={canReveal} />
             <small title={data.supportDir}>{shortenHomePath(data.supportDir)}</small>
           </article>
           <article className="settings-status-card">

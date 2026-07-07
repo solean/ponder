@@ -254,6 +254,12 @@ export type RuntimeStatus = {
   lastImport?: RuntimeOperation;
   lastLiveActivity?: RuntimeOperation;
   lastError?: string;
+  capabilities?: RuntimeCapabilities;
+};
+
+export type RuntimeCapabilities = {
+  pickFile: boolean;
+  reveal: boolean;
 };
 
 export type AutostartStatus = {

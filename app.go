@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -99,6 +100,43 @@ func (a *App) failStartup(stage string, err error) {
 	}
 }
 
+// PickLogFile satisfies api.Desktop with a native open dialog. Returns "" if
+// the user cancels.
+func (a *App) PickLogFile() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("desktop context not ready")
+	}
+	defaultDir := ""
+	if currentLogPath, _, err := appstate.DefaultMTGALogPaths(); err == nil {
+		defaultDir = filepath.Dir(currentLogPath)
+	}
+	return wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
+		Title:            "Choose MTGA log file",
+		DefaultDirectory: defaultDir,
+		Filters: []wailsruntime.FileFilter{
+			{DisplayName: "Log files (*.log)", Pattern: "*.log"},
+			{DisplayName: "All files", Pattern: "*"},
+		},
+	})
+}
+
+// RevealPath satisfies api.Desktop: selects the file in Finder, or opens the
+// directory. A missing file falls back to its parent directory so the button
+// still lands somewhere useful.
+func (a *App) RevealPath(path string) error {
+	info, err := os.Stat(path)
+	switch {
+	case err != nil && os.IsNotExist(err):
+		return exec.Command("open", filepath.Dir(path)).Run()
+	case err != nil:
+		return err
+	case info.IsDir():
+		return exec.Command("open", path).Run()
+	default:
+		return exec.Command("open", "-R", path).Run()
+	}
+}
+
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
@@ -134,6 +172,10 @@ func (a *App) startup(ctx context.Context) {
 		SupportDir:         supportDir,
 		DefaultLogPath:     currentLogPath,
 		DefaultPrevLogPath: prevLogPath,
+		Capabilities: appstate.Capabilities{
+			PickFile: true,
+			Reveal:   true,
+		},
 	})
 	if err != nil {
 		_ = database.Close()
@@ -142,6 +184,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	server := api.NewServer(store, "", runtimeService)
+	server.SetDesktop(a)
 	// The dev API listener below serves the whole app to a plain browser, so
 	// give it the embedded frontend; deep links fall back to index.html there.
 	server.SetStaticAssets(a.staticAssets)

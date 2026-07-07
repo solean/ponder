@@ -26,6 +26,14 @@ type Options struct {
 	DefaultLogPath      string
 	DefaultPrevLogPath  string
 	DefaultPollInterval time.Duration
+	Capabilities        Capabilities
+}
+
+// Capabilities advertises native-shell integrations available to the frontend.
+// Both are false in headless serve mode; the desktop app enables them.
+type Capabilities struct {
+	PickFile bool `json:"pickFile"`
+	Reveal   bool `json:"reveal"`
 }
 
 type Config struct {
@@ -69,6 +77,7 @@ type Status struct {
 	LastImport            *OperationResult `json:"lastImport,omitempty"`
 	LastLiveActivity      *OperationResult `json:"lastLiveActivity,omitempty"`
 	LastError             string           `json:"lastError,omitempty"`
+	Capabilities          Capabilities     `json:"capabilities"`
 }
 
 type Service struct {
@@ -79,6 +88,7 @@ type Service struct {
 	defaultLogPath     string
 	defaultPrevLogPath string
 	defaultPoll        time.Duration
+	capabilities       Capabilities
 
 	mu               sync.RWMutex
 	config           Config
@@ -152,6 +162,7 @@ func NewService(opts Options) (*Service, error) {
 		defaultLogPath:     currentLogPath,
 		defaultPrevLogPath: prevLogPath,
 		defaultPoll:        poll,
+		capabilities:       opts.Capabilities,
 		config:             normalizeConfig(cfg, poll),
 	}, nil
 }
@@ -196,6 +207,21 @@ func (s *Service) Status() Status {
 		LastImport:            lastImport,
 		LastLiveActivity:      lastLiveActivity,
 		LastError:             lastError,
+		Capabilities:          s.capabilities,
+	}
+}
+
+// RevealablePaths lists the filesystem paths the UI displays; the desktop
+// reveal endpoint refuses anything outside this set.
+func (s Status) RevealablePaths() []string {
+	return []string{
+		s.DBPath,
+		s.SupportDir,
+		s.ConfigPath,
+		s.ActiveLogPath,
+		s.PreviousLogPath,
+		s.DefaultLogPath,
+		s.DefaultPrevLogPath,
 	}
 }
 

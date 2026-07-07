@@ -67,4 +67,6 @@ export const api = {
   autostartStatus: () => getJSON<AutostartStatus>("/api/runtime/autostart"),
   setAutostart: (enabled: boolean) => postJSON<AutostartStatus>("/api/runtime/autostart", { enabled }),
   checkForUpdate: () => getJSON<UpdateCheck>("/api/runtime/update-check"),
+  pickLogFile: () => postJSON<{ path: string }>("/api/runtime/pick-log"),
+  revealPath: (path: string) => postJSON<{ status: string }>("/api/runtime/reveal", { path }),
 };

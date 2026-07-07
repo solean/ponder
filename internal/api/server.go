@@ -31,6 +31,7 @@ type Server struct {
 	staticDir    string
 	staticAssets fs.FS
 	appState     *appstate.Service
+	desktop      Desktop
 	httpClient   *http.Client
 }
 
@@ -71,6 +72,8 @@ func (s *Server) routes() http.Handler {
 		mux.HandleFunc("/api/runtime/live/stop", s.handleRuntimeLiveStop)
 		mux.HandleFunc("/api/runtime/autostart", s.handleRuntimeAutostart)
 		mux.HandleFunc("/api/runtime/update-check", s.handleRuntimeUpdateCheck)
+		mux.HandleFunc("/api/runtime/pick-log", s.handleRuntimePickLog)
+		mux.HandleFunc("/api/runtime/reveal", s.handleRuntimeReveal)
 	}
 
 	staticAssets := s.staticAssets

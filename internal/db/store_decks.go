@@ -101,6 +101,122 @@ func (s *Store) UpsertDeck(ctx context.Context, tx *sql.Tx, arenaDeckID, eventNa
 	return deckID, nil
 }
 
+// linkReasonRank orders match-deck link sources by confidence: exact deck IDs
+// reported by Arena beat room-state event-name guesses, which beat pre-match
+// guesses and everything else.
+func linkReasonRank(reason string) int {
+	switch strings.ToLower(strings.TrimSpace(reason)) {
+	case "event_deck":
+		return 3
+	case "room_state":
+		return 2
+	default:
+		return 1
+	}
+}
+
+// matchDeckLinkGate reports whether a new link with the given reason may be
+// written, and whether existing links are present (and must be cleared first).
+func (s *Store) matchDeckLinkGate(ctx context.Context, tx *sql.Tx, matchID int64, reason string) (allowed, hasLinks bool, err error) {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT snapshot_reason
+		FROM match_decks
+		WHERE match_id = ?
+		ORDER BY id ASC
+	`, matchID)
+	if err != nil {
+		return false, false, fmt.Errorf("list existing match decks: %w", err)
+	}
+	defer rows.Close()
+
+	hasSameReason := false
+	maxRank := 0
+	for rows.Next() {
+		hasLinks = true
+		var existingReason string
+		if err := rows.Scan(&existingReason); err != nil {
+			return false, hasLinks, fmt.Errorf("scan existing match deck reason: %w", err)
+		}
+		if strings.EqualFold(strings.TrimSpace(existingReason), strings.TrimSpace(reason)) {
+			hasSameReason = true
+		}
+		if r := linkReasonRank(existingReason); r > maxRank {
+			maxRank = r
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, hasLinks, fmt.Errorf("iterate existing match decks: %w", err)
+	}
+
+	// Keep the first link from a given source stable across reparses.
+	if hasSameReason {
+		return false, hasLinks, nil
+	}
+	// A lower-confidence source never overrides a higher-confidence link.
+	if hasLinks && linkReasonRank(reason) <= maxRank {
+		return false, hasLinks, nil
+	}
+	return true, hasLinks, nil
+}
+
+func (s *Store) writeMatchDeckLink(ctx context.Context, tx *sql.Tx, matchID, deckID int64, reason string, clearExisting bool) error {
+	if clearExisting {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM match_decks WHERE match_id = ?`, matchID); err != nil {
+			return fmt.Errorf("clear prior match_decks: %w", err)
+		}
+	}
+	_, err := tx.ExecContext(ctx, `
+		INSERT INTO match_decks (match_id, deck_id, snapshot_reason, created_at)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(match_id, deck_id) DO NOTHING
+	`, matchID, deckID, reason, nowUTC())
+	if err != nil {
+		return fmt.Errorf("link match_deck: %w", err)
+	}
+	return nil
+}
+
+// LinkMatchToDeckByArenaDeckID links a match to the exact deck Arena reported
+// as selected for the event. It returns false when the match or deck is not
+// known yet, so callers can fall back to the event-name heuristic.
+func (s *Store) LinkMatchToDeckByArenaDeckID(ctx context.Context, tx *sql.Tx, arenaMatchID, arenaDeckID, reason string) (bool, error) {
+	arenaDeckID = strings.TrimSpace(arenaDeckID)
+	if arenaDeckID == "" {
+		return false, nil
+	}
+
+	var matchID int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM matches WHERE arena_match_id = ?`, arenaMatchID).Scan(&matchID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("get match id: %w", err)
+	}
+
+	var deckID int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM decks WHERE arena_deck_id = ?`, arenaDeckID).Scan(&deckID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("find deck by arena id: %w", err)
+	}
+
+	allowed, hasLinks, err := s.matchDeckLinkGate(ctx, tx, matchID, reason)
+	if err != nil {
+		return false, err
+	}
+	if !allowed {
+		// The match already carries a link of equal or higher confidence;
+		// the deck is known, so no fallback is needed either way.
+		return true, nil
+	}
+
+	if err := s.writeMatchDeckLink(ctx, tx, matchID, deckID, reason, hasLinks); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (s *Store) LinkMatchToLatestDeckByEvent(ctx context.Context, tx *sql.Tx, arenaMatchID, eventName, reason string) error {
 	if eventName == "" {
 		return nil
@@ -124,41 +240,11 @@ func (s *Store) LinkMatchToLatestDeckByEvent(ctx context.Context, tx *sql.Tx, ar
 		return fmt.Errorf("get match id: %w", err)
 	}
 
-	rows, err := tx.QueryContext(ctx, `
-		SELECT snapshot_reason
-		FROM match_decks
-		WHERE match_id = ?
-		ORDER BY id ASC
-	`, matchID)
+	allowed, hasLinks, err := s.matchDeckLinkGate(ctx, tx, matchID, reason)
 	if err != nil {
-		return fmt.Errorf("list existing match decks: %w", err)
+		return err
 	}
-
-	hasLinks := false
-	hasSameReason := false
-	for rows.Next() {
-		hasLinks = true
-		var existingReason string
-		if err := rows.Scan(&existingReason); err != nil {
-			rows.Close()
-			return fmt.Errorf("scan existing match deck reason: %w", err)
-		}
-		if strings.EqualFold(strings.TrimSpace(existingReason), strings.TrimSpace(reason)) {
-			hasSameReason = true
-		}
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return fmt.Errorf("iterate existing match decks: %w", err)
-	}
-	rows.Close()
-
-	// Keep the first resolved room-state link stable across reparses.
-	if hasSameReason {
-		return nil
-	}
-	// Only room state is allowed to override an earlier pre-match guess.
-	if hasLinks && !strings.EqualFold(strings.TrimSpace(reason), "room_state") {
+	if !allowed {
 		return nil
 	}
 
@@ -201,22 +287,7 @@ func (s *Store) LinkMatchToLatestDeckByEvent(ctx context.Context, tx *sql.Tx, ar
 		return fmt.Errorf("find deck for match: %w", err)
 	}
 
-	if hasLinks {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM match_decks WHERE match_id = ?`, matchID); err != nil {
-			return fmt.Errorf("clear prior match_decks: %w", err)
-		}
-	}
-
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO match_decks (match_id, deck_id, snapshot_reason, created_at)
-		VALUES (?, ?, ?, ?)
-		ON CONFLICT(match_id, deck_id) DO NOTHING
-	`, matchID, deckID, reason, nowUTC())
-	if err != nil {
-		return fmt.Errorf("link match_deck: %w", err)
-	}
-
-	return nil
+	return s.writeMatchDeckLink(ctx, tx, matchID, deckID, reason, hasLinks)
 }
 
 func (s *Store) ListDecks(ctx context.Context) ([]model.DeckSummaryRow, error) {

@@ -217,7 +217,13 @@ func (p *Parser) handleRoomStateJSON(ctx context.Context, tx *sql.Tx, stats *mod
 	state.activeMatchID = strings.TrimSpace(config.MatchID)
 	state.rememberSelfSeat(config.MatchID, selfSeatID)
 	if eventName != "" {
-		_ = p.store.LinkMatchToLatestDeckByEvent(ctx, tx, config.MatchID, eventName, "room_state")
+		linked := false
+		if arenaDeckID := state.eventDeck(eventName); arenaDeckID != "" {
+			linked, _ = p.store.LinkMatchToDeckByArenaDeckID(ctx, tx, config.MatchID, arenaDeckID, "event_deck")
+		}
+		if !linked {
+			_ = p.store.LinkMatchToLatestDeckByEvent(ctx, tx, config.MatchID, eventName, "room_state")
+		}
 	}
 
 	if selfSeen && (strings.TrimSpace(opponentName) != "" || strings.TrimSpace(opponentUserID) != "") {

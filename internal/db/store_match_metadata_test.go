@@ -350,3 +350,85 @@ func TestLinkMatchToLatestDeckByEventRoomStateOverridesPreMatchOnlyOnce(t *testi
 		t.Fatalf("match_decks rows = %d, want 1", links)
 	}
 }
+
+func TestLinkMatchToDeckByArenaDeckIDOverridesEventNameGuess(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database := openTempSQLiteDB(t)
+	if err := Init(ctx, database); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	store := NewStore(database)
+	tx, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+
+	if _, err := store.UpsertDeck(ctx, tx, "deck-izzet", "Traditional_Ladder", "Izzet Prowess", "TraditionalStandard", "test", "2026-07-01T00:00:00Z", nil); err != nil {
+		t.Fatalf("UpsertDeck(deck-izzet): %v", err)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	// Most recently observed deck for the event: the event-name heuristic
+	// links to this one.
+	if _, err := store.UpsertDeck(ctx, tx, "deck-dimir", "Traditional_Ladder", "Dimir Mid 2026", "TraditionalStandard", "test", "2026-07-02T00:00:00Z", nil); err != nil {
+		t.Fatalf("UpsertDeck(deck-dimir): %v", err)
+	}
+
+	startedAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+	if _, err := store.UpsertMatchStart(ctx, tx, "match-exact-deck", "Traditional_Ladder", 1, startedAt); err != nil {
+		t.Fatalf("UpsertMatchStart: %v", err)
+	}
+	if err := store.LinkMatchToLatestDeckByEvent(ctx, tx, "match-exact-deck", "Traditional_Ladder", "room_state"); err != nil {
+		t.Fatalf("LinkMatchToLatestDeckByEvent(room_state): %v", err)
+	}
+
+	// An unknown arena deck id is not handled, so callers can fall back.
+	linked, err := store.LinkMatchToDeckByArenaDeckID(ctx, tx, "match-exact-deck", "deck-missing", "event_deck")
+	if err != nil {
+		t.Fatalf("LinkMatchToDeckByArenaDeckID(deck-missing): %v", err)
+	}
+	if linked {
+		t.Fatalf("LinkMatchToDeckByArenaDeckID(deck-missing) = true, want false")
+	}
+
+	// The exact deck id reported by Arena overrides the event-name guess.
+	linked, err = store.LinkMatchToDeckByArenaDeckID(ctx, tx, "match-exact-deck", "deck-izzet", "event_deck")
+	if err != nil {
+		t.Fatalf("LinkMatchToDeckByArenaDeckID(deck-izzet): %v", err)
+	}
+	if !linked {
+		t.Fatalf("LinkMatchToDeckByArenaDeckID(deck-izzet) = false, want true")
+	}
+
+	// A later event-name guess must not override the exact link.
+	if err := store.LinkMatchToLatestDeckByEvent(ctx, tx, "match-exact-deck", "Traditional_Ladder", "room_state"); err != nil {
+		t.Fatalf("LinkMatchToLatestDeckByEvent(room_state replay): %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	rows, err := store.ListMatches(ctx, 10, "", "")
+	if err != nil {
+		t.Fatalf("ListMatches: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("len(ListMatches) = %d, want 1", len(rows))
+	}
+	if rows[0].DeckName == nil || *rows[0].DeckName != "Izzet Prowess" {
+		t.Fatalf("DeckName = %v, want Izzet Prowess", rows[0].DeckName)
+	}
+
+	var links int64
+	if err := database.QueryRowContext(ctx, `SELECT COUNT(*) FROM match_decks WHERE match_id = ?`, rows[0].ID).Scan(&links); err != nil {
+		t.Fatalf("count match_decks: %v", err)
+	}
+	if links != 1 {
+		t.Fatalf("match_decks rows = %d, want 1", links)
+	}
+}

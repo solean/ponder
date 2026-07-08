@@ -98,11 +98,32 @@ type parseState struct {
 	zoneVisibilityByMatch     map[string]map[int64]string
 	zoneOwnerSeatByMatch      map[string]map[int64]int64
 	gameNumberByMatch         map[string]int64
+	deckByEvent               map[string]string
 	replayByMatchGame         map[string]*replayPublicState
 	lastUnityLogTimestamp     string
 	pendingResponseMethod     string
 	pendingResponseRequestID  string
 	pendingResponseObservedAt string
+}
+
+func (s *parseState) rememberEventDeck(eventName, arenaDeckID string) {
+	eventName = strings.TrimSpace(eventName)
+	arenaDeckID = strings.TrimSpace(arenaDeckID)
+	if eventName == "" || arenaDeckID == "" {
+		return
+	}
+	if s.deckByEvent == nil {
+		s.deckByEvent = make(map[string]string)
+	}
+	s.deckByEvent[eventName] = arenaDeckID
+}
+
+func (s *parseState) eventDeck(eventName string) string {
+	eventName = strings.TrimSpace(eventName)
+	if eventName == "" || s.deckByEvent == nil {
+		return ""
+	}
+	return s.deckByEvent[eventName]
 }
 
 func (s *parseState) rememberSelfSeat(matchID string, seatID int64) {
@@ -689,7 +710,7 @@ func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.Pa
 				return err
 			}
 		}
-	case "EventSetDeckV2":
+	case "EventSetDeckV2", "EventSetDeckV3":
 		var req eventSetDeckRequest
 		if err := json.Unmarshal(requestPayload, &req); err != nil {
 			return nil
@@ -716,6 +737,7 @@ func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.Pa
 		if err != nil {
 			return err
 		}
+		state.rememberEventDeck(req.EventName, req.Summary.DeckID)
 		stats.DecksUpserted++
 	case "EventPlayerDraftMakePick":
 		var req playerDraftPickRequest
@@ -806,7 +828,13 @@ func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.Pa
 			}
 			state.activeMatchID = strings.TrimSpace(evt.MatchID)
 			state.rememberSelfSeat(evt.MatchID, evt.SeatID)
-			_ = p.store.LinkMatchToLatestDeckByEvent(ctx, tx, evt.MatchID, eventName, "pre_match")
+			linked := false
+			if arenaDeckID := state.eventDeck(eventName); arenaDeckID != "" {
+				linked, _ = p.store.LinkMatchToDeckByArenaDeckID(ctx, tx, evt.MatchID, arenaDeckID, "event_deck")
+			}
+			if !linked {
+				_ = p.store.LinkMatchToLatestDeckByEvent(ctx, tx, evt.MatchID, eventName, "pre_match")
+			}
 			stats.MatchesUpserted++
 		case 4:
 			if evt.MatchID == "" {

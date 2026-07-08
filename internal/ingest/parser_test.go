@@ -989,6 +989,87 @@ func replayHasAnyChange(frame model.MatchReplayFrameRow, action string, instance
 	return false
 }
 
+func setDeckLogLine(t *testing.T, method, requestJSON string) string {
+	t.Helper()
+	envelope, err := json.Marshal(map[string]string{"id": "req-" + method, "request": requestJSON})
+	if err != nil {
+		t.Fatalf("marshal %s envelope: %v", method, err)
+	}
+	return "[UnityCrossThreadLogger]==> " + method + " " + string(envelope)
+}
+
+func TestParserIngestsEventSetDeckV3AndLinksMatchByDeckID(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	logPath := filepath.Join(tmpDir, "Player.log")
+
+	database, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	parser := NewParser(db.NewStore(database))
+
+	lines := []string{
+		// An older deck for the same event: the latest-by-event heuristic
+		// would pick whichever deck was set most recently, so the match
+		// below must link to the V3 deck by its exact arena deck id.
+		setDeckLogLine(t, "EventSetDeckV2",
+			`{"EventName":"Traditional_Ladder","Summary":{"DeckId":"deck-dimir","Name":"Dimir Mid 2026","Attributes":[{"name":"Format","value":"TraditionalStandard"}]},"Deck":{"MainDeck":[{"cardId":11,"quantity":4}],"Sideboard":[],"CommandZone":[],"Companions":[]}}`),
+		setDeckLogLine(t, "EventSetDeckV3",
+			`{"EventName":"Traditional_Ladder","Summary":{"DeckId":"deck-izzet","Name":"Izzet Prowess","Attributes":[{"name":"Format","value":"TraditionalStandard"}]},"Deck":{"MainDeck":[{"cardId":22,"quantity":4}],"Sideboard":[{"cardId":33,"quantity":2}],"CommandZone":[],"Companions":[]}}`),
+		`{"timestamp":"1783485810381","matchGameRoomStateChangedEvent":{"gameRoomInfo":{"gameRoomConfig":{"reservedPlayers":[{"userId":"self-user","playerName":"Self","systemSeatId":1,"teamId":1,"eventId":"Traditional_Ladder"},{"userId":"opp-user","playerName":"Opp","systemSeatId":2,"teamId":2,"eventId":"Traditional_Ladder"}],"matchId":"match-izzet"},"stateType":"MatchGameRoomStateType_Playing"}}}`,
+	}
+	if err := writeLogLines(logPath, lines, false); err != nil {
+		t.Fatalf("write log lines: %v", err)
+	}
+
+	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
+		t.Fatalf("parse file: %v", err)
+	}
+
+	var deckName string
+	var cardRows int64
+	if err := database.QueryRowContext(ctx, `
+		SELECT d.name, (SELECT COUNT(*) FROM deck_cards dc WHERE dc.deck_id = d.id)
+		FROM decks d
+		WHERE d.arena_deck_id = 'deck-izzet'
+	`).Scan(&deckName, &cardRows); err != nil {
+		t.Fatalf("query V3 deck: %v", err)
+	}
+	if deckName != "Izzet Prowess" {
+		t.Fatalf("deck name = %q, want Izzet Prowess", deckName)
+	}
+	if cardRows != 2 {
+		t.Fatalf("deck_cards rows = %d, want 2", cardRows)
+	}
+
+	var linkedArenaDeckID, linkReason string
+	if err := database.QueryRowContext(ctx, `
+		SELECT d.arena_deck_id, md.snapshot_reason
+		FROM match_decks md
+		JOIN matches m ON m.id = md.match_id
+		JOIN decks d ON d.id = md.deck_id
+		WHERE m.arena_match_id = 'match-izzet'
+	`).Scan(&linkedArenaDeckID, &linkReason); err != nil {
+		t.Fatalf("query match deck link: %v", err)
+	}
+	if linkedArenaDeckID != "deck-izzet" {
+		t.Fatalf("linked deck = %q, want deck-izzet", linkedArenaDeckID)
+	}
+	if linkReason != "event_deck" {
+		t.Fatalf("link reason = %q, want event_deck", linkReason)
+	}
+}
+
 func writeLogLines(path string, lines []string, appendMode bool) error {
 	if len(lines) == 0 {
 		return nil

@@ -226,21 +226,21 @@ export function OverviewPage() {
       <section className="metrics-grid">
         <article className="metric-card">
           <p>Record</p>
-          <h2>
+          <div className="metric-value">
             {data.wins}W – {data.losses}L
-          </h2>
+          </div>
           <small className="metric-sub">
             {data.totalMatches} matches{unknownCount > 0 ? ` · ${unknownCount} unresolved` : ""}
           </small>
         </article>
         <article className={`metric-card metric-card--toned metric-card--${toneFor(overallRate)}`}>
           <p>Win Rate</p>
-          <h2>{overallRate == null ? "—" : pct(overallRate)}</h2>
+          <div className="metric-value">{overallRate == null ? "—" : pct(overallRate)}</div>
           <small className="metric-sub">all decided matches</small>
         </article>
         <article className={`metric-card metric-card--toned metric-card--${toneFor(formRate)}`}>
           <p>Recent Form</p>
-          <h2>{formRate == null ? "—" : pct(formRate)}</h2>
+          <div className="metric-value">{formRate == null ? "—" : pct(formRate)}</div>
           <small className="metric-sub">
             last {form.wins + form.losses} · {form.wins}W – {form.losses}L
           </small>
@@ -251,7 +251,7 @@ export function OverviewPage() {
           }`}
         >
           <p>Streak</p>
-          <h2>{streak ? `${streak.result === "win" ? "W" : "L"}${streak.length}` : "—"}</h2>
+          <div className="metric-value">{streak ? `${streak.result === "win" ? "W" : "L"}${streak.length}` : "—"}</div>
           <small className="metric-sub">
             {lastPlayedAt ? `last played ${formatRelativeTime(lastPlayedAt)}` : "current streak"}
           </small>

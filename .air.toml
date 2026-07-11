@@ -4,7 +4,7 @@ tmp_dir = "tmp"
 [build]
   cmd = "go build -o ./tmp/mtgdata ./cmd/mtgdata"
   bin = "./tmp/mtgdata"
-  args_bin = ["serve", "-db", "data/mtgdata.db", "-addr", ":8080"]
+  args_bin = ["serve", "-db", "data/mtgdata.db", "-addr", "127.0.0.1:8080"]
   include_ext = ["go"]
   exclude_dir = ["tmp", "web", "frontend", "build", "data", "docs"]
   delay = 200

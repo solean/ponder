@@ -119,12 +119,6 @@ const CHART_THEME_TOKENS: Record<`${ColorScheme}-${ThemeMode}`, ChartThemeTokens
   },
 };
 
-const SEASON_VIEW_LABELS: Record<SeasonView, string> = {
-  current: "Current",
-  previous: "Previous",
-  all: "All",
-};
-
 function handleSegmentedKeyDown<T extends string>(
   event: KeyboardEvent<HTMLButtonElement>,
   value: T,
@@ -205,10 +199,11 @@ export function RankProgressPanel() {
   const panelId = `${tabBaseId}-panel`;
   const headingId = `${tabBaseId}-heading`;
   const ladderOptions = ["constructed", "limited"] as const satisfies readonly Ladder[];
-  const seasonOptions = ["current", "previous", "all"] as const satisfies readonly SeasonView[];
 
   const availableSeasons = useMemo(() => (data ? seasonOrdinalsFor(data, ladder) : []), [data, ladder]);
   const hasPreviousSeason = availableSeasons.length > 1;
+  const currentSeasonOrdinal = availableSeasons[availableSeasons.length - 1];
+  const previousSeasonOrdinal = availableSeasons[availableSeasons.length - 2];
 
   useEffect(() => {
     if (seasonView === "previous" && !hasPreviousSeason) {
@@ -398,53 +393,47 @@ export function RankProgressPanel() {
           <h3 id={headingId}>Rank Progress</h3>
           <p>{series ? describeSeries(series) : describeSelection(seasonView)}</p>
         </div>
-        <div className="rank-control-stack">
-          <div className="rank-control-group">
-            <span className="rank-control-label">Ladder</span>
-            <div className="tabs rank-toggle" role="group" aria-label="Ladder selector">
-              {ladderOptions.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={ladder === value}
-                  className={`tab rank-toggle-button ${ladder === value ? "is-active" : ""}`}
-                  onClick={() => setLadder(value)}
-                  onKeyDown={(event) =>
-                    handleSegmentedKeyDown(event, value, ladderOptions, setLadder)
-                  }
-                >
-                  {LADDER_CONFIG[value].label}
-                </button>
-              ))}
-            </div>
+        <div className="rank-controls" role="group" aria-label="Rank trend filters">
+          <div className="tabs rank-toggle" role="group" aria-label="Trend ladder">
+            {ladderOptions.map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={ladder === value}
+                className={`tab rank-toggle-button ${ladder === value ? "is-active" : ""}`}
+                onClick={() => setLadder(value)}
+                onKeyDown={(event) =>
+                  handleSegmentedKeyDown(event, value, ladderOptions, setLadder)
+                }
+              >
+                {LADDER_CONFIG[value].label}
+              </button>
+            ))}
           </div>
-          <div className="rank-control-group">
-            <span className="rank-control-label">Season</span>
-            <div className="tabs rank-toggle" role="group" aria-label="Season selector">
-              {seasonOptions.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={seasonView === value}
-                  disabled={value === "previous" && !hasPreviousSeason}
-                  className={`tab rank-toggle-button ${seasonView === value ? "is-active" : ""}`}
-                  onClick={() => setSeasonView(value)}
-                  onKeyDown={(event) =>
-                    handleSegmentedKeyDown(event, value, seasonOptions, setSeasonView)
-                  }
-                >
-                  {SEASON_VIEW_LABELS[value]}
-                </button>
-              ))}
-            </div>
-          </div>
+          <label className="rank-season-select">
+            <span>Season</span>
+            <select
+              value={seasonView}
+              onChange={(event) => setSeasonView(event.target.value as SeasonView)}
+            >
+              <option value="all">All seasons</option>
+              <option value="current">
+                {currentSeasonOrdinal == null
+                  ? "Current season"
+                  : `Season ${currentSeasonOrdinal}`}
+              </option>
+              {hasPreviousSeason ? (
+                <option value="previous">Season {previousSeasonOrdinal}</option>
+              ) : null}
+            </select>
+          </label>
         </div>
       </div>
 
       {readyState ? (
         <div className="rank-summary">
-          <div className="rank-chip">
-            <span>{LADDER_CONFIG[ladder].label}</span>
+          <div className="rank-chip rank-chip--selected">
+            <span>{LADDER_CONFIG[ladder].label} · Trend</span>
             <strong>{currentRank}</strong>
           </div>
           <div className="rank-chip">

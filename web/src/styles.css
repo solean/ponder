@@ -1459,24 +1459,12 @@ body.has-wide-deck-curve .app-shell {
   letter-spacing: var(--track-sm);
 }
 
-.rank-control-stack {
-  display: grid;
-  gap: 0.52rem;
-  justify-items: end;
-}
-
-.rank-control-group {
-  display: grid;
-  gap: 0.28rem;
-  justify-items: end;
-}
-
-.rank-control-label {
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: var(--track-lg);
-  text-transform: uppercase;
+.rank-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .rank-toggle {
@@ -1487,6 +1475,54 @@ body.has-wide-deck-curve .app-shell {
   appearance: none;
   cursor: pointer;
   touch-action: manipulation;
+}
+
+.rank-season-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.rank-season-select > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.rank-season-select select {
+  appearance: none;
+  min-height: 2.5rem;
+  max-width: 14rem;
+  padding: 0.44rem 2.15rem 0.44rem 0.82rem;
+  background-image:
+    var(--select-chevron),
+    linear-gradient(155deg, var(--panel-inner-a) 0%, var(--panel-inner-b) 100%);
+  background-repeat: no-repeat;
+  background-position:
+    right 0.72rem center,
+    0 0;
+  background-size:
+    10px 6px,
+    auto;
+  box-shadow: inset 0 1px 0 var(--card-inner-border);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 700;
+  letter-spacing: var(--track-display);
+  text-overflow: ellipsis;
+  touch-action: manipulation;
+}
+
+.rank-season-select select:hover {
+  border-color: var(--line-strong);
+  background-color: var(--accent-soft);
 }
 
 .rank-summary {
@@ -1509,6 +1545,13 @@ body.has-wide-deck-curve .app-shell {
   box-shadow: inset 0 1px 0 var(--card-inner-border);
 }
 
+.rank-chip--selected {
+  border-color: var(--tab-active-border);
+  box-shadow:
+    0 0 12px var(--accent-soft),
+    inset 0 1px 0 var(--tab-active-shine);
+}
+
 .rank-chip span {
   display: block;
   color: var(--muted);
@@ -1516,6 +1559,10 @@ body.has-wide-deck-curve .app-shell {
   font-size: var(--text-xs);
   letter-spacing: var(--track-lg);
   text-transform: uppercase;
+}
+
+.rank-chip--selected span {
+  color: var(--accent);
 }
 
 .rank-chip strong {
@@ -5549,6 +5596,12 @@ select {
     justify-content: flex-start;
   }
 
+  .rank-controls .rank-toggle {
+    order: initial;
+    flex: 0 1 auto;
+    width: auto;
+  }
+
   .deck-detail-actions {
     width: 100%;
     justify-items: stretch;
@@ -5703,14 +5756,14 @@ select {
     align-items: start;
   }
 
-  .rank-control-stack,
-  .rank-control-group {
+  .rank-controls {
     width: 100%;
-    justify-items: stretch;
+    justify-content: stretch;
   }
 
   .rank-toggle {
-    width: 100%;
+    width: auto;
+    flex: 1 1 12rem;
     justify-content: stretch;
   }
 
@@ -5718,6 +5771,18 @@ select {
     flex: 1 1 0;
     padding-left: 0.75rem;
     padding-right: 0.75rem;
+  }
+
+  .rank-season-select {
+    min-width: 0;
+    flex: 1 1 8rem;
+  }
+
+  .rank-season-select select {
+    width: 100%;
+    max-width: none;
+    min-height: 2.75rem;
+    font-size: 1rem;
   }
 
   .rank-chip {

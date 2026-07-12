@@ -14,6 +14,9 @@ import (
 //go:embed all:web/dist
 var embeddedAssets embed.FS
 
+// App display name — change here to rebrand. Keep web/src/lib/branding.ts in sync.
+const appDisplayName = "Ponder"
+
 func main() {
 	assets, err := fs.Sub(embeddedAssets, "web/dist")
 	if err != nil {
@@ -22,7 +25,7 @@ func main() {
 
 	app := NewApp(assets)
 	if err := wails.Run(&options.App{
-		Title:            "MTGData",
+		Title:            appDisplayName,
 		Width:            1480,
 		Height:           960,
 		MinWidth:         1200,

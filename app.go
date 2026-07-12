@@ -94,7 +94,7 @@ func (a *App) failStartup(stage string, err error) {
 	if a.ctx != nil {
 		_, _ = wailsruntime.MessageDialog(a.ctx, wailsruntime.MessageDialogOptions{
 			Type:    wailsruntime.ErrorDialog,
-			Title:   "MTGData failed to start",
+			Title:   appDisplayName + " failed to start",
 			Message: message + "\n\nThe app will stay open but cannot load data. Fix the issue and restart.",
 		})
 	}

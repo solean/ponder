@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { APP_NAME } from "../lib/branding";
 import { formatBytes, formatDateTime, formatRelativeTime, shortenHomePath } from "../lib/format";
 import { useThemeControls, type ColorScheme, type ModePreference } from "../lib/theme";
 import type { RuntimeConfig, RuntimeOperation, RuntimeStatus, UpdateCheck } from "../lib/types";
@@ -766,7 +767,7 @@ export function SettingsPage() {
               onChange={(event) => autostartMutation.mutate(event.target.checked)}
               disabled={autostartMutation.isPending}
             />
-            <span>Launch MTGData at login.</span>
+            <span>Launch {APP_NAME} at login.</span>
           </label>
         ) : (
           <p className="settings-note">{autostartQuery.data?.note || "Launch at login is unavailable."}</p>
@@ -816,7 +817,7 @@ export function SettingsPage() {
           </p>
         ) : null}
         <p className="settings-note">
-          Closing the window keeps MTGData running in the background so live tracking continues; quit fully with
+          Closing the window keeps {APP_NAME} running in the background so live tracking continues; quit fully with
           Cmd+Q.
         </p>
       </section>

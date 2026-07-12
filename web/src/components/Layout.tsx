@@ -8,6 +8,7 @@ import {
   type ModePreference,
   type ThemeMode,
 } from "../lib/theme";
+import { APP_NAME } from "../lib/branding";
 import { AppErrorFallback, ErrorBoundary } from "./ErrorBoundary";
 import { LiveMatchBanner } from "./LiveMatchBanner";
 import { Plasma } from "./Plasma";
@@ -35,7 +36,7 @@ function pageTitle(pathname: string): string {
   if (pathname === "/drafts") return "Drafts";
   if (pathname.startsWith("/drafts/")) return "Draft Detail";
   if (pathname === "/settings") return "Settings";
-  return "MTGData Control Room";
+  return APP_NAME;
 }
 
 function applyThemeColorMeta(mode: ThemeMode, scheme: ColorScheme) {
@@ -123,7 +124,7 @@ export function Layout() {
 
   useEffect(() => {
     const context = pageTitle(location.pathname);
-    document.title = context === "MTGData Control Room" ? context : `${context} · MTGData Control Room`;
+    document.title = context === APP_NAME ? context : `${context} · ${APP_NAME}`;
   }, [location.pathname]);
 
   useEffect(() => {
@@ -160,7 +161,7 @@ export function Layout() {
           <header className="topbar">
           <div className="brand">
             <span className="title-sigil" aria-hidden="true" />
-            <h1>MTGA Data Tracker</h1>
+            <h1>{APP_NAME}</h1>
           </div>
           <div className="topbar-controls">
             <nav className="tabs" aria-label="Primary">

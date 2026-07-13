@@ -43,6 +43,7 @@ import {
   buildReplayBoardCensus,
   buildReplayGameGroups,
   buildReplayLifeSeries,
+  buildReplayTargetLookup,
   buildReplayTickKinds,
   buildReplayTurnBoundaries,
   cardDisplayName,
@@ -69,6 +70,7 @@ import {
   replayObjectStatusText,
   replayTurnLabel,
   replayTurnValue,
+  replayTargetListLabel,
   shouldRenderOnBattlefield,
   sortBattlefieldSectionObjects,
   sortReplayObjects,
@@ -90,6 +92,7 @@ import {
   type ReplayKeyMoment,
   type ReplayLifePoint,
   type ReplayTickKind,
+  type ReplayTargetLookup,
   type ReplayTurnBoundary,
 } from "../lib/replay";
 import {
@@ -1532,6 +1535,7 @@ function MatchReplayHand({
 
 function MatchReplayStack({
   frame,
+  targetsBySourceId,
   previewByCardID,
   highlightedInstanceIDs,
   onRegisterCardShell,
@@ -1540,6 +1544,7 @@ function MatchReplayStack({
   onConnectionFocusChange,
 }: {
   frame: MatchReplayFrame;
+  targetsBySourceId: ReplayTargetLookup;
   previewByCardID: Map<number, CardPreview | null>;
   highlightedInstanceIDs: Set<number>;
   onRegisterCardShell?: (instanceId: number, element: HTMLDivElement | null) => void;
@@ -1577,6 +1582,8 @@ function MatchReplayStack({
           const name = preview?.name ?? cardDisplayName(card);
           const isTop = index === 0;
           const manaCost = preview?.manaCost?.trim() ?? "";
+          const targets = targetsBySourceId.get(object.instanceId) ?? [];
+          const targetLabel = replayTargetListLabel(targets);
           const connectionFocusable =
             connectionInteractiveInstanceIDs?.has(object.instanceId) &&
             onConnectionFocusChange;
@@ -1628,8 +1635,8 @@ function MatchReplayStack({
                     href={preview?.scryfallUrl ?? cardFallbackHref(card)}
                     target="_blank"
                     rel="noreferrer"
-                    aria-label={`Open ${name} on Scryfall`}
-                    title={`${name} • ${timelinePlayerLabel(object.playerSide)}${isTop ? " • Top of stack" : ""}`}
+                    aria-label={`Open ${name} on Scryfall${targetLabel ? `, targeting ${targetLabel}` : ""}`}
+                    title={`${name} • ${timelinePlayerLabel(object.playerSide)}${isTop ? " • Top of stack" : ""}${targetLabel ? ` • Targets ${targetLabel}` : ""}`}
                   >
                     <span
                       className="match-replay-stack-ticket-edge"
@@ -1653,6 +1660,14 @@ function MatchReplayStack({
                     <span className="match-replay-stack-ticket-owner">
                       {object.playerSide === "self" ? "You" : "Opp"}
                     </span>
+                    {targetLabel ? (
+                      <span
+                        className="match-replay-stack-ticket-target"
+                        title={`Targets ${targetLabel}`}
+                      >
+                        → {targetLabel}
+                      </span>
+                    ) : null}
                     {isTop ? (
                       <span className="match-replay-stack-ticket-tag">Top</span>
                     ) : (
@@ -2266,6 +2281,10 @@ function MatchReplayFrameBoard({
   const lifeSeries = useMemo(() => buildReplayLifeSeries(frames), [frames]);
   const tickKinds = useMemo(() => buildReplayTickKinds(frames), [frames]);
   const keyMoments = useMemo(() => findReplayKeyMoments(frames), [frames]);
+  const targetsBySourceId = useMemo(
+    () => buildReplayTargetLookup(frames),
+    [frames],
+  );
 
   // Lazily-built, cached per index: users sweep the scrubber back and forth
   // over the same frames, so each snapshot is computed at most once.
@@ -2345,41 +2364,25 @@ function MatchReplayFrameBoard({
       }
     }
 
-    const seen = new Set<string>();
     const next: ReplayBoardConnection[] = [];
-    for (const annotation of replayFrameAnnotations(currentFrame)) {
-      if (!replayAnnotationHasType(annotation, "AnnotationType_TargetSpec")) {
+    for (const [sourceId, targets] of targetsBySourceId) {
+      if (!stackByID.has(sourceId)) {
         continue;
       }
-      if (
-        typeof annotation.affectorId !== "number" ||
-        !stackByID.has(annotation.affectorId)
-      ) {
-        continue;
-      }
-
-      const affectedIds = Array.isArray(annotation.affectedIds)
-        ? annotation.affectedIds
-        : [];
-      for (const targetId of affectedIds) {
-        if (typeof targetId !== "number" || !battlefieldByID.has(targetId)) {
+      for (const target of targets) {
+        if (!battlefieldByID.has(target.targetId)) {
           continue;
         }
-        const key = `${annotation.affectorId}-${targetId}`;
-        if (seen.has(key)) {
-          continue;
-        }
-        seen.add(key);
         next.push({
           kind: "spellTarget",
-          sourceId: annotation.affectorId,
-          targetId,
+          sourceId,
+          targetId: target.targetId,
         });
       }
     }
 
     return next;
-  }, [currentFrame, currentObjects]);
+  }, [currentObjects, targetsBySourceId]);
   const overlayConnections = useMemo(
     () => [...combatConnections, ...spellTargetConnections],
     [combatConnections, spellTargetConnections],
@@ -2694,6 +2697,7 @@ function MatchReplayFrameBoard({
             <div className="match-replay-arena-stack">
               <MatchReplayStack
                 frame={currentFrame}
+                targetsBySourceId={targetsBySourceId}
                 previewByCardID={previewByCardID}
                 highlightedInstanceIDs={changedInstanceIDs}
                 onRegisterCardShell={registerCardShell}
@@ -3785,4 +3789,3 @@ export function MatchDetailPage() {
     </div>
   );
 }
-

@@ -40,6 +40,11 @@ export type ReplayBoardConnection = {
   sourceId: number;
   targetId: number;
 };
+export type ReplayTarget = {
+  targetId: number;
+  label: string;
+};
+export type ReplayTargetLookup = Map<number, ReplayTarget[]>;
 export type ReplayAnnotationDetail = {
   key?: string;
   type?: string;
@@ -468,6 +473,12 @@ export function replayFrameAnnotations(frame: MatchReplayFrame | null): ReplayAn
   }
 }
 
+export function replayFrameHasTargetSpec(frame: MatchReplayFrame): boolean {
+  return replayFrameAnnotations(frame).some((annotation) =>
+    replayAnnotationHasType(annotation, "AnnotationType_TargetSpec"),
+  );
+}
+
 export function replayAnnotationHasType(
   annotation: ReplayAnnotation,
   expectedType: string,
@@ -494,6 +505,88 @@ export function replayAnnotationDetailIntValue(
   }
 
   return undefined;
+}
+
+export function replayTargetListLabel(targets: ReplayTarget[]): string {
+  const labels = targets.map((target) => target.label);
+  if (labels.length === 0) return "";
+  if (labels.length === 1) return labels[0]!;
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+}
+
+export function buildReplayTargetLookup(
+  frames: MatchReplayFrame[],
+): ReplayTargetLookup {
+  const objectById = new Map<number, MatchReplayFrameObject>();
+  const playerSideBySeatId = new Map<number, "self" | "opponent">();
+
+  for (const frame of frames) {
+    for (const object of frame.objects ?? []) {
+      objectById.set(object.instanceId, object);
+      if (object.playerSide !== "self" && object.playerSide !== "opponent") {
+        continue;
+      }
+      if (typeof object.ownerSeatId === "number") {
+        playerSideBySeatId.set(object.ownerSeatId, object.playerSide);
+      }
+      if (typeof object.controllerSeatId === "number") {
+        playerSideBySeatId.set(object.controllerSeatId, object.playerSide);
+      }
+    }
+  }
+
+  const targetIdsBySourceId = new Map<number, number[]>();
+  for (const frame of frames) {
+    for (const annotation of replayFrameAnnotations(frame)) {
+      if (
+        !replayAnnotationHasType(annotation, "AnnotationType_TargetSpec") ||
+        typeof annotation.affectorId !== "number"
+      ) {
+        continue;
+      }
+
+      let targetIds = targetIdsBySourceId.get(annotation.affectorId);
+      if (!targetIds) {
+        targetIds = [];
+        targetIdsBySourceId.set(annotation.affectorId, targetIds);
+      }
+      for (const targetId of annotation.affectedIds ?? []) {
+        if (typeof targetId === "number" && !targetIds.includes(targetId)) {
+          targetIds.push(targetId);
+        }
+      }
+    }
+  }
+
+  const lookup: ReplayTargetLookup = new Map();
+  for (const [sourceId, targetIds] of targetIdsBySourceId) {
+    const targets = targetIds.map((targetId) => {
+      const object = objectById.get(targetId);
+      if (object) {
+        return {
+          targetId,
+          label: cardDisplayName(object),
+        };
+      }
+
+      const playerSide = playerSideBySeatId.get(targetId);
+      return {
+        targetId,
+        label:
+          playerSide === "self"
+            ? "you"
+            : playerSide === "opponent"
+              ? "opponent"
+              : `target ${targetId}`,
+      };
+    });
+    if (targets.length > 0) {
+      lookup.set(sourceId, targets);
+    }
+  }
+
+  return lookup;
 }
 
 export function replayObjectStatePills(
@@ -787,6 +880,7 @@ export function isMeaningfulReplayFrame(
 ): boolean {
   return (
     replayFrameHasNarratableChange(frame) ||
+    replayFrameHasTargetSpec(frame) ||
     replayFrameHasLifeDelta(previousFrame, frame)
   );
 }
@@ -1543,6 +1637,22 @@ function replayPowerToughnessAbilityBeat(
   return null;
 }
 
+function replayTargetBeat(frame: MatchReplayFrame): ReplayBeat | null {
+  const targetsBySourceId = buildReplayTargetLookup([frame]);
+  for (const [sourceId, targets] of targetsBySourceId) {
+    const source = (frame.objects ?? []).find(
+      (object) => object.instanceId === sourceId,
+    );
+    if (!source) {
+      continue;
+    }
+    return {
+      text: `${cardDisplayName(source)} targets ${replayTargetListLabel(targets)}`,
+    };
+  }
+  return null;
+}
+
 /**
  * Subject + correctly conjugated verb, e.g. "You attack" vs "Opponent attacks".
  * The base verbs here are all regular, so the third-person form just adds "s".
@@ -1599,6 +1709,11 @@ export function buildReplayBeat(
     return {
       text: `${replayActorVerb(lead.playerSide, "cast")} ${replayChangeName(lead)}`,
     };
+  }
+
+  const target = replayTargetBeat(frame);
+  if (target) {
+    return target;
   }
 
   const powerToughnessAbility = replayPowerToughnessAbilityBeat(frame);

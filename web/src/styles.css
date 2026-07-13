@@ -3113,6 +3113,16 @@ span.settings-status-pill {
   color: var(--metric-negative-text);
 }
 
+.match-replay-stack-ticket-target {
+  max-width: 9rem;
+  overflow: hidden;
+  color: var(--spell-target-connection-line);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
 .match-replay-stack-ticket-tag {
   padding: 0.08rem 0.32rem;
   border: 1px solid var(--accent-glow);

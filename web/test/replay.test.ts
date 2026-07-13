@@ -8,6 +8,7 @@ import {
   buildReplayBoardCensus,
   buildReplayGameGroups,
   buildReplayLifeSeries,
+  buildReplayTargetLookup,
   buildReplayTickKinds,
   buildReplayTurnBoundaries,
   findReplayKeyMoments,
@@ -560,6 +561,39 @@ describe("play-by-play beats", () => {
       text: "Slickshot Show-Off's ability gives it +2/+0",
     });
     expect(replayFrameTickKind(f, null)).toBe("other");
+  });
+
+  test("keeps and narrates a spell target selection", () => {
+    const targetFrame = frame({
+      id: 2,
+      annotationsJson: JSON.stringify({
+        annotations: [
+          {
+            affectorId: 8,
+            affectedIds: [7],
+            type: ["AnnotationType_TargetSpec"],
+          },
+        ],
+      }),
+      objects: [
+        object({
+          instanceId: 8,
+          cardName: "Burst Lightning",
+          zoneType: "Stack",
+        }),
+        object({ instanceId: 7, cardName: "Otter" }),
+      ],
+    });
+
+    expect(filterMeaningfulReplayFrames([frame({ id: 1 }), targetFrame])).toEqual([
+      targetFrame,
+    ]);
+    expect(buildReplayBeat(targetFrame, null)).toEqual({
+      text: "Burst Lightning targets Otter",
+    });
+    expect(buildReplayTargetLookup([targetFrame])).toEqual(
+      new Map([[8, [{ targetId: 7, label: "Otter" }]]]),
+    );
   });
 });
 

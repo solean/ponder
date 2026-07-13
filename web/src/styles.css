@@ -280,7 +280,6 @@
    ══════════════════════════════════════════ */
 
 :root[data-scheme="dimir"] {
-  color-scheme: dark;
 
   --bg: #020507;
   --bg-mid: #050a11;
@@ -355,7 +354,6 @@
    ══════════════════════════════════════════ */
 
 :root[data-scheme="steel"] {
-  color-scheme: dark;
 
   --bg: #040507;
   --bg-mid: #07090c;
@@ -3182,7 +3180,7 @@ span.settings-status-pill {
     ),
     linear-gradient(
       160deg,
-      rgba(10, 14, 20, 0.42) 0%,
+      var(--surface-strong) 0%,
       var(--surface-faint) 100%
     );
   overflow: hidden;
@@ -3377,7 +3375,7 @@ span.settings-status-pill {
       transparent 1px,
       transparent 104px
     ),
-    linear-gradient(160deg, rgba(10, 14, 20, 0.42) 0%, var(--surface-faint) 100%);
+    linear-gradient(160deg, var(--surface-strong) 0%, var(--surface-faint) 100%);
   overflow: hidden;
 }
 
@@ -3541,7 +3539,7 @@ button.match-replay-zonechip.is-button {
 
 .match-replay-zone-group + .match-replay-zone-group {
   padding-left: 0.85rem;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 1px solid var(--line);
 }
 
 .match-replay-zone-group-head {

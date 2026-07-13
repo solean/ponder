@@ -5226,8 +5226,9 @@ button.match-replay-zonechip.is-button {
   width: 336px;
   height: 468px;
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: 16px;
   padding: 0;
+  overflow: hidden;
   background: var(--popover-bg);
   box-shadow:
     var(--shadow-lg),
@@ -5257,7 +5258,7 @@ button.match-replay-zonechip.is-button {
   height: 100%;
   object-fit: contain;
   object-position: center;
-  border-radius: 3px;
+  border-radius: 15px;
   background: var(--popover-card-bg);
 }
 

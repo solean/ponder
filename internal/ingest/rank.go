@@ -79,10 +79,11 @@ func (p *Parser) handleMethodResponse(ctx context.Context, tx *sql.Tx, stats *mo
 	observedAt := state.pendingResponseObservedAt
 	state.clearPendingResponse()
 
-	if err := p.store.InsertRawEvent(ctx, tx, logPath, lineNo, byteOffset, "method_result", method, requestID, []byte(line), ""); err != nil {
+	if stored, err := p.store.InsertRawEvent(ctx, tx, logPath, lineNo, byteOffset, "method_result", method, requestID, []byte(line), ""); err != nil {
 		return err
+	} else if stored {
+		stats.RawEventsStored++
 	}
-	stats.RawEventsStored++
 
 	if method != "RankGetCombinedRankInfo" {
 		return nil

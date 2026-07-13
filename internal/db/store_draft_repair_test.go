@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestListDraftSessionsRepairsPlayerDraftMetadataFromRawEvents(t *testing.T) {
+func TestRepairDraftDataBackfillsPlayerDraftMetadataFromRawEvents(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -29,12 +29,18 @@ func TestListDraftSessionsRepairsPlayerDraftMetadataFromRawEvents(t *testing.T) 
 	}
 
 	rawEvent := `{"DraftId":"draft-123","EventId":"PremierDraft_TMT_20260303","PackNumber":1,"PickNumber":1,"PickGrpId":1001,"CardsInPack":[1001,1002,1003],"EventType":24,"EventTime":"2026-04-04T00:33:13.720644Z"}`
-	if err := store.InsertRawEvent(ctx, tx, "Player.log", 10, 100, "outgoing", "LogBusinessEvents", "req-1", []byte(rawEvent), ""); err != nil {
+	if stored, err := store.InsertRawEvent(ctx, tx, "Player.log", 10, 100, "outgoing", "LogBusinessEvents", "req-1", []byte(rawEvent), ""); err != nil {
 		t.Fatalf("InsertRawEvent: %v", err)
+	} else if !stored {
+		t.Fatal("InsertRawEvent skipped a draft pick business event")
 	}
 
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("Commit: %v", err)
+	}
+
+	if err := store.RepairDraftDataFromRawEvents(ctx); err != nil {
+		t.Fatalf("RepairDraftDataFromRawEvents: %v", err)
 	}
 
 	rows, err := store.ListDraftSessions(ctx)
@@ -113,7 +119,7 @@ func TestCompleteDraftSessionBackfillsLatestIncompletePlayerDraft(t *testing.T) 
 	}
 }
 
-func TestListDraftSessionsRepairsPlayerDraftFromPickAndCompleteEvents(t *testing.T) {
+func TestRepairDraftDataBackfillsPlayerDraftFromPickAndCompleteEvents(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -137,17 +143,25 @@ func TestListDraftSessionsRepairsPlayerDraftFromPickAndCompleteEvents(t *testing
 	}
 
 	rawPick := `{"DraftId":"draft-789","GrpIds":[100508],"Pack":3,"Pick":14}`
-	if err := store.InsertRawEvent(ctx, tx, "Player.log", 20, 200, "outgoing", "EventPlayerDraftMakePick", "req-pick", []byte(rawPick), ""); err != nil {
+	if stored, err := store.InsertRawEvent(ctx, tx, "Player.log", 20, 200, "outgoing", "EventPlayerDraftMakePick", "req-pick", []byte(rawPick), ""); err != nil {
 		t.Fatalf("InsertRawEvent(pick): %v", err)
+	} else if !stored {
+		t.Fatal("InsertRawEvent skipped a player draft pick event")
 	}
 
 	rawComplete := `{"EventName":"PremierDraft_TMT_20260303","IsBotDraft":false}`
-	if err := store.InsertRawEvent(ctx, tx, "Player.log", 21, 220, "outgoing", "DraftCompleteDraft", "req-complete", []byte(rawComplete), ""); err != nil {
+	if stored, err := store.InsertRawEvent(ctx, tx, "Player.log", 21, 220, "outgoing", "DraftCompleteDraft", "req-complete", []byte(rawComplete), ""); err != nil {
 		t.Fatalf("InsertRawEvent(complete): %v", err)
+	} else if !stored {
+		t.Fatal("InsertRawEvent skipped a draft complete event")
 	}
 
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("Commit: %v", err)
+	}
+
+	if err := store.RepairDraftDataFromRawEvents(ctx); err != nil {
+		t.Fatalf("RepairDraftDataFromRawEvents: %v", err)
 	}
 
 	rows, err := store.ListDraftSessions(ctx)

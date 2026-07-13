@@ -402,6 +402,13 @@ func openTempSQLiteDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() {
 		_ = db.Close()
 	})
+	// These tests recreate legacy databases written before foreign keys were
+	// enforced (including dangling references), so run them the way Init runs
+	// migrations: a single connection with enforcement off.
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
+		t.Fatalf("disable foreign_keys: %v", err)
+	}
 	return db
 }
 

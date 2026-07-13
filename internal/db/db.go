@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"net/url"
+	"path/filepath"
 	"strings"
 
 	_ "modernc.org/sqlite"
@@ -13,13 +15,41 @@ import (
 //go:embed schema.sql
 var schemaFS embed.FS
 
+// Pragmas are connection-scoped in SQLite, so they must ride on the DSN to
+// apply to every pooled connection — foreign_keys in particular guards the
+// ON DELETE CASCADE cleanup that keeps the database free of orphan rows.
+// _txlock=immediate makes concurrent write transactions queue on the busy
+// handler instead of failing with SQLITE_BUSY on lock upgrade.
+const dsnOptions = "_txlock=immediate" +
+	"&_pragma=busy_timeout(5000)" +
+	"&_pragma=foreign_keys(1)" +
+	"&_pragma=journal_mode(WAL)" +
+	"&_pragma=synchronous(NORMAL)"
+
+func dsn(path string) string {
+	// url.URL renders a relative path as file://<first-segment>/..., which
+	// SQLite reads as an authority, so the path must be absolute.
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+	path = filepath.ToSlash(path)
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	u := url.URL{Scheme: "file", Path: path, RawQuery: dsnOptions}
+	return u.String()
+}
+
 func Open(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", dsn(path))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 
-	db.SetMaxOpenConns(1)
+	// WAL allows readers to run alongside the single writer; a small pool
+	// keeps API reads from queueing behind ingest write batches.
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(4)
 
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
@@ -27,6 +57,15 @@ func Open(path string) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+// dbConn abstracts *sql.DB and *sql.Conn so migrations can run on a dedicated
+// connection whose pragmas differ from the pool's.
+type dbConn interface {
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
 func Init(ctx context.Context, db *sql.DB) error {
@@ -39,14 +78,55 @@ func Init(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("apply schema: %w", err)
 	}
 
-	if err := migrateMatchObservationTables(ctx, db); err != nil {
+	// Migrations rebuild tables from legacy databases written before foreign
+	// keys were enforced, so they may carry dangling references; run them on a
+	// dedicated connection with enforcement off, then restore it before the
+	// connection returns to the pool.
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire migration connection: %w", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		return fmt.Errorf("disable foreign keys for migration: %w", err)
+	}
+	defer func() {
+		_, _ = conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`)
+	}()
+
+	if err := migrateMatchObservationTables(ctx, conn); err != nil {
+		return err
+	}
+
+	if err := dropRedundantIndexes(ctx, conn); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func migrateMatchObservationTables(ctx context.Context, db *sql.DB) error {
+// dropRedundantIndexes removes indexes that older schema versions created but
+// that duplicate the leftmost prefix of a UNIQUE constraint's autoindex or of
+// another retained index. They cost space and write amplification during live
+// ingest without serving any query.
+func dropRedundantIndexes(ctx context.Context, conn dbConn) error {
+	stmts := []string{
+		`DROP INDEX IF EXISTS idx_match_replay_frames_match_game_state`,
+		`DROP INDEX IF EXISTS idx_match_card_plays_match_id`,
+		`DROP INDEX IF EXISTS idx_match_opponent_cards_match_id`,
+		`DROP INDEX IF EXISTS idx_match_replay_frame_objects_frame_id`,
+		`DROP INDEX IF EXISTS idx_events_raw_kind`,
+	}
+	for _, stmt := range stmts {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("drop redundant index: %w", err)
+		}
+	}
+	return nil
+}
+
+func migrateMatchObservationTables(ctx context.Context, db dbConn) error {
 	hasGameNo, err := tableHasColumn(ctx, db, "match_card_plays", "game_number")
 	if err != nil {
 		return fmt.Errorf("inspect match_card_plays schema: %w", err)
@@ -110,7 +190,7 @@ func migrateMatchObservationTables(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func tableHasColumn(ctx context.Context, db *sql.DB, tableName, columnName string) (bool, error) {
+func tableHasColumn(ctx context.Context, db dbConn, tableName, columnName string) (bool, error) {
 	query := fmt.Sprintf(`PRAGMA table_info(%s)`, tableName)
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
@@ -172,7 +252,7 @@ func tableHasColumnInTx(ctx context.Context, tx *sql.Tx, tableName, columnName s
 	return false, nil
 }
 
-func tableHasForeignKeyTarget(ctx context.Context, db *sql.DB, tableName, targetTable string) (bool, error) {
+func tableHasForeignKeyTarget(ctx context.Context, db dbConn, tableName, targetTable string) (bool, error) {
 	query := fmt.Sprintf(`PRAGMA foreign_key_list(%s)`, tableName)
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
@@ -205,7 +285,7 @@ func tableHasForeignKeyTarget(ctx context.Context, db *sql.DB, tableName, target
 	return false, nil
 }
 
-func addMatchReplayFrameResultColumns(ctx context.Context, db *sql.DB, addGameStage, addWinningPlayerSide, addWinReason bool) error {
+func addMatchReplayFrameResultColumns(ctx context.Context, db dbConn, addGameStage, addWinningPlayerSide, addWinReason bool) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin migrate match_replay_frames result columns: %w", err)
@@ -235,7 +315,7 @@ func addMatchReplayFrameResultColumns(ctx context.Context, db *sql.DB, addGameSt
 	return nil
 }
 
-func rebuildMatchCardPlaysTable(ctx context.Context, db *sql.DB) error {
+func rebuildMatchCardPlaysTable(ctx context.Context, db dbConn) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin migrate match_card_plays: %w", err)
@@ -269,7 +349,6 @@ func rebuildMatchCardPlaysTable(ctx context.Context, db *sql.DB) error {
 		SELECT
 			id, match_id, 1, instance_id, card_id, owner_seat_id, first_public_zone, turn_number, phase, source, played_at, created_at
 		FROM match_card_plays_old`,
-		`CREATE INDEX idx_match_card_plays_match_id ON match_card_plays(match_id)`,
 		`CREATE INDEX idx_match_card_plays_card_id ON match_card_plays(card_id)`,
 		`CREATE INDEX idx_match_card_plays_turn_order ON match_card_plays(match_id, turn_number, played_at, id)`,
 		`DROP TABLE match_card_plays_old`,
@@ -287,7 +366,7 @@ func rebuildMatchCardPlaysTable(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func rebuildMatchOpponentCardInstancesTable(ctx context.Context, db *sql.DB) error {
+func rebuildMatchOpponentCardInstancesTable(ctx context.Context, db dbConn) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin migrate match_opponent_card_instances: %w", err)
@@ -316,7 +395,6 @@ func rebuildMatchOpponentCardInstancesTable(ctx context.Context, db *sql.DB) err
 		SELECT
 			id, match_id, 1, instance_id, card_id, source, first_seen_at, created_at
 		FROM match_opponent_card_instances_old`,
-		`CREATE INDEX idx_match_opponent_cards_match_id ON match_opponent_card_instances(match_id)`,
 		`CREATE INDEX idx_match_opponent_cards_card_id ON match_opponent_card_instances(card_id)`,
 		`DROP TABLE match_opponent_card_instances_old`,
 	}
@@ -333,7 +411,7 @@ func rebuildMatchOpponentCardInstancesTable(ctx context.Context, db *sql.DB) err
 	return nil
 }
 
-func rebuildMatchReplayFrameObjectsTable(ctx context.Context, db *sql.DB) error {
+func rebuildMatchReplayFrameObjectsTable(ctx context.Context, db dbConn) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin migrate match_replay_frame_objects: %w", err)
@@ -362,7 +440,7 @@ func rebuildMatchReplayFrameObjectsTable(ctx context.Context, db *sql.DB) error 
 	return nil
 }
 
-func rebuildMatchReplayFramesTable(ctx context.Context, db *sql.DB) error {
+func rebuildMatchReplayFramesTable(ctx context.Context, db dbConn) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin migrate match_replay_frames: %w", err)
@@ -460,9 +538,6 @@ func rebuildMatchReplayFramesTable(ctx context.Context, db *sql.DB) error {
 	if _, err := tx.ExecContext(ctx, insertQuery); err != nil {
 		return fmt.Errorf("migrate match_replay_frames: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `CREATE INDEX idx_match_replay_frames_match_game_state ON match_replay_frames(match_id, game_number, game_state_id)`); err != nil {
-		return fmt.Errorf("migrate match_replay_frames: %w", err)
-	}
 	if _, err := tx.ExecContext(ctx, `CREATE INDEX idx_match_replay_frames_turn_order ON match_replay_frames(match_id, game_number, turn_number, game_state_id, id)`); err != nil {
 		return fmt.Errorf("migrate match_replay_frames: %w", err)
 	}
@@ -531,7 +606,6 @@ func createMatchReplayFrameObjectsTable(ctx context.Context, tx *sql.Tx) error {
 
 func createMatchReplayFrameObjectsIndexes(ctx context.Context, tx *sql.Tx) error {
 	steps := []string{
-		`CREATE INDEX idx_match_replay_frame_objects_frame_id ON match_replay_frame_objects(frame_id)`,
 		`CREATE INDEX idx_match_replay_frame_objects_card_id ON match_replay_frame_objects(card_id)`,
 		`CREATE INDEX idx_match_replay_frame_objects_zone ON match_replay_frame_objects(frame_id, zone_type, zone_position, instance_id)`,
 	}

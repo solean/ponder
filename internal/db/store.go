@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -150,7 +151,46 @@ func (s *Store) PlayerName(ctx context.Context) (string, error) {
 	return strings.TrimSpace(playerName), nil
 }
 
-func (s *Store) InsertRawEvent(ctx context.Context, tx *sql.Tx, logPath string, lineNo, byteOffset int64, kind, method, requestID string, payload []byte, rawText string) error {
+// rawEventPersistMethods lists the outgoing methods whose payloads
+// RepairDraftDataFromRawEvents reads back. Everything else parses inline
+// during ingest and would only occupy space, so it is never stored.
+var rawEventPersistMethods = map[string]bool{
+	"LogBusinessEvents":        true,
+	"EventPlayerDraftMakePick": true,
+	"DraftCompleteDraft":       true,
+	"EventSetDeckV2":           true,
+	"EventSetDeckV3":           true,
+}
+
+// logBusinessEventTypeDraftPick is the LogBusinessEvents EventType carrying
+// draft pick data; it is the only business event draft repair consumes.
+const logBusinessEventTypeDraftPick = 24
+
+// shouldPersistRawEvent reports whether a raw event is worth storing: only
+// outgoing draft/deck methods are ever read back, and of LogBusinessEvents
+// only the draft pick events.
+func shouldPersistRawEvent(kind, method string, payload []byte) bool {
+	if kind != "outgoing" || !rawEventPersistMethods[method] {
+		return false
+	}
+	if method != "LogBusinessEvents" {
+		return true
+	}
+	var probe struct {
+		EventType int64 `json:"EventType"`
+	}
+	if err := json.Unmarshal(payload, &probe); err != nil {
+		return false
+	}
+	return probe.EventType == logBusinessEventTypeDraftPick
+}
+
+// InsertRawEvent stores a raw log event when a later repair pass can use it
+// (see shouldPersistRawEvent). Returns whether a row was written.
+func (s *Store) InsertRawEvent(ctx context.Context, tx *sql.Tx, logPath string, lineNo, byteOffset int64, kind, method, requestID string, payload []byte, rawText string) (bool, error) {
+	if !shouldPersistRawEvent(kind, method, payload) {
+		return false, nil
+	}
 	payloadText := ""
 	if len(payload) > 0 {
 		payloadText = string(payload)
@@ -161,9 +201,33 @@ func (s *Store) InsertRawEvent(ctx context.Context, tx *sql.Tx, logPath string, 
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, logPath, lineNo, byteOffset, kind, method, requestID, payloadText, rawText, nowUTC())
 	if err != nil {
-		return fmt.Errorf("insert events_raw: %w", err)
+		return false, fmt.Errorf("insert events_raw: %w", err)
 	}
-	return nil
+	return true, nil
+}
+
+// PruneRawEvents deletes stored raw events that no reader consumes — rows
+// written before InsertRawEvent started filtering. Returns rows deleted.
+func (s *Store) PruneRawEvents(ctx context.Context) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `
+		DELETE FROM events_raw
+		WHERE NOT (
+			kind = 'outgoing'
+			AND method_name IN ('LogBusinessEvents', 'EventPlayerDraftMakePick', 'DraftCompleteDraft', 'EventSetDeckV2', 'EventSetDeckV3')
+			AND (
+				method_name != 'LogBusinessEvents'
+				OR (json_valid(payload_json) AND json_extract(payload_json, '$.EventType') = ?)
+			)
+		)
+	`, logBusinessEventTypeDraftPick)
+	if err != nil {
+		return 0, fmt.Errorf("prune events_raw: %w", err)
+	}
+	deleted, err := res.RowsAffected()
+	if err != nil {
+		return 0, nil
+	}
+	return deleted, nil
 }
 
 func nullableInt(v int64) any {

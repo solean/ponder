@@ -499,6 +499,15 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		return stats, fmt.Errorf("commit final tx: %w", err)
 	}
 
+	// Raw events are only stored when draft repair can consume them, so their
+	// presence is the trigger to backfill draft metadata. Running here keeps
+	// the repair scans off the API read path.
+	if stats.RawEventsStored > 0 || stats.DraftPicksAdded > 0 {
+		if err := p.store.RepairDraftDataFromRawEvents(ctx); err != nil {
+			return stats, fmt.Errorf("repair draft data after ingest: %w", err)
+		}
+	}
+
 	stats.CompletedAt = time.Now().UTC()
 	return stats, nil
 }
@@ -569,10 +578,11 @@ func (p *Parser) processLine(ctx context.Context, tx *sql.Tx, stats *model.Parse
 	}
 
 	if m := reComplete.FindStringSubmatch(line); len(m) == 3 {
-		if err := p.store.InsertRawEvent(ctx, tx, logPath, lineNo, byteOffset, "method_complete", m[1], m[2], nil, ""); err != nil {
+		if stored, err := p.store.InsertRawEvent(ctx, tx, logPath, lineNo, byteOffset, "method_complete", m[1], m[2], nil, ""); err != nil {
 			return err
+		} else if stored {
+			stats.RawEventsStored++
 		}
-		stats.RawEventsStored++
 		if m[1] == "RankGetCombinedRankInfo" {
 			state.pendingResponseMethod = m[1]
 			state.pendingResponseRequestID = m[2]
@@ -670,10 +680,11 @@ func cardSectionCards(section string, in []struct {
 func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.ParseStats, state *parseState, logPath string, lineNo, byteOffset int64, method, envelopeJSON string) error {
 	var env outgoingEnvelope
 	if err := json.Unmarshal([]byte(envelopeJSON), &env); err != nil {
-		if err := p.store.InsertRawEvent(ctx, tx, logPath, lineNo, byteOffset, "outgoing_unparsed", method, "", nil, ""); err != nil {
+		if stored, err := p.store.InsertRawEvent(ctx, tx, logPath, lineNo, byteOffset, "outgoing_unparsed", method, "", nil, ""); err != nil {
 			return err
+		} else if stored {
+			stats.RawEventsStored++
 		}
-		stats.RawEventsStored++
 		return nil
 	}
 
@@ -682,10 +693,11 @@ func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.Pa
 		return fmt.Errorf("decode raw request for %s: %w", method, err)
 	}
 
-	if err := p.store.InsertRawEvent(ctx, tx, logPath, lineNo, byteOffset, "outgoing", method, env.ID, requestPayload, ""); err != nil {
+	if stored, err := p.store.InsertRawEvent(ctx, tx, logPath, lineNo, byteOffset, "outgoing", method, env.ID, requestPayload, ""); err != nil {
 		return err
+	} else if stored {
+		stats.RawEventsStored++
 	}
-	stats.RawEventsStored++
 	observedAt := state.lastUnityLogTimestamp
 
 	switch method {

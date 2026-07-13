@@ -363,11 +363,9 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 	return nil
 }
 
+// ListDraftSessions reads current draft rows; RepairDraftDataFromRawEvents
+// runs after ingest and during startup maintenance, not on this read path.
 func (s *Store) ListDraftSessions(ctx context.Context) ([]model.DraftSessionRow, error) {
-	if err := s.RepairDraftDataFromRawEvents(ctx); err != nil {
-		return nil, err
-	}
-
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT
 			ds.id,
@@ -543,10 +541,6 @@ func (s *Store) resolveDraftSessionDeckResults(ctx context.Context, eventName, s
 }
 
 func (s *Store) ListDraftPicks(ctx context.Context, draftSessionID int64) ([]model.DraftPickRow, error) {
-	if err := s.RepairDraftDataFromRawEvents(ctx); err != nil {
-		return nil, err
-	}
-
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, pack_number, pick_number, picked_card_ids, COALESCE(pack_card_ids, '[]'), COALESCE(pick_ts, '')
 		FROM draft_picks

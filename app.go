@@ -222,13 +222,14 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	go func() {
-		archived, err := store.CompactAndVacuumMatchReplays(bgCtx)
+		result, err := store.RunMaintenance(bgCtx)
 		if err != nil {
-			log.Printf("replay compaction failed (archived=%d): %v", archived, err)
+			log.Printf("db maintenance failed (%+v): %v", result, err)
 			return
 		}
-		if archived > 0 {
-			log.Printf("replay compaction: archived %d matches", archived)
+		if result.ReplaysArchived > 0 || result.ArchivesRecompressed > 0 || result.RawEventsPruned > 0 {
+			log.Printf("db maintenance: archived %d replays, recompressed %d archives, pruned %d raw events",
+				result.ReplaysArchived, result.ArchivesRecompressed, result.RawEventsPruned)
 		}
 	}()
 }

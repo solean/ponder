@@ -245,10 +245,11 @@ func (p *Parser) handleRoomStateJSON(ctx context.Context, tx *sql.Tx, stats *mod
 		}
 	}
 
-	if err := p.store.InsertRawEvent(ctx, tx, logPath, lineNo, byteOffset, "room_state", "matchGameRoomStateChangedEvent", "", nil, ""); err != nil {
+	if stored, err := p.store.InsertRawEvent(ctx, tx, logPath, lineNo, byteOffset, "room_state", "matchGameRoomStateChangedEvent", "", nil, ""); err != nil {
 		return err
+	} else if stored {
+		stats.RawEventsStored++
 	}
-	stats.RawEventsStored++
 	stats.MatchesUpserted++
 	return nil
 }

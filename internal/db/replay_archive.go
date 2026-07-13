@@ -86,7 +86,9 @@ var (
 
 func getZstdEncoder() *zstd.Encoder {
 	zstdEncoderOnce.Do(func() {
-		enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBetterCompression))
+		// Archives are written once per completed match, so encode speed is
+		// irrelevant; best level measured ~30% smaller than BetterCompression.
+		enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBestCompression))
 		if err != nil {
 			panic(fmt.Sprintf("init zstd encoder: %v", err))
 		}
@@ -616,19 +618,4 @@ func (s *Store) CompactMatchReplays(ctx context.Context) (int, error) {
 		}
 	}
 	return archivedCount, nil
-}
-
-// CompactAndVacuumMatchReplays runs replay compaction and, when anything was
-// archived, vacuums the database to return the freed pages to the filesystem.
-func (s *Store) CompactAndVacuumMatchReplays(ctx context.Context) (int, error) {
-	archived, err := s.CompactMatchReplays(ctx)
-	if err != nil {
-		return archived, err
-	}
-	if archived > 0 {
-		if _, err := s.db.ExecContext(ctx, `VACUUM`); err != nil {
-			return archived, fmt.Errorf("vacuum after replay compaction: %w", err)
-		}
-	}
-	return archived, nil
 }

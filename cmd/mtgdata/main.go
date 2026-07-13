@@ -147,13 +147,14 @@ func runParse(ctx context.Context, args []string) error {
 
 func compactReplays(ctx context.Context, store *db.Store) {
 	started := time.Now()
-	archived, err := store.CompactAndVacuumMatchReplays(ctx)
+	result, err := store.RunMaintenance(ctx)
 	if err != nil {
-		log.Printf("replay compaction failed (archived=%d): %v", archived, err)
+		log.Printf("db maintenance failed (%+v): %v", result, err)
 		return
 	}
-	if archived > 0 {
-		log.Printf("replay compaction: archived %d matches in %s", archived, time.Since(started).Round(time.Millisecond))
+	if result.ReplaysArchived > 0 || result.ArchivesRecompressed > 0 || result.RawEventsPruned > 0 {
+		log.Printf("db maintenance: archived %d replays, recompressed %d archives, pruned %d raw events in %s",
+			result.ReplaysArchived, result.ArchivesRecompressed, result.RawEventsPruned, time.Since(started).Round(time.Millisecond))
 	}
 }
 

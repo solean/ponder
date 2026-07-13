@@ -1,5 +1,5 @@
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
+-- journal_mode, foreign_keys, and the other connection pragmas are set on the
+-- DSN in db.Open so they apply to every pooled connection.
 
 CREATE TABLE IF NOT EXISTS ingest_state (
   log_path TEXT PRIMARY KEY,
@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS events_raw (
   created_at TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_events_raw_kind ON events_raw(kind);
 CREATE INDEX IF NOT EXISTS idx_events_raw_method ON events_raw(method_name);
 
 CREATE TABLE IF NOT EXISTS event_runs (
@@ -141,7 +140,8 @@ CREATE TABLE IF NOT EXISTS match_opponent_card_instances (
   FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_match_opponent_cards_match_id ON match_opponent_card_instances(match_id);
+-- match_id lookups are served by the UNIQUE(match_id, game_number, instance_id)
+-- autoindex; no separate match_id index needed.
 CREATE INDEX IF NOT EXISTS idx_match_opponent_cards_card_id ON match_opponent_card_instances(card_id);
 
 CREATE TABLE IF NOT EXISTS match_card_plays (
@@ -161,7 +161,8 @@ CREATE TABLE IF NOT EXISTS match_card_plays (
   FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_match_card_plays_match_id ON match_card_plays(match_id);
+-- match_id lookups are served by the UNIQUE(match_id, game_number, instance_id)
+-- autoindex and the turn_order index prefix; no separate match_id index needed.
 CREATE INDEX IF NOT EXISTS idx_match_card_plays_card_id ON match_card_plays(card_id);
 CREATE INDEX IF NOT EXISTS idx_match_card_plays_turn_order ON match_card_plays(match_id, turn_number, played_at, id);
 
@@ -187,8 +188,8 @@ CREATE TABLE IF NOT EXISTS match_replay_frames (
   FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_match_replay_frames_match_game_state
-  ON match_replay_frames(match_id, game_number, game_state_id);
+-- (match_id, game_number, game_state_id) lookups are served by the UNIQUE
+-- autoindex on those columns.
 CREATE INDEX IF NOT EXISTS idx_match_replay_frames_turn_order
   ON match_replay_frames(match_id, game_number, turn_number, game_state_id, id);
 
@@ -219,8 +220,7 @@ CREATE TABLE IF NOT EXISTS match_replay_frame_objects (
   FOREIGN KEY(frame_id) REFERENCES match_replay_frames(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_match_replay_frame_objects_frame_id
-  ON match_replay_frame_objects(frame_id);
+-- frame_id lookups are served by the UNIQUE(frame_id, instance_id) autoindex.
 CREATE INDEX IF NOT EXISTS idx_match_replay_frame_objects_card_id
   ON match_replay_frame_objects(card_id);
 CREATE INDEX IF NOT EXISTS idx_match_replay_frame_objects_zone

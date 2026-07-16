@@ -3645,22 +3645,94 @@ button.match-replay-zonechip.is-button {
 }
 
 .match-replay-zone-groups {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 0.5rem 0.85rem;
+  display: grid;
+  gap: 0.55rem;
   min-height: 0;
+}
+
+.match-replay-battlefield-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.match-replay-battlefield-row + .match-replay-battlefield-row {
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--line);
 }
 
 .match-replay-zone-group {
   display: grid;
   gap: 0.34rem;
   align-content: start;
+  min-width: 0;
 }
 
 .match-replay-zone-group + .match-replay-zone-group {
   padding-left: 0.85rem;
   border-left: 1px solid var(--line);
+}
+
+/* Compact MTGA-style board: creatures get the combat-facing row; lands and
+   utility permanents share a single backline row nearest their player. */
+.match-replay-battlefield-row.is-creature-row > .match-replay-zone-group {
+  width: 100%;
+}
+
+.match-replay-battlefield-row.is-backline-row > .match-replay-zone-group.is-lands {
+  flex: 1 1 66%;
+  min-width: 0;
+}
+
+.match-replay-utility-groups {
+  display: flex;
+  flex: 0 1 34%;
+  align-items: flex-start;
+  gap: 0.7rem;
+  min-width: 11rem;
+  overflow-x: auto;
+  padding-left: 0.7rem;
+  padding-bottom: 0.18rem;
+  border-left: 1px solid var(--line);
+  scrollbar-width: thin;
+}
+
+.match-replay-utility-groups > .match-replay-zone-group {
+  flex: 0 0 auto;
+}
+
+.match-replay-utility-groups > .match-replay-zone-group + .match-replay-zone-group {
+  padding-top: 0;
+}
+
+.match-replay-utility-groups .match-replay-card-row,
+.match-replay-battlefield-row.is-creature-row .match-replay-card-row,
+.match-replay-battlefield-row.is-backline-row
+  > .match-replay-zone-group.is-lands
+  .match-replay-card-row {
+  flex-wrap: nowrap;
+}
+
+.match-replay-battlefield-row.is-creature-row .match-replay-card-row,
+.match-replay-battlefield-row.is-backline-row
+  > .match-replay-zone-group.is-lands
+  .match-replay-card-row {
+  overflow-x: auto;
+  padding-bottom: 0.18rem;
+  scrollbar-width: thin;
+}
+
+.match-replay-lane:not(.is-hand) .match-replay-object,
+.match-replay-lane:not(.is-hand) .match-replay-land-stack {
+  --match-replay-board-card-width: clamp(58px, 8.5cqw, 92px);
+}
+
+.match-replay-lane:not(.is-hand) .match-replay-lane-head > div {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.55rem;
 }
 
 .match-replay-zone-group-head {
@@ -3695,6 +3767,11 @@ button.match-replay-zonechip.is-button {
   align-items: flex-start;
   gap: 0.42rem;
   min-height: 0;
+}
+
+.match-replay-card-row > .match-replay-object,
+.match-replay-card-row > .match-replay-land-stack {
+  flex: 0 0 auto;
 }
 
 .match-replay-card-row.is-sectioned {
@@ -3796,6 +3873,17 @@ button.match-replay-zonechip.is-button {
 
 .match-replay-object.is-tapped .match-replay-card-shell {
   align-items: center;
+}
+
+/* The shell grows to the card's rotated width, but its full-size anchor used
+   to leave the narrower portrait card aligned to the shell's left edge. That
+   made the transformed card extend outside horizontally scrolling lanes. */
+.match-replay-object.is-tapped
+  .match-replay-card-shell
+  > .card-preview-anchor.is-replay-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .match-replay-object.has-linked-exile .match-replay-card-shell {

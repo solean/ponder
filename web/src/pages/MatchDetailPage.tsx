@@ -1279,6 +1279,60 @@ function MatchReplayFrameSideSummary({
   );
 }
 
+function CompactBattlefieldRows<
+  T extends { kind: BattlefieldSectionKind },
+>({
+  side,
+  sections,
+  renderSection,
+}: {
+  side: "self" | "opponent";
+  sections: T[];
+  renderSection: (section: T) => ReactNode;
+}) {
+  const creatures = sections.find((section) => section.kind === "creatures");
+  const lands = sections.find((section) => section.kind === "lands");
+  const utilitySections = sections.filter(
+    (section) => section.kind !== "creatures" && section.kind !== "lands",
+  );
+
+  const creatureRow = creatures ? (
+    <div className="match-replay-battlefield-row is-creature-row">
+      {renderSection(creatures)}
+    </div>
+  ) : null;
+  const backlineRow = lands || utilitySections.length > 0 ? (
+    <div className="match-replay-battlefield-row is-backline-row">
+      {lands ? renderSection(lands) : null}
+      {utilitySections.length > 0 ? (
+        <div
+          className="match-replay-utility-groups"
+          role="group"
+          aria-label={`${timelinePlayerLabel(side)} utility permanents`}
+        >
+          {utilitySections.map(renderSection)}
+        </div>
+      ) : null}
+    </div>
+  ) : null;
+
+  return (
+    <div className="match-replay-zone-groups">
+      {side === "opponent" ? (
+        <>
+          {backlineRow}
+          {creatureRow}
+        </>
+      ) : (
+        <>
+          {creatureRow}
+          {backlineRow}
+        </>
+      )}
+    </div>
+  );
+}
+
 function MatchReplayFrameBattlefield({
   side,
   objects,
@@ -1372,11 +1426,13 @@ function MatchReplayFrameBattlefield({
           No battlefield cards in this frame.
         </p>
       ) : (
-        <div className="match-replay-zone-groups">
-          {battlefieldSections.map((section) => (
+        <CompactBattlefieldRows
+          side={side}
+          sections={battlefieldSections}
+          renderSection={(section) => (
             <section
               key={section.kind}
-              className="match-replay-zone-group"
+              className={`match-replay-zone-group is-${section.kind}`}
               aria-label={`${timelinePlayerLabel(side)} ${section.label.toLowerCase()}`}
             >
               <div className="match-replay-zone-group-head">
@@ -1444,8 +1500,8 @@ function MatchReplayFrameBattlefield({
                 </div>
               )}
             </section>
-          ))}
-        </div>
+          )}
+        />
       )}
     </section>
   );
@@ -3128,11 +3184,13 @@ function MatchReplayBattlefield({
       {battlefieldPlays.length === 0 ? (
         <p className="match-replay-empty">No battlefield cards observed yet.</p>
       ) : (
-        <div className="match-replay-zone-groups">
-          {battlefieldSections.map((section) => (
+        <CompactBattlefieldRows
+          side={side}
+          sections={battlefieldSections}
+          renderSection={(section) => (
             <section
               key={section.kind}
-              className="match-replay-zone-group"
+              className={`match-replay-zone-group is-${section.kind}`}
               aria-label={`${timelinePlayerLabel(side)} ${section.label.toLowerCase()}`}
             >
               <div className="match-replay-zone-group-head">
@@ -3152,8 +3210,8 @@ function MatchReplayBattlefield({
                 ))}
               </div>
             </section>
-          ))}
-        </div>
+          )}
+        />
       )}
     </section>
   );

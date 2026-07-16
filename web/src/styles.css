@@ -4956,7 +4956,8 @@ button.match-replay-zonechip.is-button {
   font-size: var(--text-base);
 }
 
-.deck-curve-panel {
+.deck-curve-panel,
+.deck-visual-panel {
   border: 1px solid var(--line);
   border-radius: 3px;
   padding: 0.8rem;
@@ -4970,7 +4971,8 @@ button.match-replay-zonechip.is-button {
   gap: 0.82rem;
 }
 
-.deck-curve-panel::before {
+.deck-curve-panel::before,
+.deck-visual-panel::before {
   content: "";
   position: absolute;
   inset: -1px;
@@ -5177,6 +5179,137 @@ button.match-replay-zonechip.is-button {
 }
 
 .deck-curve-card.is-skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--skeleton-base) 18%,
+    var(--skeleton-highlight) 50%,
+    var(--skeleton-base) 82%
+  );
+  background-size: 200% 100%;
+  border-color: var(--line);
+  box-shadow: none;
+  animation: skeleton-shimmer 1.6s linear infinite;
+}
+
+.deck-visual-panel {
+  gap: 0.72rem;
+}
+
+.deck-visual-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  margin-top: -0.1rem;
+  padding: 0.1rem 0 0.34rem;
+}
+
+.deck-visual-groups {
+  --deck-visual-card-width: clamp(58px, 4.3vw, 70px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.9rem 1rem;
+  width: 100%;
+  min-width: min-content;
+}
+
+.deck-visual-group {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 0.42rem;
+}
+
+.deck-visual-group h5 {
+  margin: 0;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--track-md);
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+
+.deck-visual-group h5 span {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.deck-visual-cards {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.34rem;
+}
+
+.deck-visual-card {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  width: var(--deck-visual-card-width);
+  aspect-ratio: 626 / 457;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+  background: linear-gradient(
+    165deg,
+    var(--surface-strong) 0%,
+    var(--surface-faint) 100%
+  );
+  box-shadow:
+    0 4px 9px rgba(0, 0, 0, 0.3),
+    0 0 0 1px var(--card-inner-border) inset;
+  text-decoration: none;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease;
+}
+
+.deck-visual-card:hover {
+  z-index: 1;
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+  box-shadow:
+    0 7px 13px rgba(0, 0, 0, 0.36),
+    0 0 12px var(--accent-soft);
+}
+
+.deck-visual-card:focus-visible {
+  z-index: 2;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.deck-visual-card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.deck-visual-card .deck-curve-card-qty {
+  inset: auto auto 0.2rem 0.2rem;
+  min-width: 0;
+  padding: 0.14rem 0.3rem;
+  font-size: 0.64rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.deck-visual-card .deck-curve-card-fallback {
+  padding: 0.42rem;
+}
+
+.deck-visual-card .deck-curve-card-fallback strong {
+  overflow: hidden;
+  font-size: var(--text-xs);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+}
+
+.deck-visual-card .deck-curve-card-fallback span {
+  display: none;
+}
+
+.deck-visual-card.is-skeleton {
   background: linear-gradient(
     100deg,
     var(--skeleton-base) 18%,
@@ -5689,6 +5822,7 @@ select {
   .data-table tbody tr,
   .match-replay-card,
   .deck-curve-card,
+  .deck-visual-card,
   .match-replay-turn-pill,
   .match-replay-button,
   .title-sigil,
@@ -5962,6 +6096,11 @@ select {
   .deck-curve-grid {
     --deck-curve-card-width: 128px;
     --deck-curve-card-peek: 1.6rem;
+  }
+
+  .deck-visual-groups {
+    --deck-visual-card-width: 58px;
+    gap: 0.8rem;
   }
 }
 

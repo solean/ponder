@@ -16,6 +16,7 @@ type ScryfallImageURIs = {
   large?: string;
   normal?: string;
   small?: string;
+  art?: string;
   art_crop?: string;
 };
 
@@ -61,14 +62,15 @@ function pickImageURL(card: ScryfallCard): string {
   return "";
 }
 
+
 function pickArtCropURL(card: ScryfallCard): string {
-  const rootArtCrop = card.image_uris?.art_crop;
+  const rootArtCrop = card.image_uris?.art ?? card.image_uris?.art_crop;
   if (rootArtCrop) {
     return rootArtCrop;
   }
 
   for (const face of card.card_faces ?? []) {
-    const faceArtCrop = face.image_uris?.art_crop;
+    const faceArtCrop = face.image_uris?.art ?? face.image_uris?.art_crop;
     if (faceArtCrop) {
       return faceArtCrop;
     }

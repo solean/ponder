@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
@@ -30,8 +30,18 @@ type FloatingPopoverPosition = {
   height: number;
 };
 type ManaCostPart = { kind: "symbol"; token: string } | { kind: "separator"; value: string };
-type DeckDisplayMode = "list" | "curve";
+type DeckDisplayMode = "list" | "curve" | "visual";
 type CurveBucketKey = number | "other" | "lands";
+type VisualCategory =
+  | "creatures"
+  | "planeswalkers"
+  | "instants"
+  | "sorceries"
+  | "battles"
+  | "artifacts"
+  | "enchantments"
+  | "lands"
+  | "other";
 
 type MainboardCategory = "creatures" | "spells" | "artifacts" | "enchantments" | "lands";
 
@@ -39,6 +49,7 @@ type MainboardDeckListCard = DeckListCard & {
   manaCost: string;
   manaValue: number | null;
   imageUrl?: string;
+  artCropUrl?: string;
   scryfallUrl?: string;
   typeLine?: string;
   rarity?: CardRarity;
@@ -48,6 +59,7 @@ type SideboardDeckListCard = DeckListCard & {
   manaCost: string;
   manaValue: number | null;
   imageUrl?: string;
+  artCropUrl?: string;
   scryfallUrl?: string;
   typeLine?: string;
   rarity?: CardRarity;
@@ -67,8 +79,26 @@ type DeckCurveCardEntry = {
   quantityBadge?: number;
 };
 
+type DeckVisualGroup = {
+  key: VisualCategory;
+  label: string;
+  cards: MainboardDeckListCard[];
+};
+
 const MAINBOARD_CATEGORY_ORDER: MainboardCategory[] = ["creatures", "spells", "artifacts", "enchantments", "lands"];
 const MAINBOARD_SKELETON_CATEGORY_ORDER: MainboardCategory[] = ["creatures", "spells", "lands"];
+const VISUAL_CATEGORY_LABELS: Record<VisualCategory, string> = {
+  creatures: "Creatures",
+  planeswalkers: "Planeswalkers",
+  instants: "Instants",
+  sorceries: "Sorceries",
+  battles: "Battles",
+  artifacts: "Artifacts",
+  enchantments: "Enchantments",
+  lands: "Lands",
+  other: "Other",
+};
+const VISUAL_CATEGORY_ORDER = Object.keys(VISUAL_CATEGORY_LABELS) as VisualCategory[];
 const DEFAULT_APP_SHELL_WIDTH = 1280;
 const MAX_CURVE_APP_SHELL_WIDTH = 1520;
 const CURVE_COLUMN_TARGET_WIDTH = 176;
@@ -142,6 +172,35 @@ function classifyMainboardCard(typeLine?: string): MainboardCategory {
   return "spells";
 }
 
+function classifyVisualCard(typeLine?: string): VisualCategory {
+  const lower = typeLine?.toLowerCase() ?? "";
+  if (lower.includes("land")) {
+    return "lands";
+  }
+  if (lower.includes("creature")) {
+    return "creatures";
+  }
+  if (lower.includes("planeswalker")) {
+    return "planeswalkers";
+  }
+  if (lower.includes("instant")) {
+    return "instants";
+  }
+  if (lower.includes("sorcery")) {
+    return "sorceries";
+  }
+  if (lower.includes("battle")) {
+    return "battles";
+  }
+  if (lower.includes("artifact")) {
+    return "artifacts";
+  }
+  if (lower.includes("enchantment")) {
+    return "enchantments";
+  }
+  return "other";
+}
+
 function compareMainboardCards(a: MainboardDeckListCard, b: MainboardDeckListCard): number {
   const manaA = a.manaValue ?? Number.POSITIVE_INFINITY;
   const manaB = b.manaValue ?? Number.POSITIVE_INFINITY;
@@ -178,6 +237,28 @@ function compareLandCards(a: MainboardDeckListCard, b: MainboardDeckListCard): n
   return a.cardId - b.cardId;
 }
 
+function buildVisualGroups(cards: MainboardDeckListCard[]): DeckVisualGroup[] {
+  const groups = new Map<VisualCategory, MainboardDeckListCard[]>();
+  for (const card of cards) {
+    const category = classifyVisualCard(card.typeLine);
+    const categoryCards = groups.get(category) ?? [];
+    categoryCards.push(card);
+    groups.set(category, categoryCards);
+  }
+
+  return VISUAL_CATEGORY_ORDER.flatMap((category) => {
+    const categoryCards = groups.get(category);
+    if (!categoryCards?.length) {
+      return [];
+    }
+    return [{
+      key: category,
+      label: VISUAL_CATEGORY_LABELS[category],
+      cards: [...categoryCards].sort(category === "lands" ? compareLandCards : compareMainboardCards),
+    }];
+  });
+}
+
 function formatSectionLabel(section: string): string {
   const trimmed = section.trim();
   if (!trimmed) {
@@ -187,7 +268,7 @@ function formatSectionLabel(section: string): string {
 }
 
 function parseDeckDisplayMode(value: string | null): DeckDisplayMode {
-  return value === "curve" ? "curve" : "list";
+  return value === "curve" || value === "visual" ? value : "list";
 }
 
 function sectionTotal(cards: DeckListCard[]): number {
@@ -520,25 +601,35 @@ function DeckCardPreviewName({ card, placementMode = "auto" }: { card: DeckListC
   );
 }
 
-function DeckCurveCardLink({
+function DeckImageCardLink({
   card,
+  className,
   eager = false,
   quantityBadge,
+  quantityBadgeText,
+  displayImageUrl,
   onPreviewStart,
   onPreviewEnd,
 }: {
   card: MainboardDeckListCard;
+  className: string;
   eager?: boolean;
   quantityBadge?: number;
+  quantityBadgeText?: string;
   onPreviewStart: (card: MainboardDeckListCard, anchor: HTMLAnchorElement) => void;
   onPreviewEnd: () => void;
+  displayImageUrl?: string;
 }) {
   const name = cardDisplayName(card);
-  const ariaLabel = quantityBadge ? `Open ${name} on Scryfall, quantity ${quantityBadge}` : `Open ${name} on Scryfall`;
+  const ariaLabel =
+    quantityBadge !== undefined
+      ? `Open ${name} on Scryfall, quantity ${quantityBadge}`
+      : `Open ${name} on Scryfall`;
+  const imageURL = displayImageUrl ?? card.imageUrl;
 
   return (
     <a
-      className="deck-curve-card"
+      className={className}
       href={cardScryfallHref(card, card.scryfallUrl)}
       target="_blank"
       rel="noreferrer"
@@ -548,9 +639,9 @@ function DeckCurveCardLink({
       onMouseLeave={onPreviewEnd}
       onFocus={(event) => onPreviewStart(card, event.currentTarget)}
     >
-      {card.imageUrl ? (
+      {imageURL ? (
         <img
-          src={card.imageUrl}
+          src={imageURL}
           alt=""
           loading={eager ? "eager" : "lazy"}
           decoding="async"
@@ -563,19 +654,25 @@ function DeckCurveCardLink({
           <span>{card.manaCost ? `Mana cost ${card.manaCost}` : "Preview unavailable"}</span>
         </span>
       )}
-      {quantityBadge ? <span className="deck-curve-card-qty">x{quantityBadge}</span> : null}
+      {quantityBadge !== undefined ? (
+        <span className="deck-curve-card-qty">{quantityBadgeText ?? `x${quantityBadge}`}</span>
+      ) : null}
     </a>
   );
 }
 
-function DeckCurveSection({
-  title,
-  cards,
+function DeckImagePreviewRegion({
+  className,
+  ariaLabel,
+  children,
 }: {
-  title: string;
-  cards: MainboardDeckListCard[];
+  className: string;
+  ariaLabel: string;
+  children: (handlers: {
+    showPreview: (card: MainboardDeckListCard, anchor: HTMLAnchorElement) => void;
+    schedulePreviewClose: () => void;
+  }) => ReactNode;
 }) {
-  const columns = useMemo(() => buildCurveColumns(cards), [cards]);
   const [activePreviewCard, setActivePreviewCard] = useState<MainboardDeckListCard | null>(null);
   const [activePreviewPosition, setActivePreviewPosition] = useState<FloatingPopoverPosition | null>(null);
   const activePreviewAnchorRef = useRef<HTMLAnchorElement | null>(null);
@@ -643,14 +740,10 @@ function DeckCurveSection({
     };
   }, [activePreviewCard]);
 
-  if (columns.length === 0) {
-    return null;
-  }
-
   return (
     <article
-      className="deck-curve-panel"
-      aria-label={`${title} arranged by mana value`}
+      className={className}
+      aria-label={ariaLabel}
       onBlurCapture={(event) => {
         if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) {
           return;
@@ -658,34 +751,7 @@ function DeckCurveSection({
         clearPreview();
       }}
     >
-      <div className="deck-curve-panel-head">
-        <h4>{title}</h4>
-        <p>{sectionTotal(cards).toLocaleString()} cards</p>
-      </div>
-      <div className="deck-curve-scroll">
-        <div className="deck-curve-grid">
-          {columns.map((column, columnIndex) => (
-            <section className="deck-curve-column" key={column.key} aria-label={column.accessibleLabel}>
-              <div className="deck-curve-column-head">
-                <p className="deck-curve-column-count">{column.totalCards.toLocaleString()}</p>
-                <p className="deck-curve-column-label">{column.label}</p>
-              </div>
-              <div className="deck-curve-stack">
-                {buildCurveCardEntries(column.key, column.cards).map((entry, entryIndex) => (
-                  <DeckCurveCardLink
-                    key={entry.key}
-                    card={entry.card}
-                    quantityBadge={entry.quantityBadge}
-                    eager={columnIndex < 2 && entryIndex < 2}
-                    onPreviewStart={showPreview}
-                    onPreviewEnd={schedulePreviewClose}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      </div>
+      {children({ showPreview, schedulePreviewClose })}
       {activePreviewCard && activePreviewPosition && activePreviewCard.imageUrl && typeof document !== "undefined"
         ? createPortal(
             <div
@@ -704,6 +770,124 @@ function DeckCurveSection({
           )
         : null}
     </article>
+  );
+}
+
+function DeckCurveSection({
+  title,
+  cards,
+}: {
+  title: string;
+  cards: MainboardDeckListCard[];
+}) {
+  const columns = useMemo(() => buildCurveColumns(cards), [cards]);
+
+  if (columns.length === 0) {
+    return null;
+  }
+
+  return (
+    <DeckImagePreviewRegion className="deck-curve-panel" ariaLabel={`${title} arranged by mana value`}>
+      {({ showPreview, schedulePreviewClose }) => (
+        <>
+          <div className="deck-curve-panel-head">
+            <h4>{title}</h4>
+            <p>{sectionTotal(cards).toLocaleString()} cards</p>
+          </div>
+          <div className="deck-curve-scroll">
+            <div className="deck-curve-grid">
+              {columns.map((column, columnIndex) => (
+                <section className="deck-curve-column" key={column.key} aria-label={column.accessibleLabel}>
+                  <div className="deck-curve-column-head">
+                    <p className="deck-curve-column-count">{column.totalCards.toLocaleString()}</p>
+                    <p className="deck-curve-column-label">{column.label}</p>
+                  </div>
+                  <div className="deck-curve-stack">
+                    {buildCurveCardEntries(column.key, column.cards).map((entry, entryIndex) => (
+                      <DeckImageCardLink
+                        key={entry.key}
+                        card={entry.card}
+                        className="deck-curve-card"
+                        quantityBadge={entry.quantityBadge}
+                        eager={columnIndex < 2 && entryIndex < 2}
+                        onPreviewStart={showPreview}
+                        onPreviewEnd={schedulePreviewClose}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </DeckImagePreviewRegion>
+  );
+}
+
+function DeckVisualSection({
+  title,
+  cards,
+  groupByType = false,
+}: {
+  title: string;
+  cards: MainboardDeckListCard[];
+  groupByType?: boolean;
+}) {
+  const groups = useMemo(() => {
+    if (groupByType) {
+      return buildVisualGroups(cards);
+    }
+    return [{
+      key: "other" as const,
+      label: title,
+      cards: [...cards].sort(compareMainboardCards),
+    }];
+  }, [cards, groupByType, title]);
+
+  if (groups.length === 0) {
+    return null;
+  }
+
+  return (
+    <DeckImagePreviewRegion className="deck-visual-panel" ariaLabel={`${title} card gallery`}>
+      {({ showPreview, schedulePreviewClose }) => (
+        <>
+          <div className="deck-curve-panel-head">
+            <h4>{title}</h4>
+            <p>{sectionTotal(cards).toLocaleString()} cards</p>
+          </div>
+          <div className="deck-visual-scroll">
+            <div className="deck-visual-groups">
+              {groups.map((group) => (
+                <section className="deck-visual-group" key={group.key} aria-label={group.label}>
+                  {groupByType ? (
+                    <h5>
+                      {group.label} <span>({sectionTotal(group.cards).toLocaleString()})</span>
+                    </h5>
+                  ) : null}
+                  <div className="deck-visual-cards">
+                    {group.cards.map((card, cardIndex) => (
+                      <DeckImageCardLink
+                        key={`${group.key}-${card.cardId}`}
+                        card={card}
+                        className="deck-visual-card"
+                        quantityBadge={card.quantity}
+                        quantityBadgeText={`${card.quantity}×`}
+                        displayImageUrl={card.artCropUrl}
+                        eager={cardIndex < 4}
+                        onPreviewStart={showPreview}
+                        onPreviewEnd={schedulePreviewClose}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </DeckImagePreviewRegion>
   );
 }
 
@@ -728,6 +912,34 @@ function DeckCurveSkeleton({ title = "Mainboard", columnCount = 6 }: { title?: s
                 ))}
               </div>
             </div>
+          ))}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function DeckVisualSkeleton({ title = "Mainboard", groupCount = 4 }: { title?: string; groupCount?: number }) {
+  return (
+    <article className="deck-visual-panel is-skeleton" aria-hidden="true">
+      <div className="deck-curve-panel-head">
+        <span className="skeleton-line skeleton-heading-sm" />
+        <span className="skeleton-line skeleton-count" />
+      </div>
+      <div className="deck-visual-scroll">
+        <div className="deck-visual-groups">
+          {Array.from({ length: groupCount }).map((_, groupIndex) => (
+            <section className="deck-visual-group" key={`${title}-visual-skeleton-${groupIndex}`}>
+              <span className="skeleton-line skeleton-table-line is-short" />
+              <div className="deck-visual-cards">
+                {Array.from({ length: groupIndex === 0 ? 5 : 3 }).map((_, cardIndex) => (
+                  <span
+                    className="deck-visual-card is-skeleton"
+                    key={`${title}-visual-card-${groupIndex}-${cardIndex}`}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       </div>
@@ -904,6 +1116,7 @@ export function DeckDetailPage() {
         manaValue:
           typeof metadata?.manaValue === "number" && Number.isFinite(metadata.manaValue) ? metadata.manaValue : null,
         imageUrl: metadata?.imageUrl,
+        artCropUrl: metadata?.artCropUrl,
         scryfallUrl: metadata?.scryfallUrl,
         typeLine: metadata?.typeLine,
         rarity: metadata?.rarity,
@@ -993,6 +1206,7 @@ export function DeckDetailPage() {
         manaValue:
           typeof metadata?.manaValue === "number" && Number.isFinite(metadata.manaValue) ? metadata.manaValue : null,
         imageUrl: metadata?.imageUrl,
+        artCropUrl: metadata?.artCropUrl,
         scryfallUrl: metadata?.scryfallUrl,
         typeLine: metadata?.typeLine,
         rarity: metadata?.rarity,
@@ -1056,7 +1270,7 @@ export function DeckDetailPage() {
   };
 
   return (
-    <div className={`stack-lg deck-detail-stack ${deckDisplayMode === "curve" ? "is-curve-layout" : ""}`}>
+    <div className={`stack-lg deck-detail-stack ${deckDisplayMode === "list" ? "" : "is-curve-layout"}`}>
       <section className="panel decklist-panel">
         <div className="panel-head">
           <div>
@@ -1090,6 +1304,14 @@ export function DeckDetailPage() {
               >
                 Curve
               </button>
+              <button
+                type="button"
+                className={`tab ${deckDisplayMode === "visual" ? "is-active" : ""}`}
+                aria-pressed={deckDisplayMode === "visual"}
+                onClick={() => setDeckDisplayMode("visual")}
+              >
+                Visual
+              </button>
             </div>
             <Link className="text-link" to="/decks">
               Back to decks
@@ -1103,6 +1325,12 @@ export function DeckDetailPage() {
               <DeckCurveSkeleton title="Mainboard" />
             ) : (
               <DeckCurveSection title="Mainboard" cards={enrichedMainboardCards} />
+            )
+          ) : deckDisplayMode === "visual" ? (
+            isMainboardMetadataLoading ? (
+              <DeckVisualSkeleton title="Mainboard" />
+            ) : (
+              <DeckVisualSection title="Mainboard" cards={enrichedMainboardCards} groupByType />
             )
           ) : (
             isMainboardMetadataLoading ? (
@@ -1148,6 +1376,12 @@ export function DeckDetailPage() {
                 <DeckCurveSkeleton title="Sideboard" columnCount={4} />
               ) : (
                 <DeckCurveSection title="Sideboard" cards={enrichedSideboardCards} />
+              )
+            ) : deckDisplayMode === "visual" ? (
+              isSideboardMetadataLoading ? (
+                <DeckVisualSkeleton title="Sideboard" groupCount={1} />
+              ) : (
+                <DeckVisualSection title="Sideboard" cards={enrichedSideboardCards} />
               )
             ) : isSideboardMetadataLoading ? (
               <DeckSectionSkeleton rowCount={sideboardSkeletonRows} />

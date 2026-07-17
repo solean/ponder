@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
 import { EventLabel } from "../components/EventLabel";
@@ -67,6 +68,69 @@ function SplitRow({ label, record }: { label: string; record: WinLossRecord }) {
   );
 }
 
+const ACTIVITY_HOVER_DELAY_MS = 120;
+const ACTIVITY_POPOVER_GAP = 10;
+const ACTIVITY_POPOVER_PADDING = 8;
+const activityDateFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+  year: "numeric",
+});
+const activityNumberFormatter = new Intl.NumberFormat();
+const activityRateFormatter = new Intl.NumberFormat(undefined, {
+  style: "percent",
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+type ActivityPopoverPosition = {
+  top: number;
+  left: number;
+  arrowLeft: number;
+  placement: "above" | "below";
+};
+
+function activityFullDate(dateKey: string): string {
+  const date = new Date(`${dateKey}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? dateKey : activityDateFormatter.format(date);
+}
+
+function activityDuration(day: DailyActivity): string | null {
+  if (day.timedMatches === 0 || day.trackedSeconds <= 0) return null;
+
+  const totalMinutes = Math.max(1, Math.round(day.trackedSeconds / 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const duration = [
+    hours > 0 ? `${activityNumberFormatter.format(hours)}h` : null,
+    minutes > 0 ? `${activityNumberFormatter.format(minutes)}m` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return `${duration} ${day.timedMatches === day.count ? "played" : "tracked"}`;
+}
+
+function activityFormatMix(day: DailyActivity): string {
+  return [
+    day.limited > 0 ? `${activityNumberFormatter.format(day.limited)} Limited` : null,
+    day.constructed > 0 ? `${activityNumberFormatter.format(day.constructed)} Constructed` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function activityDayLabel(day: DailyActivity): string {
+  const count = `${activityNumberFormatter.format(day.count)} match${day.count === 1 ? "" : "es"}`;
+  if (day.count === 0) return `${activityFullDate(day.date)}: no matches played`;
+
+  const record = `${activityNumberFormatter.format(day.wins)} wins, ${activityNumberFormatter.format(day.losses)} losses`;
+  const unresolved = day.unknown > 0
+    ? `, ${activityNumberFormatter.format(day.unknown)} unresolved`
+    : "";
+  return `${activityFullDate(day.date)}: ${count}, ${record}${unresolved}`;
+}
+
 function ActivityGraph({
   activity,
   total,
@@ -88,14 +152,129 @@ function ActivityGraph({
       label: monthFormatter.format(date),
     }];
   });
+  const [focusedIndex, setFocusedIndex] = useState(Math.max(activity.length - 1, 0));
+  const [visibleIndex, setVisibleIndex] = useState<number | null>(null);
+  const [position, setPosition] = useState<ActivityPopoverPosition | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const anchorRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const hoverTimerRef = useRef<number | null>(null);
+  const tooltipId = "activity-day-tooltip";
+  const visibleDay = visibleIndex == null ? null : activity[visibleIndex];
+  const visibleDuration = visibleDay ? activityDuration(visibleDay) : null;
+
+  const clearHoverTimer = useCallback(() => {
+    if (hoverTimerRef.current != null) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  }, []);
+
+  const updatePopoverPosition = useCallback(() => {
+    const anchor = anchorRef.current;
+    const popover = popoverRef.current;
+    if (!anchor || !popover) return;
+
+    const anchorRect = anchor.getBoundingClientRect();
+    const popoverRect = popover.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    const maxLeft = Math.max(
+      ACTIVITY_POPOVER_PADDING,
+      viewportWidth - popoverRect.width - ACTIVITY_POPOVER_PADDING,
+    );
+    const left = Math.max(
+      ACTIVITY_POPOVER_PADDING,
+      Math.min(
+        anchorRect.left + anchorRect.width / 2 - popoverRect.width / 2,
+        maxLeft,
+      ),
+    );
+    const fitsAbove =
+      anchorRect.top - popoverRect.height - ACTIVITY_POPOVER_GAP >= ACTIVITY_POPOVER_PADDING;
+    const placement = fitsAbove ? "above" : "below";
+    const rawTop = fitsAbove
+      ? anchorRect.top - popoverRect.height - ACTIVITY_POPOVER_GAP
+      : anchorRect.bottom + ACTIVITY_POPOVER_GAP;
+    const top = Math.max(
+      ACTIVITY_POPOVER_PADDING,
+      Math.min(
+        rawTop,
+        viewportHeight - popoverRect.height - ACTIVITY_POPOVER_PADDING,
+      ),
+    );
+    const arrowLeft = Math.max(
+      12,
+      Math.min(anchorRect.left + anchorRect.width / 2 - left, popoverRect.width - 12),
+    );
+
+    setPosition({ top, left, arrowLeft, placement });
+  }, []);
+
+  const showDay = useCallback((index: number, anchor: HTMLButtonElement) => {
+    clearHoverTimer();
+    anchorRef.current = anchor;
+    setVisibleIndex(index);
+  }, [clearHoverTimer]);
+
+  const showHoveredDay = useCallback((index: number, anchor: HTMLButtonElement) => {
+    clearHoverTimer();
+    anchorRef.current = anchor;
+    if (visibleIndex != null) {
+      setVisibleIndex(index);
+      return;
+    }
+    hoverTimerRef.current = window.setTimeout(() => {
+      hoverTimerRef.current = null;
+      setVisibleIndex(index);
+    }, ACTIVITY_HOVER_DELAY_MS);
+  }, [clearHoverTimer, visibleIndex]);
+
+  const hideHoveredDay = useCallback(() => {
+    clearHoverTimer();
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLButtonElement
+      && gridRef.current?.contains(activeElement)
+    ) {
+      const activeIndex = Number(activeElement.dataset.activityIndex);
+      if (Number.isInteger(activeIndex)) {
+        showDay(activeIndex, activeElement);
+        return;
+      }
+    }
+    anchorRef.current = null;
+    setVisibleIndex(null);
+    setPosition(null);
+  }, [clearHoverTimer, showDay]);
+
+  const focusDay = useCallback((index: number) => {
+    const target = gridRef.current?.querySelector<HTMLButtonElement>(
+      `[data-activity-index="${index}"]`,
+    );
+    target?.focus();
+  }, []);
+
+  useLayoutEffect(() => {
+    if (visibleDay) updatePopoverPosition();
+  }, [updatePopoverPosition, visibleDay]);
+
+  useEffect(() => {
+    if (!visibleDay) return undefined;
+    const update = () => updatePopoverPosition();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [updatePopoverPosition, visibleDay]);
+
+  useEffect(() => () => clearHoverTimer(), [clearHoverTimer]);
 
   return (
     <div className="activity-frame">
-      <div
-        className="activity-heatmap"
-        role="img"
-        aria-label={`${total} match${total === 1 ? "" : "es"} played over the last ${ACTIVITY_DAYS} days`}
-      >
+      <div className="activity-heatmap">
         <div className="activity-months" style={{ gridTemplateColumns: gridColumns }} aria-hidden="true">
           {monthLabels.map((month) => (
             <span key={`${month.column}-${month.label}`} style={{ gridColumn: month.column }}>
@@ -110,22 +289,57 @@ function ActivityGraph({
             <span style={{ gridRow: 6 }}>Fri</span>
           </div>
           <div
+            ref={gridRef}
             className="activity-grid"
+            role="grid"
+            aria-label={`${activityNumberFormatter.format(total)} match${total === 1 ? "" : "es"} played over the last ${ACTIVITY_DAYS} days. Use arrow keys to inspect days.`}
+            aria-rowcount={7}
+            aria-colcount={weekCount}
             style={{ gridTemplateColumns: gridColumns, aspectRatio: `${weekCount} / 7` }}
-            aria-hidden="true"
+            onMouseLeave={hideHoveredDay}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) {
+                anchorRef.current = null;
+                setVisibleIndex(null);
+                setPosition(null);
+              }
+            }}
           >
             {activity.map((day, index) => {
               const level = day.count === 0 ? 0 : Math.max(1, Math.ceil((day.count / maxCount) * 4));
-              const position = firstWeekday + index;
+              const positionInGrid = firstWeekday + index;
+              const row = positionInGrid % 7;
+              const column = Math.floor(positionInGrid / 7);
               return (
-                <span
+                <button
+                  type="button"
+                  role="gridcell"
                   key={day.date}
+                  data-activity-index={index}
                   className={`activity-cell activity-cell--${level}`}
                   style={{
-                    gridColumn: Math.floor(position / 7) + 1,
-                    gridRow: (position % 7) + 1,
+                    gridColumn: column + 1,
+                    gridRow: row + 1,
                   }}
-                  title={`${day.label}: ${day.count} match${day.count === 1 ? "" : "es"}`}
+                  tabIndex={focusedIndex === index ? 0 : -1}
+                  aria-label={activityDayLabel(day)}
+                  aria-describedby={visibleIndex === index ? tooltipId : undefined}
+                  onMouseEnter={(event) => showHoveredDay(index, event.currentTarget)}
+                  onFocus={(event) => {
+                    setFocusedIndex(index);
+                    showDay(index, event.currentTarget);
+                  }}
+                  onKeyDown={(event) => {
+                    let nextIndex = index;
+                    if (event.key === "ArrowLeft" && index >= 7) nextIndex = index - 7;
+                    else if (event.key === "ArrowRight" && index + 7 < activity.length) nextIndex = index + 7;
+                    else if (event.key === "ArrowUp" && row > 0 && index > 0) nextIndex = index - 1;
+                    else if (event.key === "ArrowDown" && row < 6 && index + 1 < activity.length) nextIndex = index + 1;
+                    else return;
+
+                    event.preventDefault();
+                    focusDay(nextIndex);
+                  }}
                 />
               );
             })}
@@ -143,6 +357,58 @@ function ActivityGraph({
         </div>
         <span>Today</span>
       </div>
+      {visibleDay && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              id={tooltipId}
+              className="activity-popover"
+              role="tooltip"
+              data-placement={position?.placement ?? "above"}
+              style={{
+                top: position?.top ?? 0,
+                left: position?.left ?? 0,
+                visibility: position ? "visible" : "hidden",
+                "--activity-popover-arrow-left": `${position?.arrowLeft ?? 20}px`,
+              } as CSSProperties}
+            >
+              <p className="activity-popover-date">{activityFullDate(visibleDay.date)}</p>
+              {visibleDay.count === 0 ? (
+                <p className="activity-popover-empty">No matches played</p>
+              ) : (
+                <>
+                  <div className="activity-popover-count">
+                    <strong>{activityNumberFormatter.format(visibleDay.count)}</strong>
+                    <span>match{visibleDay.count === 1 ? "" : "es"}</span>
+                  </div>
+                  <div className="activity-popover-record">
+                    <strong>
+                      {activityNumberFormatter.format(visibleDay.wins)}W –{" "}
+                      {activityNumberFormatter.format(visibleDay.losses)}L
+                    </strong>
+                    {visibleDay.wins + visibleDay.losses > 0 ? (
+                      <span>
+                        {activityRateFormatter.format(
+                          visibleDay.wins / (visibleDay.wins + visibleDay.losses),
+                        )}
+                      </span>
+                    ) : null}
+                  </div>
+                  {visibleDay.unknown > 0 ? (
+                    <p className="activity-popover-unresolved">
+                      {activityNumberFormatter.format(visibleDay.unknown)} unresolved
+                    </p>
+                  ) : null}
+                  <div className="activity-popover-details">
+                    {visibleDuration ? <span>{visibleDuration}</span> : null}
+                    <span>{activityFormatMix(visibleDay)}</span>
+                  </div>
+                </>
+              )}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

@@ -95,6 +95,13 @@ export type DailyActivity = {
   date: string;
   label: string;
   count: number;
+  wins: number;
+  losses: number;
+  unknown: number;
+  trackedSeconds: number;
+  timedMatches: number;
+  constructed: number;
+  limited: number;
 };
 
 function localDateKey(date: Date): string {
@@ -106,12 +113,31 @@ function localDateKey(date: Date): string {
 
 /** Matches per local calendar day for the trailing `days` days (oldest first). */
 export function dailyActivity(matches: Match[], days: number, now = new Date()): DailyActivity[] {
-  const counts = new Map<string, number>();
+  const activity = new Map<string, Omit<DailyActivity, "date" | "label">>();
   for (const match of matches) {
     const started = new Date(match.startedAt);
     if (Number.isNaN(started.getTime())) continue;
+
     const key = localDateKey(started);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const totals = activity.get(key) ?? {
+      count: 0,
+      wins: 0,
+      losses: 0,
+      unknown: 0,
+      trackedSeconds: 0,
+      timedMatches: 0,
+      constructed: 0,
+      limited: 0,
+    };
+
+    totals.count += 1;
+    totals[match.result === "win" ? "wins" : match.result === "loss" ? "losses" : "unknown"] += 1;
+    if (match.secondsCount != null && match.secondsCount > 0) {
+      totals.trackedSeconds += match.secondsCount;
+      totals.timedMatches += 1;
+    }
+    totals[isLimitedEvent(match.eventName) ? "limited" : "constructed"] += 1;
+    activity.set(key, totals);
   }
 
   const out: DailyActivity[] = [];
@@ -121,7 +147,16 @@ export function dailyActivity(matches: Match[], days: number, now = new Date()):
     out.push({
       date: key,
       label: date.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-      count: counts.get(key) ?? 0,
+      ...(activity.get(key) ?? {
+        count: 0,
+        wins: 0,
+        losses: 0,
+        unknown: 0,
+        trackedSeconds: 0,
+        timedMatches: 0,
+        constructed: 0,
+        limited: 0,
+      }),
     });
   }
   return out;

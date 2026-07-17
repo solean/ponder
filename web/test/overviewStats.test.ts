@@ -118,6 +118,42 @@ describe("dailyActivity", () => {
     expect(days.map((day) => day.count)).toEqual([1, 0, 2]);
     expect(days[2].date).toBe("2026-07-03");
   });
+
+  test("summarizes daily record, tracked time, and format mix", () => {
+    const now = new Date(2026, 6, 3, 12, 0, 0);
+    const startedAt = new Date(2026, 6, 3, 9, 0, 0).toISOString();
+    const [day] = dailyActivity([
+      makeMatch({
+        startedAt,
+        result: "win",
+        eventName: "QuickDraft_TMT_20260313",
+        secondsCount: 600,
+      }),
+      makeMatch({
+        startedAt,
+        result: "loss",
+        eventName: "Traditional_Ladder",
+        secondsCount: 300,
+      }),
+      makeMatch({
+        startedAt,
+        result: "unknown",
+        eventName: "Play",
+        secondsCount: null,
+      }),
+    ], 1, now);
+
+    expect(day).toMatchObject({
+      count: 3,
+      wins: 1,
+      losses: 1,
+      unknown: 1,
+      trackedSeconds: 900,
+      timedMatches: 2,
+      limited: 1,
+      constructed: 2,
+    });
+  });
 });
 
 describe("matchAverages", () => {

@@ -6734,6 +6734,12 @@ select {
 .activity-grid .activity-cell {
   width: 100%;
   height: 100%;
+  min-width: 0;
+  appearance: none;
+  padding: 0;
+  cursor: crosshair;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: var(--tap-highlight);
 }
 
 .activity-cell--1 {
@@ -6757,9 +6763,157 @@ select {
   box-shadow: 0 0 5px var(--accent-soft);
 }
 
-.activity-grid .activity-cell:hover {
+.activity-grid .activity-cell:hover,
+.activity-grid .activity-cell:focus-visible {
+  position: relative;
+  z-index: 1;
   border-color: var(--text);
   box-shadow: 0 0 0 1px var(--surface-strong);
+}
+
+.activity-grid .activity-cell:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.activity-popover {
+  position: fixed;
+  z-index: 1400;
+  width: min(13.75rem, calc(100vw - 1rem));
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line-strong));
+  border-radius: 5px;
+  padding: 0.78rem 0.85rem 0.82rem;
+  color: var(--text);
+  background: var(--popover-bg);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 20px color-mix(in srgb, var(--accent) 10%, transparent),
+    inset 0 1px 0 var(--card-inner-border);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  animation: popover-in 120ms cubic-bezier(0.16, 0.9, 0.3, 1) both;
+}
+
+.activity-popover[data-placement="above"] {
+  transform-origin: var(--activity-popover-arrow-left) bottom;
+}
+
+.activity-popover[data-placement="below"] {
+  transform-origin: var(--activity-popover-arrow-left) top;
+}
+
+.activity-popover::after {
+  position: absolute;
+  left: var(--activity-popover-arrow-left);
+  width: 8px;
+  height: 8px;
+  content: "";
+  background: var(--popover-bg);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.activity-popover[data-placement="above"]::after {
+  bottom: -5px;
+  border-right: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line-strong));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line-strong));
+}
+
+.activity-popover[data-placement="below"]::after {
+  top: -5px;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line-strong));
+  border-left: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line-strong));
+}
+
+.activity-popover p {
+  margin: 0;
+}
+
+.activity-popover-date {
+  overflow: hidden;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: var(--track-lg);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.activity-popover-count {
+  display: flex;
+  align-items: baseline;
+  gap: 0.42rem;
+  margin-top: 0.52rem;
+}
+
+.activity-popover-count strong {
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.activity-popover-count span {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: var(--track-sm);
+}
+
+.activity-popover-record {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.58rem;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.activity-popover-record strong {
+  font-weight: 650;
+}
+
+.activity-popover-record span {
+  color: var(--muted-strong);
+}
+
+.activity-popover-unresolved {
+  margin-top: 0.22rem !important;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.activity-popover-details {
+  display: grid;
+  gap: 0.26rem;
+  margin-top: 0.64rem;
+  padding-top: 0.56rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-sm);
+}
+
+.activity-popover-empty {
+  margin-top: 0.58rem !important;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-popover {
+    animation: none;
+  }
 }
 
 .activity-footer {

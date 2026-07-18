@@ -26,6 +26,46 @@ func migrateAnalyticsTables(ctx context.Context, conn dbConn) error {
 	return nil
 }
 
+// v2: v1 was briefly consumable by a build that created the marker before the
+// card-stat derivation existed, leaving game_card_stats empty.
+const cardStatsBackfillMetadataKey = "card_stats_backfill_v2"
+
+// prepareCardStatsBackfill invalidates existing analytics coverage exactly once
+// after per-card game stats were introduced, so the next maintenance pass (or
+// per-match EnsureMatchAnalytics) re-derives every match and populates
+// game_card_stats from archived replays. The marker keeps this one-time.
+func prepareCardStatsBackfill(ctx context.Context, conn dbConn) error {
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin card stats backfill migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var markerCount int64
+	if err := tx.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM app_metadata WHERE key = ?
+	`, cardStatsBackfillMetadataKey).Scan(&markerCount); err != nil {
+		return fmt.Errorf("check card stats backfill marker: %w", err)
+	}
+	if markerCount > 0 {
+		return tx.Commit()
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM match_analytics_coverage`); err != nil {
+		return fmt.Errorf("invalidate analytics coverage for card stats backfill: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO app_metadata (key, value, updated_at)
+		VALUES (?, 'complete', ?)
+	`, cardStatsBackfillMetadataKey, nowUTC()); err != nil {
+		return fmt.Errorf("save card stats backfill marker: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit card stats backfill migration: %w", err)
+	}
+	return nil
+}
+
 func backfillDeckVersions(ctx context.Context, conn dbConn) error {
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {

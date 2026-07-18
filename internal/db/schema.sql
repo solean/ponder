@@ -209,6 +209,31 @@ CREATE TABLE IF NOT EXISTS game_opening_hand_cards (
   FOREIGN KEY(opening_hand_id) REFERENCES game_opening_hands(id) ON DELETE CASCADE
 );
 
+-- Per-game, per-card facts derived from replay hand snapshots and card plays.
+-- One row per (game, card) the player kept, mulliganed, drew, or played.
+-- Copies are counts within that game; deck analytics aggregate these rows
+-- through games (results) and match_decks (deck/version scope).
+CREATE TABLE IF NOT EXISTS game_card_stats (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id INTEGER NOT NULL,
+  match_id INTEGER NOT NULL,
+  card_id INTEGER NOT NULL,
+  opening_kept_copies INTEGER NOT NULL DEFAULT 0,
+  mulligan_copies INTEGER NOT NULL DEFAULT 0,
+  drawn_copies INTEGER NOT NULL DEFAULT 0,
+  played_copies INTEGER NOT NULL DEFAULT 0,
+  end_in_hand_copies INTEGER NOT NULL DEFAULT 0,
+  first_seen_turn INTEGER,
+  first_played_turn INTEGER,
+  source TEXT,
+  confidence TEXT NOT NULL DEFAULT 'derived',
+  UNIQUE(game_id, card_id),
+  FOREIGN KEY(game_id) REFERENCES games(id) ON DELETE CASCADE,
+  FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_card_stats_match ON game_card_stats(match_id, card_id);
+
 CREATE TABLE IF NOT EXISTS match_analytics_coverage (
   match_id INTEGER PRIMARY KEY,
   replay_available INTEGER NOT NULL DEFAULT 0,

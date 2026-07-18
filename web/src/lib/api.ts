@@ -1,6 +1,9 @@
 import type {
   AiStatus,
   AutostartStatus,
+  DeckAnalytics,
+  DeckAnalyticsGameRef,
+  DeckAnalyticsGamesParams,
   DeckDetail,
   DeckPrimer,
   DeckSummary,
@@ -58,6 +61,24 @@ export const api = {
   decks: (scope: "constructed" | "draft" | "all" = "constructed") =>
     getJSON<DeckSummary[]>(scope === "constructed" ? "/api/decks" : `/api/decks?scope=${scope}`),
   deckDetail: (deckId: number) => getJSON<DeckDetail>(`/api/decks/${deckId}`),
+  deckAnalytics: (deckId: number, versionId?: number) =>
+    getJSON<DeckAnalytics>(
+      versionId ? `/api/decks/${deckId}/analytics?version=${versionId}` : `/api/decks/${deckId}/analytics`,
+    ),
+  deckAnalyticsGames: (deckId: number, params: DeckAnalyticsGamesParams) => {
+    const search = new URLSearchParams();
+    if (params.version) search.set("version", String(params.version));
+    if (params.card) search.set("card", String(params.card));
+    if (params.facet) search.set("facet", params.facet);
+    if (params.keptSize != null) search.set("keptSize", String(params.keptSize));
+    if (params.mulligans != null) search.set("mulligans", String(params.mulligans));
+    if (params.game) search.set("game", params.game);
+    if (params.playDraw) search.set("playDraw", params.playDraw);
+    const query = search.toString();
+    return getJSON<DeckAnalyticsGameRef[]>(
+      query ? `/api/decks/${deckId}/analytics/games?${query}` : `/api/decks/${deckId}/analytics/games`,
+    );
+  },
   drafts: () => getJSON<DraftSession[]>("/api/drafts"),
   draftPicks: (draftId: number) => getJSON<DraftPick[]>(`/api/drafts/${draftId}/picks`),
   sets: (codes: string[]) =>

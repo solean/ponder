@@ -183,6 +183,94 @@ type MatchAnalyticsCoverage struct {
 	DerivedAt             string `json:"derivedAt,omitempty"`
 }
 
+// RecordAgg is a win/loss/draw tally over games with a known result. Unknown
+// results are excluded and reported separately wherever a RecordAgg appears.
+type RecordAgg struct {
+	Games  int64 `json:"games"`
+	Wins   int64 `json:"wins"`
+	Losses int64 `json:"losses"`
+	Draws  int64 `json:"draws"`
+}
+
+// AnalyticsBucket groups games sharing one integer fact (kept-hand size,
+// mulligan count, kept land count) with the record inside that group.
+type AnalyticsBucket struct {
+	Key            int64     `json:"key"`
+	Record         RecordAgg `json:"record"`
+	UnknownResults int64     `json:"unknownResults"`
+}
+
+type DeckCardPerformance struct {
+	CardID             int64     `json:"cardId"`
+	CardName           string    `json:"cardName,omitempty"`
+	GamesSeen          int64     `json:"gamesSeen"`
+	UnknownResultGames int64     `json:"unknownResultGames"`
+	OpeningHand        RecordAgg `json:"openingHand"`
+	Drawn              RecordAgg `json:"drawn"`
+	InHand             RecordAgg `json:"inHand"`
+	Played             RecordAgg `json:"played"`
+	NotPlayed          RecordAgg `json:"notPlayed"`
+	GameOne            RecordAgg `json:"gameOne"`
+	PostBoard          RecordAgg `json:"postBoard"`
+	OnPlay             RecordAgg `json:"onPlay"`
+	OnDraw             RecordAgg `json:"onDraw"`
+	EndedInHandGames   int64     `json:"endedInHandGames"`
+	MulliganGames      int64     `json:"mulliganGames"`
+	MulliganCopies     int64     `json:"mulliganCopies"`
+	AvgFirstSeenTurn   *float64  `json:"avgFirstSeenTurn,omitempty"`
+	AvgFirstPlayedTurn *float64  `json:"avgFirstPlayedTurn,omitempty"`
+	AvgCopiesSeen      *float64  `json:"avgCopiesSeen,omitempty"`
+	AvgCopiesPlayed    *float64  `json:"avgCopiesPlayed,omitempty"`
+}
+
+type DeckAnalyticsCoverage struct {
+	Matches              int64 `json:"matches"`
+	MatchesWithVersion   int64 `json:"matchesWithVersion"`
+	GameCount            int64 `json:"gameCount"`
+	GamesWithResult      int64 `json:"gamesWithResult"`
+	GamesWithOpeningHand int64 `json:"gamesWithOpeningHand"`
+	GamesWithPlayDraw    int64 `json:"gamesWithPlayDraw"`
+	GamesWithCardStats   int64 `json:"gamesWithCardStats"`
+}
+
+type DeckAnalytics struct {
+	DeckID                int64                 `json:"deckId"`
+	DeckVersionID         *int64                `json:"deckVersionId,omitempty"`
+	Coverage              DeckAnalyticsCoverage `json:"coverage"`
+	MatchRecord           RecordAgg             `json:"matchRecord"`
+	GameRecord            RecordAgg             `json:"gameRecord"`
+	UnknownResultGames    int64                 `json:"unknownResultGames"`
+	GameOne               RecordAgg             `json:"gameOne"`
+	PostBoard             RecordAgg             `json:"postBoard"`
+	OnPlay                RecordAgg             `json:"onPlay"`
+	OnDraw                RecordAgg             `json:"onDraw"`
+	AverageMulligans      *float64              `json:"averageMulligans,omitempty"`
+	HandSizes             []AnalyticsBucket     `json:"handSizes"`
+	MulliganCounts        []AnalyticsBucket     `json:"mulliganCounts"`
+	LandCounts            []AnalyticsBucket     `json:"landCounts"`
+	LandCountUnknownHands int64                 `json:"landCountUnknownHands"`
+	Cards                 []DeckCardPerformance `json:"cards"`
+}
+
+// DeckAnalyticsGameRef links one aggregated statistic back to a concrete game
+// so the UI can navigate to the match detail and replay it came from.
+type DeckAnalyticsGameRef struct {
+	MatchID           int64  `json:"matchId"`
+	GameNumber        int64  `json:"gameNumber"`
+	Result            string `json:"result"`
+	PlayDraw          string `json:"playDraw,omitempty"`
+	StartedAt         string `json:"startedAt,omitempty"`
+	Opponent          string `json:"opponent,omitempty"`
+	EventName         string `json:"eventName,omitempty"`
+	KeptHandSize      *int64 `json:"keptHandSize,omitempty"`
+	MulliganCount     *int64 `json:"mulliganCount,omitempty"`
+	OpeningKeptCopies int64  `json:"openingKeptCopies,omitempty"`
+	DrawnCopies       int64  `json:"drawnCopies,omitempty"`
+	PlayedCopies      int64  `json:"playedCopies,omitempty"`
+	EndInHandCopies   int64  `json:"endInHandCopies,omitempty"`
+	FirstPlayedTurn   *int64 `json:"firstPlayedTurn,omitempty"`
+}
+
 type DeckSummaryRow struct {
 	DeckID        int64   `json:"deckId"`
 	DeckName      string  `json:"deckName"`

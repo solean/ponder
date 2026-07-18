@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
+import { DeckAnalyticsPanel } from "../components/DeckAnalyticsPanel";
 import { DeckColorIdentity } from "../components/MatchDeckColors";
 import { DeckPrimerPanel } from "../components/DeckPrimerPanel";
 import { EventLabel } from "../components/EventLabel";
@@ -1486,6 +1487,8 @@ export function DeckDetailPage() {
           </ol>
         )}
       </section>
+
+      <DeckAnalyticsPanel deckId={deckId} versions={versions} />
 
       <DeckPrimerPanel deckId={deckId} />
 

@@ -701,6 +701,14 @@ func (s *Server) handleDeckDetail(w http.ResponseWriter, r *http.Request) {
 		s.handleDeckPrimer(w, r, id)
 		return
 	}
+	if len(parts) == 2 && parts[1] == "analytics" {
+		s.handleDeckAnalytics(w, r, id)
+		return
+	}
+	if len(parts) == 3 && parts[1] == "analytics" && parts[2] == "games" {
+		s.handleDeckAnalyticsGames(w, r, id)
+		return
+	}
 	if len(parts) != 1 {
 		writeError(w, http.StatusNotFound, "not found")
 		return

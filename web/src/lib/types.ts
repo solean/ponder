@@ -285,6 +285,109 @@ export type DeckVersion = {
   cards: DeckCard[];
 };
 
+// Win/loss/draw tally over games with a known result; unknown results are
+// excluded and reported separately beside every RecordAgg.
+export type RecordAgg = {
+  games: number;
+  wins: number;
+  losses: number;
+  draws: number;
+};
+
+export type AnalyticsBucket = {
+  key: number;
+  record: RecordAgg;
+  unknownResults: number;
+};
+
+export type DeckCardPerformance = {
+  cardId: number;
+  cardName?: string;
+  gamesSeen: number;
+  unknownResultGames: number;
+  openingHand: RecordAgg;
+  drawn: RecordAgg;
+  inHand: RecordAgg;
+  played: RecordAgg;
+  notPlayed: RecordAgg;
+  gameOne: RecordAgg;
+  postBoard: RecordAgg;
+  onPlay: RecordAgg;
+  onDraw: RecordAgg;
+  endedInHandGames: number;
+  mulliganGames: number;
+  mulliganCopies: number;
+  avgFirstSeenTurn?: number;
+  avgFirstPlayedTurn?: number;
+  avgCopiesSeen?: number;
+  avgCopiesPlayed?: number;
+};
+
+export type DeckAnalyticsCoverage = {
+  matches: number;
+  matchesWithVersion: number;
+  gameCount: number;
+  gamesWithResult: number;
+  gamesWithOpeningHand: number;
+  gamesWithPlayDraw: number;
+  gamesWithCardStats: number;
+};
+
+export type DeckAnalytics = {
+  deckId: number;
+  deckVersionId?: number;
+  coverage: DeckAnalyticsCoverage;
+  matchRecord: RecordAgg;
+  gameRecord: RecordAgg;
+  unknownResultGames: number;
+  gameOne: RecordAgg;
+  postBoard: RecordAgg;
+  onPlay: RecordAgg;
+  onDraw: RecordAgg;
+  averageMulligans?: number;
+  handSizes: AnalyticsBucket[];
+  mulliganCounts: AnalyticsBucket[];
+  landCounts: AnalyticsBucket[];
+  landCountUnknownHands: number;
+  cards: DeckCardPerformance[];
+};
+
+export type DeckAnalyticsGameRef = {
+  matchId: number;
+  gameNumber: number;
+  result: "win" | "loss" | "draw" | "unknown";
+  playDraw?: "play" | "draw" | "";
+  startedAt?: string;
+  opponent?: string;
+  eventName?: string;
+  keptHandSize?: number;
+  mulliganCount?: number;
+  openingKeptCopies?: number;
+  drawnCopies?: number;
+  playedCopies?: number;
+  endInHandCopies?: number;
+  firstPlayedTurn?: number;
+};
+
+export type DeckAnalyticsCardFacet =
+  | "any"
+  | "opening"
+  | "drawn"
+  | "played"
+  | "notplayed"
+  | "stranded"
+  | "mulled";
+
+export type DeckAnalyticsGamesParams = {
+  version?: number;
+  card?: number;
+  facet?: DeckAnalyticsCardFacet;
+  keptSize?: number;
+  mulligans?: number;
+  game?: "one" | "post";
+  playDraw?: "play" | "draw";
+};
+
 export type AiStatus = {
   available: boolean;
   cliPath?: string;

@@ -41,7 +41,8 @@ func TestDeriveOpeningHandsTracksLondonMulliganAndBottomedCard(t *testing.T) {
 		testHandFrame(5, &turnOne, "GameStage_Play", kept),
 	}
 
-	hands, mulligans, keptSize := deriveOpeningHands(frames)
+	opening := deriveOpeningHands(frames)
+	hands, mulligans, keptSize := opening.Hands, opening.MulliganCount, opening.KeptHandSize
 	if len(hands) != 2 {
 		t.Fatalf("opening hand attempts = %d, want 2", len(hands))
 	}

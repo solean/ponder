@@ -46,6 +46,31 @@ type derivedGame struct {
 	OpeningHandSource     string
 	OpeningHandConfidence string
 	OpeningHands          []derivedOpeningHand
+	CardStats             map[int64]*derivedCardStat
+}
+
+// derivedCardStat captures what one card did in one game from the player's
+// perspective. Copies are within-game counts; a zero-valued row is never
+// stored.
+type derivedCardStat struct {
+	CardID          int64
+	OpeningKept     int64
+	MulliganCopies  int64
+	DrawnCopies     int64
+	PlayedCopies    int64
+	EndInHand       int64
+	FirstSeenTurn   *int64
+	FirstPlayedTurn *int64
+}
+
+// openingHandDerivation carries the aggregate opening-hand rows for storage
+// plus the instance-level snapshots card stats are derived from.
+type openingHandDerivation struct {
+	Hands         []derivedOpeningHand
+	MulliganCount *int64
+	KeptHandSize  *int64
+	Offers        []replayHandSnapshot
+	Kept          replayHandSnapshot
 }
 
 type cardPlayGameFact struct {
@@ -156,15 +181,21 @@ func aggregateOpeningCards(offered, kept replayHandSnapshot, decision string) []
 	return out
 }
 
-func deriveOpeningHands(frames []model.MatchReplayFrameRow) ([]derivedOpeningHand, *int64, *int64) {
+// replayFrameIsPlay reports whether a frame belongs to actual gameplay rather
+// than the pre-game mulligan sequence.
+func replayFrameIsPlay(frame model.MatchReplayFrameRow) bool {
+	return (frame.TurnNumber != nil && *frame.TurnNumber > 0) ||
+		strings.Contains(strings.ToLower(frame.GameStage), "play") ||
+		strings.Contains(strings.ToLower(frame.GameStage), "gameover")
+}
+
+func deriveOpeningHands(frames []model.MatchReplayFrameRow) openingHandDerivation {
+	empty := openingHandDerivation{Kept: replayHandSnapshot{ByInstance: map[int64]int64{}}}
 	prePlay := make([]replayHandSnapshot, 0)
 	var firstPlayHand *replayHandSnapshot
 	for _, frame := range frames {
 		hand := replaySelfHand(frame)
-		isPlay := (frame.TurnNumber != nil && *frame.TurnNumber > 0) ||
-			strings.Contains(strings.ToLower(frame.GameStage), "play") ||
-			strings.Contains(strings.ToLower(frame.GameStage), "gameover")
-		if isPlay {
+		if replayFrameIsPlay(frame) {
 			isOpeningTurn := frame.TurnNumber == nil || *frame.TurnNumber <= 1
 			if firstPlayHand == nil && isOpeningTurn && len(hand.ByInstance) > 0 {
 				copy := hand
@@ -183,7 +214,7 @@ func deriveOpeningHands(frames []model.MatchReplayFrameRow) ([]derivedOpeningHan
 		prePlay = append(prePlay, *firstPlayHand)
 	}
 	if len(prePlay) == 0 {
-		return nil, nil, nil
+		return empty
 	}
 
 	maxSize := 0
@@ -193,7 +224,7 @@ func deriveOpeningHands(frames []model.MatchReplayFrameRow) ([]derivedOpeningHan
 		}
 	}
 	if maxSize <= 0 {
-		return nil, nil, nil
+		return empty
 	}
 
 	offers := make([]replayHandSnapshot, 0)
@@ -210,7 +241,7 @@ func deriveOpeningHands(frames []model.MatchReplayFrameRow) ([]derivedOpeningHan
 		lastSignature = signature
 	}
 	if len(offers) == 0 {
-		return nil, nil, nil
+		return empty
 	}
 
 	finalOffer := offers[len(offers)-1]
@@ -248,7 +279,84 @@ func deriveOpeningHands(frames []model.MatchReplayFrameRow) ([]derivedOpeningHan
 		})
 	}
 
-	return out, pointerInt64(int64(len(offers) - 1)), pointerInt64(int64(len(kept.ByInstance)))
+	return openingHandDerivation{
+		Hands:         out,
+		MulliganCount: pointerInt64(int64(len(offers) - 1)),
+		KeptHandSize:  pointerInt64(int64(len(kept.ByInstance))),
+		Offers:        offers,
+		Kept:          kept,
+	}
+}
+
+// deriveGameCardStats reduces one game's replay frames to per-card hand facts:
+// copies kept in the opening hand, copies shuffled back by mulligans, copies
+// drawn during play (new hand instances after the keep), and copies still in
+// hand in the last populated frame. Played copies are merged in separately
+// from match_card_plays, which records first public appearances exactly.
+func deriveGameCardStats(frames []model.MatchReplayFrameRow, opening openingHandDerivation) map[int64]*derivedCardStat {
+	stats := make(map[int64]*derivedCardStat)
+	ensure := func(cardID int64) *derivedCardStat {
+		stat, ok := stats[cardID]
+		if !ok {
+			stat = &derivedCardStat{CardID: cardID}
+			stats[cardID] = stat
+		}
+		return stat
+	}
+
+	seenInstances := make(map[int64]bool, len(opening.Kept.ByInstance))
+	for instanceID, cardID := range opening.Kept.ByInstance {
+		seenInstances[instanceID] = true
+		stat := ensure(cardID)
+		stat.OpeningKept++
+		stat.FirstSeenTurn = pointerInt64(0)
+	}
+	// Every offer except the final one was shuffled back.
+	for index := 0; index+1 < len(opening.Offers); index++ {
+		for _, cardID := range opening.Offers[index].ByInstance {
+			ensure(cardID).MulliganCopies++
+		}
+	}
+
+	var lastHand *replayHandSnapshot
+	sawPlayHand := len(opening.Hands) > 0
+	for _, frame := range frames {
+		if !replayFrameIsPlay(frame) {
+			continue
+		}
+		hand := replaySelfHand(frame)
+		if len(frame.Objects) > 0 {
+			handCopy := hand
+			lastHand = &handCopy
+		}
+		// Without any observed opening hand the log started mid-game; cards in
+		// the first visible hand have unknown provenance and are only marked
+		// seen so the rest of the game still produces drawn/stranded facts.
+		if !sawPlayHand {
+			for instanceID := range hand.ByInstance {
+				seenInstances[instanceID] = true
+			}
+			sawPlayHand = true
+			continue
+		}
+		for instanceID, cardID := range hand.ByInstance {
+			if seenInstances[instanceID] {
+				continue
+			}
+			seenInstances[instanceID] = true
+			stat := ensure(cardID)
+			stat.DrawnCopies++
+			if frame.TurnNumber != nil && (stat.FirstSeenTurn == nil || *frame.TurnNumber < *stat.FirstSeenTurn) {
+				stat.FirstSeenTurn = pointerInt64(*frame.TurnNumber)
+			}
+		}
+	}
+	if lastHand != nil {
+		for _, cardID := range lastHand.ByInstance {
+			ensure(cardID).EndInHand++
+		}
+	}
+	return stats
 }
 
 func deriveReplayGames(frames []model.MatchReplayFrameRow) []derivedGame {
@@ -303,11 +411,15 @@ func deriveReplayGames(frames []model.MatchReplayFrameRow) []derivedGame {
 				game.WinReason = frame.WinReason
 			}
 		}
-		game.OpeningHands, game.MulliganCount, game.KeptHandSize = deriveOpeningHands(gameFrames)
+		opening := deriveOpeningHands(gameFrames)
+		game.OpeningHands = opening.Hands
+		game.MulliganCount = opening.MulliganCount
+		game.KeptHandSize = opening.KeptHandSize
 		if len(game.OpeningHands) > 0 {
 			game.OpeningHandSource = "replay_private_hand"
 			game.OpeningHandConfidence = "derived"
 		}
+		game.CardStats = deriveGameCardStats(gameFrames, opening)
 		out = append(out, game)
 	}
 	return out
@@ -362,6 +474,74 @@ func (s *Store) loadCardPlayGameFacts(ctx context.Context, matchID int64) (map[i
 	return out, nil
 }
 
+type cardPlayCardFact struct {
+	Copies    int64
+	FirstTurn *int64
+}
+
+// loadCardPlayCardFacts returns, per game and card, how many copies the player
+// cast or played (first public zone stack/battlefield) and the earliest turn.
+func (s *Store) loadCardPlayCardFacts(ctx context.Context, matchID int64) (map[int64]map[int64]cardPlayCardFact, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT cp.game_number, cp.card_id, COUNT(*), MIN(cp.turn_number)
+		FROM match_card_plays cp
+		JOIN matches m ON m.id = cp.match_id
+		WHERE cp.match_id = ?
+		  AND cp.owner_seat_id IS NOT NULL
+		  AND cp.owner_seat_id = m.player_seat_id
+		GROUP BY cp.game_number, cp.card_id
+	`, matchID)
+	if err != nil {
+		return nil, fmt.Errorf("load card-play card facts: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[int64]map[int64]cardPlayCardFact)
+	for rows.Next() {
+		var gameNumber, cardID, copies int64
+		var firstTurn sql.NullInt64
+		if err := rows.Scan(&gameNumber, &cardID, &copies, &firstTurn); err != nil {
+			return nil, fmt.Errorf("scan card-play card facts: %w", err)
+		}
+		fact := cardPlayCardFact{Copies: copies}
+		if firstTurn.Valid {
+			fact.FirstTurn = pointerInt64(firstTurn.Int64)
+		}
+		if out[gameNumber] == nil {
+			out[gameNumber] = make(map[int64]cardPlayCardFact)
+		}
+		out[gameNumber][cardID] = fact
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate card-play card facts: %w", err)
+	}
+	return out, nil
+}
+
+func mergeCardPlayCardFacts(games []derivedGame, facts map[int64]map[int64]cardPlayCardFact) []derivedGame {
+	for index := range games {
+		gameFacts := facts[games[index].GameNumber]
+		if len(gameFacts) == 0 {
+			continue
+		}
+		if games[index].CardStats == nil {
+			games[index].CardStats = make(map[int64]*derivedCardStat, len(gameFacts))
+		}
+		for cardID, fact := range gameFacts {
+			stat, ok := games[index].CardStats[cardID]
+			if !ok {
+				stat = &derivedCardStat{CardID: cardID}
+				games[index].CardStats[cardID] = stat
+			}
+			stat.PlayedCopies = fact.Copies
+			stat.FirstPlayedTurn = fact.FirstTurn
+			if fact.FirstTurn != nil && (stat.FirstSeenTurn == nil || *fact.FirstTurn < *stat.FirstSeenTurn) {
+				stat.FirstSeenTurn = pointerInt64(*fact.FirstTurn)
+			}
+		}
+	}
+	return games
+}
+
 func mergeGameFacts(games []derivedGame, facts map[int64]cardPlayGameFact) []derivedGame {
 	indexByNumber := make(map[int64]int, len(games))
 	for index := range games {
@@ -414,7 +594,12 @@ func (s *Store) RefreshMatchAnalytics(ctx context.Context, matchID int64) error 
 	if err != nil {
 		return err
 	}
+	cardFacts, err := s.loadCardPlayCardFacts(ctx, matchID)
+	if err != nil {
+		return err
+	}
 	games := mergeGameFacts(deriveReplayGames(frames), facts)
+	games = mergeCardPlayCardFacts(games, cardFacts)
 
 	var matchResult, matchReason string
 	if err := s.db.QueryRowContext(ctx, `
@@ -513,6 +698,32 @@ func (s *Store) RefreshMatchAnalytics(ctx context.Context, matchID int64) error 
 				`, handID, card.CardID, card.Quantity, boolToInt(card.Kept)); err != nil {
 					return fmt.Errorf("insert opening hand card: %w", err)
 				}
+			}
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM game_card_stats WHERE game_id = ?`, gameID); err != nil {
+			return fmt.Errorf("clear derived card stats: %w", err)
+		}
+		statCardIDs := make([]int64, 0, len(game.CardStats))
+		for cardID := range game.CardStats {
+			statCardIDs = append(statCardIDs, cardID)
+		}
+		sort.Slice(statCardIDs, func(i, j int) bool { return statCardIDs[i] < statCardIDs[j] })
+		for _, cardID := range statCardIDs {
+			stat := game.CardStats[cardID]
+			if stat.OpeningKept == 0 && stat.MulliganCopies == 0 && stat.DrawnCopies == 0 &&
+				stat.PlayedCopies == 0 && stat.EndInHand == 0 {
+				continue
+			}
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO game_card_stats (
+					game_id, match_id, card_id, opening_kept_copies, mulligan_copies,
+					drawn_copies, played_copies, end_in_hand_copies, first_seen_turn,
+					first_played_turn, source, confidence
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'replay_hand_card_plays', 'derived')
+			`, gameID, matchID, cardID, stat.OpeningKept, stat.MulliganCopies,
+				stat.DrawnCopies, stat.PlayedCopies, stat.EndInHand,
+				nullableDerivedInt(stat.FirstSeenTurn), nullableDerivedInt(stat.FirstPlayedTurn)); err != nil {
+				return fmt.Errorf("insert derived card stat: %w", err)
 			}
 		}
 		if result != "unknown" {

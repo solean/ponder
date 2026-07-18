@@ -116,6 +116,26 @@ CREATE TABLE IF NOT EXISTS card_types (
 -- Friendly metadata for MTG sets, keyed by the lowercase set code embedded in
 -- Arena event names (e.g. "tmt" in "QuickDraft_TMT_20260313"). Resolved on
 -- demand from Scryfall and cached here so set names/symbols work offline.
+-- Card color identity and mana value, resolved on demand from the local MTGA
+-- raw card database (preferred) or Scryfall, and cached for offline matchup
+-- classification. color_identity is a WUBRG-ordered subset string ("UB").
+CREATE TABLE IF NOT EXISTS card_metadata (
+  arena_id INTEGER PRIMARY KEY,
+  color_identity TEXT NOT NULL DEFAULT '',
+  mana_value REAL,
+  updated_at TEXT NOT NULL
+);
+
+-- Manual archetype corrections for one match's opponent. Overrides win over
+-- the derived classification wherever matchups are aggregated.
+CREATE TABLE IF NOT EXISTS match_opponent_archetype_overrides (
+  match_id INTEGER PRIMARY KEY,
+  archetype TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS set_catalog (
   code TEXT PRIMARY KEY,
   name TEXT NOT NULL,

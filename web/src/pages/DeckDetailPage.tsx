@@ -7,11 +7,13 @@ import { DeckAnalyticsPanel } from "../components/DeckAnalyticsPanel";
 import { DeckColorIdentity } from "../components/MatchDeckColors";
 import { DeckPrimerPanel } from "../components/DeckPrimerPanel";
 import { EventLabel } from "../components/EventLabel";
+import { DeckMatchupsPanel, LimitedMatchupsPanel } from "../components/MatchupPanels";
 import { ManaSymbol } from "../components/ManaSymbol";
 import { RarityDot, RARITY_LABELS, RARITY_ORDER } from "../components/RarityDot";
 import { ResultPill } from "../components/ResultPill";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { parseEventName } from "../lib/events";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { fetchCardPreview, type CardPreview, type CardRarity } from "../lib/scryfall";
 import { useEventSets } from "../lib/useEventSets";
@@ -1489,6 +1491,12 @@ export function DeckDetailPage() {
       </section>
 
       <DeckAnalyticsPanel deckId={deckId} versions={versions} />
+
+      {/draft|sealed|limited/.test(`${data.format} ${data.eventName}`.toLowerCase()) ? (
+        <LimitedMatchupsPanel setCode={parseEventName(data.eventName).setCode ?? ""} />
+      ) : (
+        <DeckMatchupsPanel deckId={deckId} />
+      )}
 
       <DeckPrimerPanel deckId={deckId} />
 

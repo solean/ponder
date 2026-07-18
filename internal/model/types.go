@@ -271,6 +271,118 @@ type DeckAnalyticsGameRef struct {
 	FirstPlayedTurn   *int64 `json:"firstPlayedTurn,omitempty"`
 }
 
+// OpponentClassification is the derived (or manually corrected) read on one
+// match's opponent, built only from locally observed cards.
+type OpponentClassification struct {
+	Colors        []string `json:"colors"`
+	ColorsKnown   bool     `json:"colorsKnown"`
+	Archetype     string   `json:"archetype"`
+	Source        string   `json:"source"` // "derived" or "manual"
+	Confidence    string   `json:"confidence"`
+	DistinctCards int64    `json:"distinctCards"`
+	ObservedCards int64    `json:"observedCards"`
+	PctObserved   float64  `json:"pctObserved"`
+	AvgManaValue  *float64 `json:"avgManaValue,omitempty"`
+	CreatureShare *float64 `json:"creatureShare,omitempty"`
+}
+
+type MatchupObservedCard struct {
+	CardID     int64  `json:"cardId"`
+	CardName   string `json:"cardName,omitempty"`
+	Matches    int64  `json:"matches"`
+	Copies     int64  `json:"copies"`
+	WinMatches int64  `json:"winMatches"`
+	LossMatches int64 `json:"lossMatches"`
+}
+
+type MatchupMatchRef struct {
+	MatchID         int64    `json:"matchId"`
+	Opponent        string   `json:"opponent,omitempty"`
+	EventName       string   `json:"eventName,omitempty"`
+	Result          string   `json:"result"`
+	StartedAt       string   `json:"startedAt,omitempty"`
+	Colors          []string `json:"colors"`
+	Archetype       string   `json:"archetype"`
+	ArchetypeSource string   `json:"archetypeSource"`
+	Confidence      string   `json:"confidence"`
+	PctObserved     float64  `json:"pctObserved"`
+}
+
+// MatchupRow is one (opponent colors × archetype) group for a single deck.
+type MatchupRow struct {
+	ColorsKey          string                `json:"colorsKey"`
+	Colors             []string              `json:"colors"`
+	Archetype          string                `json:"archetype"`
+	Matches            RecordAgg             `json:"matches"`
+	Games              RecordAgg             `json:"games"`
+	UnknownResultGames int64                 `json:"unknownResultGames"`
+	GameOne            RecordAgg             `json:"gameOne"`
+	PostBoard          RecordAgg             `json:"postBoard"`
+	OnPlay             RecordAgg             `json:"onPlay"`
+	OnDraw             RecordAgg             `json:"onDraw"`
+	AvgPctObserved     float64               `json:"avgPctObserved"`
+	Confidence         string                `json:"confidence"`
+	TopObservedCards   []MatchupObservedCard `json:"topObservedCards"`
+	LossSkewedCards    []MatchupObservedCard `json:"lossSkewedCards"`
+	MatchRefs          []MatchupMatchRef     `json:"matchRefs"`
+}
+
+type MatchupDeck struct {
+	DeckID   int64        `json:"deckId"`
+	DeckName string       `json:"deckName"`
+	Format   string       `json:"format"`
+	Matches  RecordAgg    `json:"matches"`
+	Rows     []MatchupRow `json:"rows"`
+}
+
+type MatchupsResponse struct {
+	Decks      []MatchupDeck `json:"decks"`
+	Archetypes []string      `json:"archetypes"`
+}
+
+// DeckMatchupsResponse is one deck's matchup data for the deck detail page;
+// Deck is null when the deck has no deck-linked matches yet.
+type DeckMatchupsResponse struct {
+	Deck       *MatchupDeck `json:"deck"`
+	Archetypes []string     `json:"archetypes"`
+}
+
+// LimitedMatchupColorGroup pools the matches you played with one of your own
+// deck color identities within a set; Rows group by opponent color pair.
+type LimitedMatchupColorGroup struct {
+	ColorsKey   string       `json:"colorsKey"`
+	Colors      []string     `json:"colors"`
+	ColorsKnown bool         `json:"colorsKnown"`
+	Matches     RecordAgg    `json:"matches"`
+	DeckCount   int64        `json:"deckCount"`
+	Rows        []MatchupRow `json:"rows"`
+}
+
+// LimitedMatchupSet pools every limited match of one set; rows group by
+// opponent color pair (Archetype is blank on limited rows), and ColorGroups
+// split the same matches by your own deck's color identity.
+type LimitedMatchupSet struct {
+	SetCode     string                     `json:"setCode"`
+	Matches     RecordAgg                  `json:"matches"`
+	DeckCount   int64                      `json:"deckCount"`
+	Rows        []MatchupRow               `json:"rows"`
+	ColorGroups []LimitedMatchupColorGroup `json:"colorGroups"`
+}
+
+type LimitedMatchupsResponse struct {
+	Sets []LimitedMatchupSet `json:"sets"`
+}
+
+// MatchGameSummary aggregates one match's derived games for matchup rollups.
+type MatchGameSummary struct {
+	Games        RecordAgg
+	UnknownGames int64
+	GameOne      RecordAgg
+	PostBoard    RecordAgg
+	OnPlay       RecordAgg
+	OnDraw       RecordAgg
+}
+
 type DeckSummaryRow struct {
 	DeckID        int64   `json:"deckId"`
 	DeckName      string  `json:"deckName"`

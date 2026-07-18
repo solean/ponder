@@ -14,6 +14,8 @@ import type {
   MatchCardPlay,
   MatchDetail,
   MatchReplayFrame,
+  DeckMatchupsResponse,
+  LimitedMatchupsResponse,
   Overview,
   RankHistoryPoint,
   RuntimeConfig,
@@ -79,6 +81,10 @@ export const api = {
       query ? `/api/decks/${deckId}/analytics/games?${query}` : `/api/decks/${deckId}/analytics/games`,
     );
   },
+  deckMatchups: (deckId: number) => getJSON<DeckMatchupsResponse>(`/api/decks/${deckId}/matchups`),
+  limitedMatchups: () => getJSON<LimitedMatchupsResponse>("/api/limited/matchups"),
+  setOpponentArchetype: (matchId: number, archetype: string) =>
+    postJSON<{ status: string; archetype: string }>(`/api/matches/${matchId}/opponent-archetype`, { archetype }),
   drafts: () => getJSON<DraftSession[]>("/api/drafts"),
   draftPicks: (draftId: number) => getJSON<DraftPick[]>(`/api/drafts/${draftId}/picks`),
   sets: (codes: string[]) =>

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { EventLabel } from "../components/EventLabel";
+import { LimitedMatchupsPanel } from "../components/MatchupPanels";
 import { SetSymbol } from "../components/SetSymbol";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
@@ -214,6 +215,8 @@ export function DraftsPage() {
           </table>
         </div>
       </section>
+
+      <LimitedMatchupsPanel />
 
       <section className="panel">
         <div className="panel-head">

@@ -64,6 +64,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/economy", s.handleEconomy)
 	mux.HandleFunc("/api/matches", s.handleMatches)
 	mux.HandleFunc("/api/matches/", s.handleMatchDetail)
+	mux.HandleFunc("/api/limited/matchups", s.handleLimitedMatchups)
 	mux.HandleFunc("/api/decks", s.handleDecks)
 	mux.HandleFunc("/api/decks/", s.handleDeckDetail)
 	mux.HandleFunc("/api/drafts", s.handleDrafts)
@@ -613,6 +614,9 @@ func (s *Server) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) == 2 {
 		switch parts[1] {
+		case "opponent-archetype":
+			s.handleMatchOpponentArchetype(w, r, id)
+			return
 		case "timeline":
 			rows, err := s.store.ListMatchCardPlays(r.Context(), id)
 			if err != nil {
@@ -703,6 +707,10 @@ func (s *Server) handleDeckDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) == 2 && parts[1] == "analytics" {
 		s.handleDeckAnalytics(w, r, id)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "matchups" {
+		s.handleDeckMatchups(w, r, id)
 		return
 	}
 	if len(parts) == 3 && parts[1] == "analytics" && parts[2] == "games" {

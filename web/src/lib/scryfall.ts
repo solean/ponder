@@ -9,6 +9,7 @@ export type CardPreview = {
   manaValue?: number;
   typeLine?: string;
   rarity?: CardRarity;
+  colors?: string[];
 };
 
 type ScryfallImageURIs = {
@@ -24,6 +25,7 @@ type ScryfallCardFace = {
   image_uris?: ScryfallImageURIs | null;
   mana_cost?: string;
   type_line?: string;
+  colors?: string[];
 };
 
 type ScryfallCard = {
@@ -35,6 +37,7 @@ type ScryfallCard = {
   cmc?: number;
   type_line?: string;
   rarity?: string;
+  colors?: string[];
 };
 
 const SCRYFALL_BASE_URL = "https://api.scryfall.com";
@@ -107,6 +110,28 @@ function pickTypeLine(card: ScryfallCard): string {
     return "";
   }
   return faceTypes.join(" // ");
+}
+
+const COLOR_ORDER = ["W", "U", "B", "R", "G"];
+
+function pickColors(card: ScryfallCard): string[] | undefined {
+  const seen = new Set<string>();
+  const add = (colors?: string[]) => {
+    for (const color of colors ?? []) {
+      const normalized = color.trim().toUpperCase();
+      if (COLOR_ORDER.includes(normalized)) {
+        seen.add(normalized);
+      }
+    }
+  };
+  add(card.colors);
+  for (const face of card.card_faces ?? []) {
+    add(face.colors);
+  }
+  if (seen.size === 0) {
+    return undefined;
+  }
+  return COLOR_ORDER.filter((color) => seen.has(color));
 }
 
 function normalizeRarity(value?: string): CardRarity | undefined {
@@ -190,5 +215,6 @@ export async function fetchCardPreview(cardID: number, cardName?: string): Promi
     manaValue: typeof card.cmc === "number" && Number.isFinite(card.cmc) ? card.cmc : undefined,
     typeLine: pickTypeLine(card),
     rarity: normalizeRarity(card.rarity),
+    colors: pickColors(card),
   };
 }

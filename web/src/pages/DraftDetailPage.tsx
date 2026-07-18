@@ -3,8 +3,12 @@ import { createPortal } from "react-dom";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
+import { DraftJourneyPanel, DraftPackReplayPanel } from "../components/DraftJourneyPanel";
+import { DraftPoolPanel } from "../components/DraftPoolPanel";
+import { LimitedMatchupsPanel } from "../components/MatchupPanels";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { parseEventName } from "../lib/events";
 import { fetchCardPreview } from "../lib/scryfall";
 import type { DraftPickCard } from "../lib/types";
 
@@ -228,6 +232,14 @@ export function DraftDetailPage() {
     queryFn: () => api.draftPicks(draftId),
     enabled: Number.isFinite(draftId),
   });
+  const sessionsQuery = useQuery({
+    queryKey: ["drafts"],
+    queryFn: api.drafts,
+  });
+  const session = useMemo(
+    () => (sessionsQuery.data ?? []).find((row) => row.id === draftId) ?? null,
+    [sessionsQuery.data, draftId],
+  );
 
   const picksByPack = useMemo(() => {
     const map = new Map<number, DraftPickDisplay[]>();
@@ -246,11 +258,16 @@ export function DraftDetailPage() {
   if (picksQuery.isLoading) return <StatusMessage>Loading draft picks…</StatusMessage>;
   if (picksQuery.error) return <StatusMessage tone="error">{(picksQuery.error as Error).message}</StatusMessage>;
 
+  const picks = picksQuery.data ?? [];
+
   return (
     <div className="stack-lg">
       <section className="panel decklist-panel">
         <div className="panel-head">
-          <h3>Draft Session #{draftId}</h3>
+          <div>
+            <h3>Draft Session #{draftId}</h3>
+            {session ? <p>{session.eventName}</p> : null}
+          </div>
           <Link className="text-link" to="/drafts">
             Back to drafts
           </Link>
@@ -288,6 +305,11 @@ export function DraftDetailPage() {
             ))}
         </div>
       </section>
+
+      <DraftJourneyPanel picks={picks} />
+      {session ? <DraftPoolPanel eventName={session.eventName} picks={picks} /> : null}
+      <DraftPackReplayPanel picks={picks} />
+      {session ? <LimitedMatchupsPanel setCode={parseEventName(session.eventName).setCode ?? ""} /> : null}
     </div>
   );
 }

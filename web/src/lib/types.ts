@@ -388,6 +388,80 @@ export type DeckAnalyticsGamesParams = {
   playDraw?: "play" | "draw";
 };
 
+export type MatchupObservedCard = {
+  cardId: number;
+  cardName?: string;
+  matches: number;
+  copies: number;
+  winMatches: number;
+  lossMatches: number;
+};
+
+export type MatchupMatchRef = {
+  matchId: number;
+  opponent?: string;
+  eventName?: string;
+  result: "win" | "loss" | "draw" | "unknown";
+  startedAt?: string;
+  colors: string[];
+  archetype: string;
+  archetypeSource: "derived" | "manual";
+  confidence: "high" | "medium" | "low";
+  pctObserved: number;
+};
+
+export type MatchupRow = {
+  colorsKey: string;
+  colors: string[];
+  archetype: string;
+  matches: RecordAgg;
+  games: RecordAgg;
+  unknownResultGames: number;
+  gameOne: RecordAgg;
+  postBoard: RecordAgg;
+  onPlay: RecordAgg;
+  onDraw: RecordAgg;
+  avgPctObserved: number;
+  confidence: "high" | "medium" | "low";
+  topObservedCards: MatchupObservedCard[];
+  lossSkewedCards: MatchupObservedCard[];
+  matchRefs: MatchupMatchRef[];
+};
+
+export type MatchupDeck = {
+  deckId: number;
+  deckName: string;
+  format: string;
+  matches: RecordAgg;
+  rows: MatchupRow[];
+};
+
+export type DeckMatchupsResponse = {
+  deck: MatchupDeck | null;
+  archetypes: string[];
+};
+
+export type LimitedMatchupColorGroup = {
+  colorsKey: string;
+  colors: string[];
+  colorsKnown: boolean;
+  matches: RecordAgg;
+  deckCount: number;
+  rows: MatchupRow[];
+};
+
+export type LimitedMatchupSet = {
+  setCode: string;
+  matches: RecordAgg;
+  deckCount: number;
+  rows: MatchupRow[];
+  colorGroups: LimitedMatchupColorGroup[];
+};
+
+export type LimitedMatchupsResponse = {
+  sets: LimitedMatchupSet[];
+};
+
 export type AiStatus = {
   available: boolean;
   cliPath?: string;

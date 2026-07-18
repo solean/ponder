@@ -15,6 +15,7 @@ type MaintenanceResult struct {
 	ReplaysArchived      int
 	ArchivesRecompressed int
 	RawEventsPruned      int64
+	AnalyticsRefreshed   int
 }
 
 func (r MaintenanceResult) reclaimedAnything() bool {
@@ -48,6 +49,12 @@ func (s *Store) RunMaintenance(ctx context.Context) (MaintenanceResult, error) {
 	}
 
 	if err := s.RepairDraftDataFromRawEvents(ctx); err != nil {
+		return result, err
+	}
+
+	refreshed, err := s.RefreshPendingMatchAnalytics(ctx)
+	result.AnalyticsRefreshed = refreshed
+	if err != nil {
 		return result, err
 	}
 

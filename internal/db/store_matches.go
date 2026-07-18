@@ -322,6 +322,21 @@ func (s *Store) ListMatches(ctx context.Context, limit int64, eventName, result 
 				WHERE md.match_id = m.id
 				ORDER BY md.id ASC
 				LIMIT 1
+			),
+			(
+				SELECT md.deck_version_id
+				FROM match_decks md
+				WHERE md.match_id = m.id
+				ORDER BY md.id ASC
+				LIMIT 1
+			),
+			(
+				SELECT dv.version_number
+				FROM match_decks md
+				JOIN deck_versions dv ON dv.id = md.deck_version_id
+				WHERE md.match_id = m.id
+				ORDER BY md.id ASC
+				LIMIT 1
 			)
 		FROM matches m
 		WHERE (? = '' OR m.event_name = ?)
@@ -353,6 +368,8 @@ func (s *Store) ListMatches(ctx context.Context, limit int64, eventName, result 
 			&r.SecondsCount,
 			&r.DeckID,
 			&r.DeckName,
+			&r.DeckVersionID,
+			&r.DeckVersionNumber,
 		); err != nil {
 			return nil, fmt.Errorf("scan match row: %w", err)
 		}
@@ -376,18 +393,32 @@ func (s *Store) ListMatchDeckCardQuantities(ctx context.Context, matchIDs []int6
 		}
 
 		query := fmt.Sprintf(`
-			SELECT m.id, dc.card_id, MAX(dc.quantity) AS quantity
-			FROM matches m
-			JOIN deck_cards dc ON dc.deck_id = (
-				SELECT md.deck_id
+			WITH selected_decks AS (
+				SELECT md.match_id, md.deck_id, md.deck_version_id
 				FROM match_decks md
-				WHERE md.match_id = m.id
-				ORDER BY md.id ASC
-				LIMIT 1
+				WHERE md.id = (
+					SELECT first_md.id
+					FROM match_decks first_md
+					WHERE first_md.match_id = md.match_id
+					ORDER BY first_md.id
+					LIMIT 1
+				)
+			), selected_cards AS (
+				SELECT sd.match_id, dvc.card_id, dvc.quantity
+				FROM selected_decks sd
+				JOIN deck_version_cards dvc ON dvc.deck_version_id = sd.deck_version_id
+				WHERE dvc.section = 'main'
+				UNION ALL
+				SELECT sd.match_id, dc.card_id, dc.quantity
+				FROM selected_decks sd
+				JOIN deck_cards dc ON dc.deck_id = sd.deck_id
+				WHERE sd.deck_version_id IS NULL AND dc.section = 'main'
 			)
-			WHERE dc.section = 'main'
-			  AND m.id IN (%s)
-			GROUP BY m.id, dc.card_id
+			SELECT m.id, sc.card_id, MAX(sc.quantity) AS quantity
+			FROM matches m
+			JOIN selected_cards sc ON sc.match_id = m.id
+			WHERE m.id IN (%s)
+			GROUP BY m.id, sc.card_id
 		`, strings.Join(placeholders, ","))
 
 		rows, err := s.db.QueryContext(ctx, query, args...)
@@ -525,6 +556,21 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 				WHERE md.match_id = m.id
 				ORDER BY md.id ASC
 				LIMIT 1
+			),
+			(
+				SELECT md.deck_version_id
+				FROM match_decks md
+				WHERE md.match_id = m.id
+				ORDER BY md.id ASC
+				LIMIT 1
+			),
+			(
+				SELECT dv.version_number
+				FROM match_decks md
+				JOIN deck_versions dv ON dv.id = md.deck_version_id
+				WHERE md.match_id = m.id
+				ORDER BY md.id ASC
+				LIMIT 1
 			)
 		FROM matches m
 		WHERE m.id = ?
@@ -546,6 +592,8 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 		&out.Match.SecondsCount,
 		&out.Match.DeckID,
 		&out.Match.DeckName,
+		&out.Match.DeckVersionID,
+		&out.Match.DeckVersionNumber,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return out, sql.ErrNoRows
@@ -590,6 +638,14 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 	}
 
 	out.CardPlays, err = s.ListMatchCardPlays(ctx, matchID)
+	if err != nil {
+		return out, err
+	}
+	out.Games, err = s.ListMatchGames(ctx, matchID)
+	if err != nil {
+		return out, err
+	}
+	out.Coverage, err = s.GetMatchAnalyticsCoverage(ctx, matchID)
 	if err != nil {
 		return out, err
 	}

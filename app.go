@@ -225,9 +225,9 @@ func (a *App) startup(ctx context.Context) {
 			log.Printf("db maintenance failed (%+v): %v", result, err)
 			return
 		}
-		if result.ReplaysArchived > 0 || result.ArchivesRecompressed > 0 || result.RawEventsPruned > 0 {
-			log.Printf("db maintenance: archived %d replays, recompressed %d archives, pruned %d raw events",
-				result.ReplaysArchived, result.ArchivesRecompressed, result.RawEventsPruned)
+		if result.ReplaysArchived > 0 || result.ArchivesRecompressed > 0 || result.RawEventsPruned > 0 || result.AnalyticsRefreshed > 0 {
+			log.Printf("db maintenance: archived %d replays, recompressed %d archives, pruned %d raw events, refreshed %d analytics records",
+				result.ReplaysArchived, result.ArchivesRecompressed, result.RawEventsPruned, result.AnalyticsRefreshed)
 		}
 	}()
 }

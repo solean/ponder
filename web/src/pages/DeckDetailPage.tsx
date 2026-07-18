@@ -1255,6 +1255,7 @@ export function DeckDetailPage() {
   if (!data) return <StatusMessage>Deck not found.</StatusMessage>;
 
   const matches = data.matches ?? [];
+  const versions = data.versions ?? [];
   const setDeckDisplayMode = (mode: DeckDisplayMode) => {
     setSearchParams(
       (current) => {
@@ -1428,6 +1429,62 @@ export function DeckDetailPage() {
           ) : null}
         </div>
         {isCardMetadataLoading ? <StatusMessage>Loading deck card details…</StatusMessage> : null}
+      </section>
+
+      <section className="panel deck-versions-panel">
+        <div className="panel-head">
+          <div>
+            <h3>Deck Versions</h3>
+            <p>Immutable card snapshots used by match analytics</p>
+          </div>
+          <span className="deck-version-count">
+            {versions.length.toLocaleString()} version{versions.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        {versions.length === 0 ? (
+          <StatusMessage>
+            A version will be created the next time Arena reports this deck list.
+          </StatusMessage>
+        ) : (
+          <ol className="deck-version-list" aria-label="Deck version history">
+            {versions.map((version, index) => {
+              const totalCards = version.cards.reduce((sum, card) => sum + card.quantity, 0);
+              const mainCards = version.cards
+                .filter((card) => card.section === "main")
+                .reduce((sum, card) => sum + card.quantity, 0);
+              const sideboardCards = totalCards - mainCards;
+              return (
+                <li className="deck-version-row" key={version.id}>
+                  <div className="deck-version-identity">
+                    <strong>Version {version.versionNumber.toLocaleString()}</strong>
+                    {index === 0 ? <span className="deck-version-current">Current</span> : null}
+                  </div>
+                  <dl>
+                    <div>
+                      <dt>Observed</dt>
+                      <dd>{version.effectiveAt ? formatDateTime(version.effectiveAt) : "Unknown"}</dd>
+                    </div>
+                    <div>
+                      <dt>Cards</dt>
+                      <dd>
+                        {mainCards.toLocaleString()} main
+                        {sideboardCards > 0 ? ` · ${sideboardCards.toLocaleString()} side` : ""}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Source</dt>
+                      <dd>{version.source?.split("_").join(" ") || "Arena deck list"}</dd>
+                    </div>
+                    <div>
+                      <dt>Fingerprint</dt>
+                      <dd title={version.cardsHash}>{version.cardsHash.slice(0, 10)}</dd>
+                    </div>
+                  </dl>
+                </li>
+              );
+            })}
+          </ol>
+        )}
       </section>
 
       <DeckPrimerPanel deckId={deckId} />

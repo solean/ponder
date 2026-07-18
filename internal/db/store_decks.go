@@ -81,6 +81,23 @@ func (s *Store) UpsertDeck(ctx context.Context, tx *sql.Tx, arenaDeckID, eventNa
 		return 0, fmt.Errorf("fetch deck id: %w", err)
 	}
 
+	versionID, err := upsertDeckVersion(ctx, tx, deckID, source, lastUpdated, cards)
+	if err != nil {
+		return 0, err
+	}
+	if versionID > 0 {
+		// A room-state link can arrive before Arena sends the full deck list.
+		// Fill only missing version references; existing historical links remain
+		// immutable when the deck is edited later.
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE match_decks
+			SET deck_version_id = ?
+			WHERE deck_id = ? AND deck_version_id IS NULL
+		`, versionID, deckID); err != nil {
+			return 0, fmt.Errorf("fill missing match deck version: %w", err)
+		}
+	}
+
 	if _, err := tx.ExecContext(ctx, `DELETE FROM deck_cards WHERE deck_id = ?`, deckID); err != nil {
 		return 0, fmt.Errorf("clear deck_cards: %w", err)
 	}
@@ -165,11 +182,17 @@ func (s *Store) writeMatchDeckLink(ctx context.Context, tx *sql.Tx, matchID, dec
 			return fmt.Errorf("clear prior match_decks: %w", err)
 		}
 	}
-	_, err := tx.ExecContext(ctx, `
-		INSERT INTO match_decks (match_id, deck_id, snapshot_reason, created_at)
-		VALUES (?, ?, ?, ?)
+	var matchStartedAt string
+	_ = tx.QueryRowContext(ctx, `SELECT COALESCE(started_at, '') FROM matches WHERE id = ?`, matchID).Scan(&matchStartedAt)
+	versionID, err := currentDeckVersionID(ctx, tx, deckID, matchStartedAt)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO match_decks (match_id, deck_id, deck_version_id, snapshot_reason, created_at)
+		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(match_id, deck_id) DO NOTHING
-	`, matchID, deckID, reason, nowUTC())
+	`, matchID, deckID, versionID, reason, nowUTC())
 	if err != nil {
 		return fmt.Errorf("link match_deck: %w", err)
 	}
@@ -368,6 +391,10 @@ func (s *Store) GetDeckDetail(ctx context.Context, deckID int64, matchLimit int6
 	if err != nil {
 		return out, err
 	}
+	out.Versions, err = s.ListDeckVersions(ctx, deckID)
+	if err != nil {
+		return out, err
+	}
 
 	matchRows, err := s.db.QueryContext(ctx, `
 		SELECT
@@ -398,9 +425,12 @@ func (s *Store) GetDeckDetail(ctx context.Context, deckID int64, matchLimit int6
 						CAST(ROUND((julianday(m.ended_at) - julianday(m.started_at)) * 86400.0) AS INTEGER)
 					ELSE NULL
 				END
-			)
+			),
+			md.deck_version_id,
+			dv.version_number
 		FROM matches m
 		JOIN match_decks md ON md.match_id = m.id
+		LEFT JOIN deck_versions dv ON dv.id = md.deck_version_id
 		WHERE md.deck_id = ?
 		ORDER BY COALESCE(m.started_at, m.ended_at, m.updated_at) DESC
 		LIMIT ?
@@ -423,6 +453,8 @@ func (s *Store) GetDeckDetail(ctx context.Context, deckID int64, matchLimit int6
 			&m.WinReason,
 			&m.TurnCount,
 			&m.SecondsCount,
+			&m.DeckVersionID,
+			&m.DeckVersionNumber,
 		); err != nil {
 			return out, fmt.Errorf("scan deck match row: %w", err)
 		}
@@ -433,4 +465,57 @@ func (s *Store) GetDeckDetail(ctx context.Context, deckID int64, matchLimit int6
 	}
 
 	return out, nil
+}
+
+func (s *Store) ListDeckVersions(ctx context.Context, deckID int64) ([]model.DeckVersionRow, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, version_number, cards_hash, COALESCE(source, ''), COALESCE(effective_at, '')
+		FROM deck_versions
+		WHERE deck_id = ?
+		ORDER BY version_number DESC
+	`, deckID)
+	if err != nil {
+		return nil, fmt.Errorf("list deck versions: %w", err)
+	}
+	defer rows.Close()
+
+	versions := make([]model.DeckVersionRow, 0)
+	for rows.Next() {
+		var version model.DeckVersionRow
+		if err := rows.Scan(&version.ID, &version.VersionNumber, &version.CardsHash,
+			&version.Source, &version.EffectiveAt); err != nil {
+			return nil, fmt.Errorf("scan deck version: %w", err)
+		}
+		versions = append(versions, version)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate deck versions: %w", err)
+	}
+
+	for index := range versions {
+		cardRows, err := s.db.QueryContext(ctx, `
+			SELECT c.section, c.card_id, c.quantity, COALESCE(cc.name, '')
+			FROM deck_version_cards c
+			LEFT JOIN card_catalog cc ON cc.arena_id = c.card_id
+			WHERE c.deck_version_id = ?
+			ORDER BY c.section, cc.name, c.card_id
+		`, versions[index].ID)
+		if err != nil {
+			return nil, fmt.Errorf("list deck version cards: %w", err)
+		}
+		for cardRows.Next() {
+			var card model.DeckCardRow
+			if err := cardRows.Scan(&card.Section, &card.CardID, &card.Quantity, &card.CardName); err != nil {
+				cardRows.Close()
+				return nil, fmt.Errorf("scan deck version card: %w", err)
+			}
+			versions[index].Cards = append(versions[index].Cards, card)
+		}
+		if err := cardRows.Err(); err != nil {
+			cardRows.Close()
+			return nil, fmt.Errorf("iterate deck version cards: %w", err)
+		}
+		cardRows.Close()
+	}
+	return versions, nil
 }

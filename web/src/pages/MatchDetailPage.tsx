@@ -27,7 +27,9 @@ import { useEventSets } from "../lib/useEventSets";
 import { fetchCardPreview } from "../lib/scryfall";
 import type { CardPreview } from "../lib/scryfall";
 import type {
+  GameAnalytics,
   MatchCardPlay,
+  MatchAnalyticsCoverage,
   MatchReplayFrame,
   MatchReplayFrameObject,
 } from "../lib/types";
@@ -3507,6 +3509,162 @@ function MatchTimelineBoard({
   );
 }
 
+function confidenceLabel(confidence: string): string {
+  switch (confidence) {
+    case "exact":
+      return "Logged";
+    case "derived":
+      return "Inferred";
+    default:
+      return "Unavailable";
+  }
+}
+
+function coverageFraction(value: number, total: number): string {
+  return total > 0 ? `${value} of ${total}` : "—";
+}
+
+function MatchAnalyticsPanel({
+  games,
+  coverage,
+}: {
+  games: GameAnalytics[];
+  coverage: MatchAnalyticsCoverage;
+}) {
+  return (
+    <section className="panel match-analytics-panel">
+      <div className="panel-head match-analytics-heading">
+        <div>
+          <h3>Game Analytics</h3>
+          <p>
+            {games.length > 0
+              ? `${games.length} game${games.length === 1 ? "" : "s"} reconstructed from local data`
+              : "No recoverable game records for this match"}
+          </p>
+        </div>
+        <span className={`analytics-coverage-badge is-${coverage.overallConfidence || "unknown"}`}>
+          {coverage.overallConfidence === "complete"
+            ? "Complete coverage"
+            : coverage.overallConfidence === "partial"
+              ? "Partial coverage"
+              : "No coverage"}
+        </span>
+      </div>
+
+      <dl className="analytics-coverage-grid" aria-label="Analytics data coverage">
+        <div>
+          <dt>Replay</dt>
+          <dd>{coverage.replayAvailable ? `${coverage.replayFrameCount.toLocaleString()} frames` : "Unavailable"}</dd>
+        </div>
+        <div>
+          <dt>Results</dt>
+          <dd>{coverageFraction(coverage.gamesWithResult, coverage.gameCount)}</dd>
+        </div>
+        <div>
+          <dt>Opening hands</dt>
+          <dd>{coverageFraction(coverage.gamesWithOpeningHand, coverage.gameCount)}</dd>
+        </div>
+        <div>
+          <dt>Play / draw</dt>
+          <dd>{coverageFraction(coverage.gamesWithPlayDraw, coverage.gameCount)}</dd>
+        </div>
+        <div>
+          <dt>Deck snapshot</dt>
+          <dd>
+            {coverage.deckVersionAvailable
+              ? "Versioned"
+              : coverage.deckSnapshotAvailable
+                ? "Current list only"
+                : "Unavailable"}
+          </dd>
+        </div>
+      </dl>
+
+      {games.length === 0 ? (
+        <StatusMessage>
+          Arena did not leave enough replay or card-play data to reconstruct individual games.
+        </StatusMessage>
+      ) : (
+        <div className="match-game-list">
+          {games.map((game) => (
+            <article className="match-game-card" key={game.id}>
+              <header className="match-game-card-head">
+                <div>
+                  <p className="match-game-eyebrow">Game {game.gameNumber.toLocaleString()}</p>
+                  <div className="match-game-result-line">
+                    <ResultPill result={game.result} />
+                    {game.winReason ? <span>{game.winReason}</span> : null}
+                  </div>
+                </div>
+                <span className={`analytics-confidence is-${game.resultConfidence}`}>
+                  Result: {confidenceLabel(game.resultConfidence)}
+                </span>
+              </header>
+
+              <dl className="match-game-stats" aria-label={`Game ${game.gameNumber} summary`}>
+                <div>
+                  <dt>Initiative</dt>
+                  <dd>{game.playDraw ? `On the ${game.playDraw}` : "Unknown"}</dd>
+                </div>
+                <div>
+                  <dt>Turns</dt>
+                  <dd>{game.turnCount?.toLocaleString() ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt>Mulligans</dt>
+                  <dd>{game.mulliganCount?.toLocaleString() ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt>Kept</dt>
+                  <dd>{game.keptHandSize != null ? `${game.keptHandSize.toLocaleString()} cards` : "—"}</dd>
+                </div>
+                <div>
+                  <dt>Life</dt>
+                  <dd>
+                    {game.openingLifeTotal != null || game.endingLifeTotal != null
+                      ? `${game.openingLifeTotal ?? "?"} → ${game.endingLifeTotal ?? "?"}`
+                      : "—"}
+                  </dd>
+                </div>
+              </dl>
+
+              {game.openingHands.length > 0 ? (
+                <div className="opening-hand-list">
+                  {game.openingHands.map((hand) => (
+                    <section className="opening-hand" key={hand.id}>
+                      <div className="opening-hand-head">
+                        <h4>
+                          Hand {hand.attemptNumber.toLocaleString()} · {hand.decision === "keep" ? "Kept" : "Mulliganed"}
+                        </h4>
+                        <span>{hand.offeredHandSize.toLocaleString()} offered</span>
+                      </div>
+                      <ul className="opening-hand-cards" aria-label={`Cards in opening hand attempt ${hand.attemptNumber}`}>
+                        {hand.cards.map((card) => (
+                          <li className={card.kept ? "is-kept" : "is-returned"} key={card.cardId}>
+                            <span className="opening-hand-card-quantity">{card.quantity}×</span>
+                            <CardPreviewName card={card} />
+                            <small>{card.kept ? "kept" : hand.decision === "keep" ? "bottomed" : "returned"}</small>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <p className="match-game-empty">Opening hand was not present in this replay.</p>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+
+      <p className="analytics-method-note">
+        Logged results come directly from GRE game state. Opening-hand sequencing and play/draw are inferred from observed replay transitions.
+      </p>
+    </section>
+  );
+}
+
 export function MatchDetailPage() {
   const params = useParams();
   const matchId = Number(params.matchId);
@@ -3778,6 +3936,7 @@ export function MatchDetailPage() {
               {match.deckId ? (
                 <Link className="text-link" to={`/decks/${match.deckId}`}>
                   {match.deckName || `Deck ${match.deckId}`}
+                  {match.deckVersionNumber ? ` · v${match.deckVersionNumber}` : ""}
                 </Link>
               ) : (
                 "-"
@@ -3824,6 +3983,8 @@ export function MatchDetailPage() {
           </div>
         </dl>
       </section>
+
+      <MatchAnalyticsPanel games={query.data.games ?? []} coverage={query.data.coverage} />
 
       <section className="panel">
         <div className="panel-head match-timeline-toolbar">

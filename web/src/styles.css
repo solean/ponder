@@ -1191,6 +1191,12 @@ body.has-wide-deck-curve .app-shell {
 .stack-lg {
   display: grid;
   gap: 1.02rem;
+  min-width: 0;
+}
+
+.content > *,
+.stack-lg > * {
+  min-width: 0;
 }
 
 .deck-detail-stack {
@@ -2605,6 +2611,324 @@ small.settings-meta,
 .match-detail-summary-item-mono dd {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   Phase 1 analytics: coverage, games, opening hands, deck versions
+   ============================================================ */
+
+.match-analytics-heading {
+  align-items: start;
+}
+
+.analytics-coverage-badge,
+.analytics-confidence,
+.deck-version-current,
+.deck-version-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  color: var(--muted-strong);
+  background: var(--pill-bg);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--track-md);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.analytics-coverage-badge.is-complete,
+.analytics-confidence.is-exact {
+  color: var(--pill-win-text);
+  border-color: var(--pill-win-border);
+  background: var(--pill-win-bg);
+}
+
+.analytics-coverage-badge.is-partial,
+.analytics-confidence.is-derived,
+.deck-version-current {
+  color: var(--accent);
+  border-color: var(--tab-active-border);
+  background: var(--accent-soft);
+}
+
+.analytics-coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  margin: 1rem 0 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--line);
+}
+
+.analytics-coverage-grid > div {
+  min-width: 0;
+  padding: 0.72rem 0.78rem;
+  background: var(--surface-faint);
+}
+
+.analytics-coverage-grid dt,
+.match-game-stats dt,
+.deck-version-row dt {
+  margin-bottom: 0.22rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--track-lg);
+  text-transform: uppercase;
+}
+
+.analytics-coverage-grid dd,
+.match-game-stats dd,
+.deck-version-row dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.match-game-list {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.match-game-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: linear-gradient(150deg, var(--panel-inner-a), var(--panel-inner-b));
+  box-shadow: inset 0 1px 0 var(--card-inner-border);
+}
+
+.match-game-card-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.82rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.match-game-eyebrow {
+  margin: 0 0 0.42rem;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--track-lg);
+  text-transform: uppercase;
+}
+
+.match-game-result-line {
+  display: flex;
+  align-items: center;
+  gap: 0.58rem;
+  color: var(--muted-strong);
+  font-size: var(--text-sm);
+}
+
+.match-game-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.72rem;
+  margin: 0;
+  padding: 0.78rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.opening-hand-list {
+  display: grid;
+  gap: 0.72rem;
+  padding: 0.85rem 0.9rem 0.95rem;
+}
+
+.opening-hand {
+  min-width: 0;
+}
+
+.opening-hand + .opening-hand {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.opening-hand-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.opening-hand-head h4 {
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+}
+
+.opening-hand-head span {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.opening-hand-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.opening-hand-cards li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.46rem;
+  min-width: 0;
+  min-height: 2rem;
+  padding: 0.38rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--list-bg-a);
+}
+
+.opening-hand-cards li.is-returned {
+  border-style: dashed;
+  opacity: 0.72;
+}
+
+.opening-hand-cards .card-preview-trigger {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opening-hand-card-quantity,
+.opening-hand-cards small {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.opening-hand-card-quantity {
+  color: var(--muted-strong);
+}
+
+.opening-hand-cards small {
+  color: var(--muted);
+  letter-spacing: var(--track-md);
+  text-transform: uppercase;
+}
+
+.match-game-empty,
+.analytics-method-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.match-game-empty {
+  padding: 0.78rem 0.9rem;
+}
+
+.analytics-method-note {
+  margin-top: 0.8rem;
+  max-width: 78ch;
+}
+
+.deck-version-list {
+  display: grid;
+  gap: 1px;
+  margin: 1rem 0 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--line);
+  list-style: none;
+}
+
+.deck-version-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.7fr) minmax(0, 2fr);
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+  padding: 0.78rem 0.85rem;
+  background: var(--surface-faint);
+}
+
+.deck-version-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  font-family: var(--font-display);
+}
+
+.deck-version-row dl {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr 1fr 0.75fr;
+  gap: 0.8rem;
+  min-width: 0;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .analytics-coverage-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .deck-version-row,
+  .deck-version-row dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .match-analytics-heading,
+  .match-game-card-head,
+  .opening-hand-head {
+    align-items: start;
+  }
+
+  .match-analytics-heading,
+  .match-game-card-head,
+  .deck-version-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-coverage-grid,
+  .match-game-stats,
+  .opening-hand-cards,
+  .deck-version-row dl {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  .analytics-coverage-grid,
+  .match-game-stats,
+  .opening-hand-cards,
+  .deck-version-row dl {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ══════════════════════════════════════════

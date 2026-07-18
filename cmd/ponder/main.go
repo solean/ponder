@@ -158,9 +158,9 @@ func compactReplays(ctx context.Context, store *db.Store) {
 		log.Printf("db maintenance failed (%+v): %v", result, err)
 		return
 	}
-	if result.ReplaysArchived > 0 || result.ArchivesRecompressed > 0 || result.RawEventsPruned > 0 {
-		log.Printf("db maintenance: archived %d replays, recompressed %d archives, pruned %d raw events in %s",
-			result.ReplaysArchived, result.ArchivesRecompressed, result.RawEventsPruned, time.Since(started).Round(time.Millisecond))
+	if result.ReplaysArchived > 0 || result.ArchivesRecompressed > 0 || result.RawEventsPruned > 0 || result.AnalyticsRefreshed > 0 {
+		log.Printf("db maintenance: archived %d replays, recompressed %d archives, pruned %d raw events, refreshed %d analytics records in %s",
+			result.ReplaysArchived, result.ArchivesRecompressed, result.RawEventsPruned, result.AnalyticsRefreshed, time.Since(started).Round(time.Millisecond))
 	}
 }
 

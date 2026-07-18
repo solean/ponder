@@ -637,6 +637,10 @@ func (s *Server) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if err := s.store.EnsureMatchAnalytics(r.Context(), id); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	out, err := s.store.GetMatchDetail(r.Context(), id)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "match not found")
@@ -649,6 +653,7 @@ func (s *Server) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
 
 	s.enrichOpponentObservedCardNames(r.Context(), out.OpponentObservedCards)
 	s.enrichMatchCardPlayNames(r.Context(), out.CardPlays)
+	s.enrichOpeningHandCardNames(r.Context(), out.Games)
 	matchRows := []model.MatchRow{out.Match}
 	s.enrichMatchDeckColors(r.Context(), matchRows)
 	out.Match = matchRows[0]
@@ -707,6 +712,9 @@ func (s *Server) handleDeckDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.enrichDeckCardNames(r.Context(), out.Cards)
+	for index := range out.Versions {
+		s.enrichDeckCardNames(r.Context(), out.Versions[index].Cards)
+	}
 	s.enrichMatchDeckColors(r.Context(), out.Matches)
 	writeJSON(w, http.StatusOK, out)
 }
@@ -994,6 +1002,30 @@ func (s *Server) enrichDeckCardNames(ctx context.Context, cards []model.DeckCard
 		}
 		if name, ok := resolvedNames[cards[i].CardID]; ok {
 			cards[i].CardName = name
+		}
+	}
+}
+
+func (s *Server) enrichOpeningHandCardNames(ctx context.Context, games []model.GameRow) {
+	cardIDs := make([]int64, 0)
+	for _, game := range games {
+		for _, hand := range game.OpeningHands {
+			for _, card := range hand.Cards {
+				if strings.TrimSpace(card.CardName) == "" {
+					cardIDs = append(cardIDs, card.CardID)
+				}
+			}
+		}
+	}
+	resolved := s.resolveCardNames(ctx, cardIDs)
+	for gameIndex := range games {
+		for handIndex := range games[gameIndex].OpeningHands {
+			cards := games[gameIndex].OpeningHands[handIndex].Cards
+			for cardIndex := range cards {
+				if strings.TrimSpace(cards[cardIndex].CardName) == "" {
+					cards[cardIndex].CardName = resolved[cards[cardIndex].CardID]
+				}
+			}
 		}
 	}
 }

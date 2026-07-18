@@ -31,6 +31,8 @@ export type Match = {
   secondsCount?: number | null;
   deckId?: number | null;
   deckName?: string | null;
+  deckVersionId?: number | null;
+  deckVersionNumber?: number | null;
   deckColors?: string[] | null;
   deckColorsKnown?: boolean;
   opponentDeckColors?: string[] | null;
@@ -123,6 +125,62 @@ export type MatchDetail = {
   match: Match;
   opponentObservedCards: OpponentObservedCard[];
   cardPlays: MatchCardPlay[];
+  games: GameAnalytics[];
+  coverage: MatchAnalyticsCoverage;
+};
+
+export type OpeningHandCard = {
+  cardId: number;
+  quantity: number;
+  cardName?: string;
+  kept: boolean;
+};
+
+export type OpeningHand = {
+  id: number;
+  attemptNumber: number;
+  decision: "keep" | "mulligan" | "unknown";
+  offeredHandSize: number;
+  keptHandSize?: number;
+  observedAt?: string;
+  source: string;
+  confidence: "exact" | "derived" | "unknown";
+  cards: OpeningHandCard[];
+};
+
+export type GameAnalytics = {
+  id: number;
+  gameNumber: number;
+  result: "win" | "loss" | "draw" | "unknown";
+  winReason?: string;
+  playDraw?: "play" | "draw" | "";
+  startedAt?: string;
+  endedAt?: string;
+  turnCount?: number;
+  openingLifeTotal?: number;
+  endingLifeTotal?: number;
+  mulliganCount?: number;
+  keptHandSize?: number;
+  resultSource?: string;
+  resultConfidence: "exact" | "derived" | "unknown";
+  playDrawSource?: string;
+  playDrawConfidence: "exact" | "derived" | "unknown";
+  openingHandSource?: string;
+  openingHandConfidence: "exact" | "derived" | "unknown";
+  openingHands: OpeningHand[];
+};
+
+export type MatchAnalyticsCoverage = {
+  replayAvailable: boolean;
+  replayFrameCount: number;
+  gameCount: number;
+  gamesWithResult: number;
+  gamesWithOpeningHand: number;
+  gamesWithPlayDraw: number;
+  deckSnapshotAvailable: boolean;
+  deckVersionAvailable: boolean;
+  overallConfidence: "complete" | "partial" | "unknown";
+  derivedAt?: string;
 };
 
 export type Overview = {
@@ -215,6 +273,16 @@ export type DeckDetail = {
   eventName: string;
   cards: DeckCard[];
   matches: Match[] | null;
+  versions: DeckVersion[];
+};
+
+export type DeckVersion = {
+  id: number;
+  versionNumber: number;
+  cardsHash: string;
+  source?: string;
+  effectiveAt?: string;
+  cards: DeckCard[];
 };
 
 export type AiStatus = {

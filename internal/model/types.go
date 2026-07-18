@@ -31,6 +31,8 @@ type MatchRow struct {
 	SecondsCount            *int64   `json:"secondsCount"`
 	DeckID                  *int64   `json:"deckId"`
 	DeckName                *string  `json:"deckName"`
+	DeckVersionID           *int64   `json:"deckVersionId,omitempty"`
+	DeckVersionNumber       *int64   `json:"deckVersionNumber,omitempty"`
 	DeckColors              []string `json:"deckColors"`
 	DeckColorsKnown         bool     `json:"deckColorsKnown"`
 	OpponentDeckColors      []string `json:"opponentDeckColors"`
@@ -123,6 +125,62 @@ type MatchDetail struct {
 	Match                 MatchRow                  `json:"match"`
 	OpponentObservedCards []OpponentObservedCardRow `json:"opponentObservedCards"`
 	CardPlays             []MatchCardPlayRow        `json:"cardPlays"`
+	Games                 []GameRow                 `json:"games"`
+	Coverage              MatchAnalyticsCoverage    `json:"coverage"`
+}
+
+type OpeningHandCardRow struct {
+	CardID   int64  `json:"cardId"`
+	Quantity int64  `json:"quantity"`
+	CardName string `json:"cardName,omitempty"`
+	Kept     bool   `json:"kept"`
+}
+
+type OpeningHandRow struct {
+	ID              int64                `json:"id"`
+	AttemptNumber   int64                `json:"attemptNumber"`
+	Decision        string               `json:"decision"`
+	OfferedHandSize int64                `json:"offeredHandSize"`
+	KeptHandSize    *int64               `json:"keptHandSize,omitempty"`
+	ObservedAt      string               `json:"observedAt,omitempty"`
+	Source          string               `json:"source"`
+	Confidence      string               `json:"confidence"`
+	Cards           []OpeningHandCardRow `json:"cards"`
+}
+
+type GameRow struct {
+	ID                    int64            `json:"id"`
+	GameNumber            int64            `json:"gameNumber"`
+	Result                string           `json:"result"`
+	WinReason             string           `json:"winReason,omitempty"`
+	PlayDraw              string           `json:"playDraw,omitempty"`
+	StartedAt             string           `json:"startedAt,omitempty"`
+	EndedAt               string           `json:"endedAt,omitempty"`
+	TurnCount             *int64           `json:"turnCount,omitempty"`
+	OpeningLifeTotal      *int64           `json:"openingLifeTotal,omitempty"`
+	EndingLifeTotal       *int64           `json:"endingLifeTotal,omitempty"`
+	MulliganCount         *int64           `json:"mulliganCount,omitempty"`
+	KeptHandSize          *int64           `json:"keptHandSize,omitempty"`
+	ResultSource          string           `json:"resultSource,omitempty"`
+	ResultConfidence      string           `json:"resultConfidence"`
+	PlayDrawSource        string           `json:"playDrawSource,omitempty"`
+	PlayDrawConfidence    string           `json:"playDrawConfidence"`
+	OpeningHandSource     string           `json:"openingHandSource,omitempty"`
+	OpeningHandConfidence string           `json:"openingHandConfidence"`
+	OpeningHands          []OpeningHandRow `json:"openingHands"`
+}
+
+type MatchAnalyticsCoverage struct {
+	ReplayAvailable       bool   `json:"replayAvailable"`
+	ReplayFrameCount      int64  `json:"replayFrameCount"`
+	GameCount             int64  `json:"gameCount"`
+	GamesWithResult       int64  `json:"gamesWithResult"`
+	GamesWithOpeningHand  int64  `json:"gamesWithOpeningHand"`
+	GamesWithPlayDraw     int64  `json:"gamesWithPlayDraw"`
+	DeckSnapshotAvailable bool   `json:"deckSnapshotAvailable"`
+	DeckVersionAvailable  bool   `json:"deckVersionAvailable"`
+	OverallConfidence     string `json:"overallConfidence"`
+	DerivedAt             string `json:"derivedAt,omitempty"`
 }
 
 type DeckSummaryRow struct {
@@ -146,13 +204,23 @@ type DeckCardRow struct {
 }
 
 type DeckDetail struct {
-	DeckID      int64         `json:"deckId"`
-	ArenaDeckID string        `json:"arenaDeckId"`
-	Name        string        `json:"name"`
-	Format      string        `json:"format"`
-	EventName   string        `json:"eventName"`
-	Cards       []DeckCardRow `json:"cards"`
-	Matches     []MatchRow    `json:"matches"`
+	DeckID      int64            `json:"deckId"`
+	ArenaDeckID string           `json:"arenaDeckId"`
+	Name        string           `json:"name"`
+	Format      string           `json:"format"`
+	EventName   string           `json:"eventName"`
+	Cards       []DeckCardRow    `json:"cards"`
+	Matches     []MatchRow       `json:"matches"`
+	Versions    []DeckVersionRow `json:"versions"`
+}
+
+type DeckVersionRow struct {
+	ID            int64         `json:"id"`
+	VersionNumber int64         `json:"versionNumber"`
+	CardsHash     string        `json:"cardsHash"`
+	Source        string        `json:"source,omitempty"`
+	EffectiveAt   string        `json:"effectiveAt,omitempty"`
+	Cards         []DeckCardRow `json:"cards,omitempty"`
 }
 
 // DeckPrimer is a cached AI-generated strategy primer for a deck. Stale is

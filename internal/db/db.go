@@ -103,6 +103,14 @@ func Init(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 
+	if err := migrateAnalyticsTables(ctx, conn); err != nil {
+		return err
+	}
+
+	if err := backfillDeckVersions(ctx, conn); err != nil {
+		return err
+	}
+
 	if err := dropRedundantIndexes(ctx, conn); err != nil {
 		return err
 	}

@@ -68,6 +68,35 @@ CREATE TABLE IF NOT EXISTS deck_cards (
 
 CREATE INDEX IF NOT EXISTS idx_deck_cards_deck_id ON deck_cards(deck_id);
 
+-- Immutable snapshots of a deck's contents. The decks/deck_cards tables keep
+-- the latest Arena state for browsing, while matches link to the version that
+-- was current when they were played.
+CREATE TABLE IF NOT EXISTS deck_versions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  deck_id INTEGER NOT NULL,
+  version_number INTEGER NOT NULL,
+  cards_hash TEXT NOT NULL,
+  source TEXT,
+  effective_at TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE(deck_id, version_number),
+  UNIQUE(deck_id, cards_hash),
+  FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_deck_versions_effective
+  ON deck_versions(deck_id, effective_at, id);
+
+CREATE TABLE IF NOT EXISTS deck_version_cards (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  deck_version_id INTEGER NOT NULL,
+  section TEXT NOT NULL,
+  card_id INTEGER NOT NULL,
+  quantity INTEGER NOT NULL,
+  UNIQUE(deck_version_id, section, card_id),
+  FOREIGN KEY(deck_version_id) REFERENCES deck_versions(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS card_catalog (
   arena_id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
@@ -120,11 +149,79 @@ CREATE TABLE IF NOT EXISTS match_decks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   match_id INTEGER NOT NULL,
   deck_id INTEGER NOT NULL,
+  deck_version_id INTEGER,
   snapshot_reason TEXT NOT NULL,
   created_at TEXT NOT NULL,
   UNIQUE(match_id, deck_id),
   FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE,
-  FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE
+  FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE,
+  FOREIGN KEY(deck_version_id) REFERENCES deck_versions(id) ON DELETE SET NULL
+);
+
+-- Replay-derived game analytics. Source/confidence fields make it explicit
+-- which values came directly from GRE state and which are heuristics.
+CREATE TABLE IF NOT EXISTS games (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  match_id INTEGER NOT NULL,
+  game_number INTEGER NOT NULL,
+  result TEXT NOT NULL DEFAULT 'unknown',
+  win_reason TEXT,
+  play_draw TEXT,
+  started_at TEXT,
+  ended_at TEXT,
+  turn_count INTEGER,
+  opening_life_total INTEGER,
+  ending_life_total INTEGER,
+  mulligan_count INTEGER,
+  kept_hand_size INTEGER,
+  result_source TEXT,
+  result_confidence TEXT NOT NULL DEFAULT 'unknown',
+  play_draw_source TEXT,
+  play_draw_confidence TEXT NOT NULL DEFAULT 'unknown',
+  opening_hand_source TEXT,
+  opening_hand_confidence TEXT NOT NULL DEFAULT 'unknown',
+  derived_at TEXT NOT NULL,
+  UNIQUE(match_id, game_number),
+  FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS game_opening_hands (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id INTEGER NOT NULL,
+  attempt_number INTEGER NOT NULL,
+  decision TEXT NOT NULL DEFAULT 'unknown',
+  offered_hand_size INTEGER NOT NULL,
+  kept_hand_size INTEGER,
+  observed_at TEXT,
+  source TEXT NOT NULL,
+  confidence TEXT NOT NULL DEFAULT 'derived',
+  UNIQUE(game_id, attempt_number),
+  FOREIGN KEY(game_id) REFERENCES games(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS game_opening_hand_cards (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  opening_hand_id INTEGER NOT NULL,
+  card_id INTEGER NOT NULL,
+  quantity INTEGER NOT NULL,
+  kept INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(opening_hand_id, card_id),
+  FOREIGN KEY(opening_hand_id) REFERENCES game_opening_hands(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS match_analytics_coverage (
+  match_id INTEGER PRIMARY KEY,
+  replay_available INTEGER NOT NULL DEFAULT 0,
+  replay_frame_count INTEGER NOT NULL DEFAULT 0,
+  game_count INTEGER NOT NULL DEFAULT 0,
+  games_with_result INTEGER NOT NULL DEFAULT 0,
+  games_with_opening_hand INTEGER NOT NULL DEFAULT 0,
+  games_with_play_draw INTEGER NOT NULL DEFAULT 0,
+  deck_snapshot_available INTEGER NOT NULL DEFAULT 0,
+  deck_version_available INTEGER NOT NULL DEFAULT 0,
+  overall_confidence TEXT NOT NULL DEFAULT 'unknown',
+  derived_at TEXT NOT NULL,
+  FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS match_opponent_card_instances (

@@ -5957,7 +5957,7 @@ button.match-replay-zonechip.is-button {
   overflow: visible;
 }
 
-.draft-pack-table {
+.data-table.compact.draft-pack-table {
   min-width: 0;
   table-layout: fixed;
 }

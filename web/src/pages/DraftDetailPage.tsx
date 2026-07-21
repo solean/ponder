@@ -14,7 +14,14 @@ import type { DraftPickCard } from "../lib/types";
 
 type DraftPickDisplay = {
   pickNumber: number;
+  displayPick: number;
   pickedCards: DraftPickCard[];
+};
+
+type DraftPackDisplay = {
+  packNumber: number;
+  displayPack: number;
+  picks: DraftPickDisplay[];
 };
 
 type PopoverPlacement = "left" | "right";
@@ -241,17 +248,29 @@ export function DraftDetailPage() {
     [sessionsQuery.data, draftId],
   );
 
-  const picksByPack = useMemo(() => {
+  const packs = useMemo<DraftPackDisplay[]>(() => {
+    const rows = picksQuery.data ?? [];
+    // Arena reports pack/pick numbers zero-based; show them one-based (and stay
+    // a no-op if a source ever reports them one-based already).
+    const packOffset = rows.some((pick) => pick.packNumber === 0) ? 1 : 0;
+    const pickOffset = rows.some((pick) => pick.pickNumber === 0) ? 1 : 0;
     const map = new Map<number, DraftPickDisplay[]>();
-    for (const pick of picksQuery.data ?? []) {
+    for (const pick of rows) {
       const existing = map.get(pick.packNumber) ?? [];
       existing.push({
         pickNumber: pick.pickNumber,
+        displayPick: pick.pickNumber + pickOffset,
         pickedCards: normalizedDraftCards(pick.pickedCardIds, pick.pickedCards),
       });
       map.set(pick.packNumber, existing);
     }
-    return map;
+    return [...map.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([packNumber, picks]) => ({
+        packNumber,
+        displayPack: packNumber + packOffset,
+        picks: picks.sort((a, b) => a.pickNumber - b.pickNumber),
+      }));
   }, [picksQuery.data]);
 
   if (!Number.isFinite(draftId)) return <StatusMessage tone="error">Invalid draft id.</StatusMessage>;
@@ -274,35 +293,31 @@ export function DraftDetailPage() {
         </div>
 
         <div className="draft-pack-grid">
-          {[...picksByPack.entries()]
-            .sort((a, b) => a[0] - b[0])
-            .map(([pack, picks]) => (
-              <article className="panel inner decklist-panel draft-pack-panel" key={pack}>
-                <h4>Pack {pack}</h4>
-                <div className="table-wrap draft-pack-table-wrap">
-                  <table className="data-table compact draft-pack-table">
-                    <thead>
-                      <tr>
-                        <th>Pick</th>
-                        <th>Selected Cards</th>
+          {packs.map((pack) => (
+            <article className="panel inner decklist-panel draft-pack-panel" key={pack.packNumber}>
+              <h4>Pack {pack.displayPack}</h4>
+              <div className="table-wrap draft-pack-table-wrap">
+                <table className="data-table compact draft-pack-table">
+                  <thead>
+                    <tr>
+                      <th>Pick</th>
+                      <th>Selected Cards</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pack.picks.map((pick) => (
+                      <tr key={`${pack.packNumber}-${pick.pickNumber}`}>
+                        <td>{pick.displayPick}</td>
+                        <td>
+                          <DraftCardList cards={pick.pickedCards} />
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {picks
-                        .sort((a, b) => a.pickNumber - b.pickNumber)
-                        .map((pick) => (
-                          <tr key={`${pack}-${pick.pickNumber}`}>
-                            <td>{pick.pickNumber}</td>
-                            <td>
-                              <DraftCardList cards={pick.pickedCards} />
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-            ))}
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 

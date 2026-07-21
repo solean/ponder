@@ -23,6 +23,7 @@ type OrderedPick = {
   packNumber: number;
   displayPack: number;
   pickNumber: number;
+  displayPick: number;
   overallIndex: number;
   pickedCards: DraftPickCard[];
   packCards: DraftPickCard[];
@@ -34,19 +35,23 @@ type WheeledCard = {
   packNumber: number;
   displayPack: number;
   seenAtPick: number;
+  displaySeenAtPick: number;
   wheeledAtPick: number;
+  displayWheeledAtPick: number;
   taken: boolean;
 };
 
 function orderedPicks(picks: DraftPick[]): OrderedPick[] {
   const sorted = [...picks].sort((a, b) => a.packNumber - b.packNumber || a.pickNumber - b.pickNumber);
-  // Some Arena events report zero-based pack numbers; show packs one-based
-  // either way while keeping the raw number for positional logic.
+  // Some Arena events report zero-based pack/pick numbers; show them one-based
+  // either way while keeping the raw numbers for positional logic.
   const packOffset = sorted.some((pick) => pick.packNumber === 0) ? 1 : 0;
+  const pickOffset = sorted.some((pick) => pick.pickNumber === 0) ? 1 : 0;
   return sorted.map((pick, index) => ({
     packNumber: pick.packNumber,
     displayPack: pick.packNumber + packOffset,
     pickNumber: pick.pickNumber,
+    displayPick: pick.pickNumber + pickOffset,
     overallIndex: index,
     pickedCards: pick.pickedCards ?? [],
     packCards: pick.packCards ?? [],
@@ -196,12 +201,15 @@ export function DraftJourneyPanel({ picks }: { picks: DraftPick[] }) {
             packNumber: pick.packNumber,
             displayPack: pick.displayPack,
             seenAtPick: pick.pickNumber,
+            displaySeenAtPick: pick.displayPick,
             wheeledAtPick: wheelPick.pickNumber,
+            displayWheeledAtPick: wheelPick.displayPick,
             taken,
           });
         } else if (taken && !existing.taken) {
           existing.taken = true;
           existing.wheeledAtPick = wheelPick.pickNumber;
+          existing.displayWheeledAtPick = wheelPick.displayPick;
         }
       }
     }
@@ -331,7 +339,7 @@ export function DraftJourneyPanel({ picks }: { picks: DraftPick[] }) {
               P1P1
             </text>
             <text x={padLeft + plotWidth} y={chartHeight - 6} className="draft-chart-label" textAnchor="end">
-              {`P${ordered[ordered.length - 1].displayPack}P${ordered[ordered.length - 1].pickNumber}`}
+              {`P${ordered[ordered.length - 1].displayPack}P${ordered[ordered.length - 1].displayPick}`}
             </text>
           </svg>
 
@@ -350,7 +358,7 @@ export function DraftJourneyPanel({ picks }: { picks: DraftPick[] }) {
                 <>
                   Final colors {finalTopColors.join("")}
                   {establishedAt != null
-                    ? `, locked in at pack ${ordered[establishedAt].displayPack} pick ${ordered[establishedAt].pickNumber}`
+                    ? `, locked in at pack ${ordered[establishedAt].displayPack} pick ${ordered[establishedAt].displayPick}`
                     : ", never firmly established"}
                   .
                 </>
@@ -359,7 +367,7 @@ export function DraftJourneyPanel({ picks }: { picks: DraftPick[] }) {
               )}
               {pivots.length > 0
                 ? ` Leading colors shifted at ${pivots
-                    .map((index) => `P${ordered[index].displayPack}P${ordered[index].pickNumber}`)
+                    .map((index) => `P${ordered[index].displayPack}P${ordered[index].displayPick}`)
                     .join(", ")}.`
                 : ""}
             </p>
@@ -379,7 +387,7 @@ export function DraftJourneyPanel({ picks }: { picks: DraftPick[] }) {
                 <li key={`${card.packNumber}-${card.cardId}`}>
                   <CardPreviewName cardId={card.cardId} cardName={card.cardName} />
                   <small>
-                    P{card.displayPack}P{card.seenAtPick} → P{card.displayPack}P{card.wheeledAtPick}
+                    P{card.displayPack}P{card.displaySeenAtPick} → P{card.displayPack}P{card.displayWheeledAtPick}
                   </small>
                 </li>
               ))}
@@ -455,7 +463,7 @@ export function DraftPackReplayPanel({ picks }: { picks: DraftPick[] }) {
           >
             {replayablePicks.map((pick, index) => (
               <option key={`${pick.packNumber}-${pick.pickNumber}`} value={index}>
-                Pack {pick.displayPack} · Pick {pick.pickNumber}
+                Pack {pick.displayPack} · Pick {pick.displayPick}
               </option>
             ))}
           </select>
@@ -470,7 +478,7 @@ export function DraftPackReplayPanel({ picks }: { picks: DraftPick[] }) {
         </div>
       </div>
 
-      <div className="draft-replay-grid" aria-label={`Pack ${current.displayPack} pick ${current.pickNumber} contents`}>
+      <div className="draft-replay-grid" aria-label={`Pack ${current.displayPack} pick ${current.displayPick} contents`}>
         {packCards.map((card) => {
           const preview = previewByCardID.get(card.cardId);
           const isPicked = pickedIDs.has(card.cardId);

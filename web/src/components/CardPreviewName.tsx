@@ -54,16 +54,19 @@ export function CardPreviewName({
   cardId,
   cardName,
   label,
+  resolveName = false,
 }: {
   cardId: number;
   cardName?: string;
   label?: ReactNode;
+  /** Resolve a missing Arena card name before hover so audit-style lists stay readable. */
+  resolveName?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<FloatingPosition | null>(null);
   const anchorRef = useRef<HTMLAnchorElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const name = displayName(cardId, cardName);
+  const knownName = cardName?.trim() ?? "";
 
   const openPopover = () => {
     if (anchorRef.current) {
@@ -73,13 +76,14 @@ export function CardPreviewName({
   };
 
   const previewQuery = useQuery({
-    queryKey: ["card-preview", cardId, name],
+    queryKey: ["card-preview", cardId, displayName(cardId, cardName)],
     queryFn: () => fetchCardPreview(cardId, cardName),
-    enabled: isOpen,
+    enabled: cardId > 0 && (isOpen || (resolveName && knownName.length === 0)),
     staleTime: 1000 * 60 * 60 * 24,
     gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
   });
+  const name = knownName || previewQuery.data?.name?.trim() || displayName(cardId);
 
   useEffect(() => {
     if (!isOpen) {

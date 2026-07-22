@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
-import { CardPreviewName } from "./CardPreviewName";
 import { ManaSymbol } from "./ManaSymbol";
 import { StatusMessage } from "./StatusMessage";
 import { api } from "../lib/api";
@@ -10,24 +9,12 @@ import { pct } from "../lib/format";
 import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
 import type { DeckSummary, DraftPick } from "../lib/types";
 
-type PoolCardStatus = "main" | "side" | "unused";
-
 type PoolCard = {
-  cardId: number;
-  cardName?: string;
   poolCopies: number;
   mainCopies: number;
-  sideCopies: number;
-  status: PoolCardStatus;
   manaValue: number | null;
   typeLine?: string;
   colors?: string[];
-};
-
-const STATUS_LABELS: Record<PoolCardStatus, string> = {
-  main: "Main deck",
-  side: "Sideboard",
-  unused: "Not in deck",
 };
 
 const COLOR_ORDER = ["W", "U", "B", "R", "G"];
@@ -163,11 +150,9 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
   const deckCards = useMemo(() => deckDetail?.cards ?? [], [deckDetail]);
   const poolCards = useMemo<PoolCard[]>(() => {
     const mainByCard = new Map<number, number>();
-    const sideByCard = new Map<number, number>();
     for (const card of deckCards) {
-      const target = card.section === "main" ? mainByCard : card.section === "sideboard" ? sideByCard : null;
-      if (target) {
-        target.set(card.cardId, (target.get(card.cardId) ?? 0) + card.quantity);
+      if (card.section === "main") {
+        mainByCard.set(card.cardId, (mainByCard.get(card.cardId) ?? 0) + card.quantity);
       }
     }
     return poolCardIDs.map((cardId) => {
@@ -175,12 +160,8 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
       const preview = previewByCardID.get(cardId);
       const mainCopies = mainByCard.get(cardId) ?? 0;
       return {
-        cardId,
-        cardName: entry.name ?? preview?.name,
         poolCopies: entry.copies,
         mainCopies,
-        sideCopies: sideByCard.get(cardId) ?? 0,
-        status: mainCopies > 0 ? "main" : (sideByCard.get(cardId) ?? 0) > 0 ? "side" : "unused",
         manaValue: typeof preview?.manaValue === "number" ? preview.manaValue : null,
         typeLine: preview?.typeLine,
         colors: preview?.colors,
@@ -191,13 +172,9 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
   const summary = useMemo(() => {
     let poolCopies = 0;
     let mainFromPool = 0;
-    let distinctMain = 0;
     for (const card of poolCards) {
       poolCopies += card.poolCopies;
       mainFromPool += Math.min(card.mainCopies, card.poolCopies);
-      if (card.mainCopies > 0) {
-        distinctMain += 1;
-      }
     }
     const mainNonPool = new Map<number, number>();
     const poolIDs = new Set(poolCardIDs);
@@ -206,7 +183,7 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
         mainNonPool.set(card.cardId, (mainNonPool.get(card.cardId) ?? 0) + card.quantity);
       }
     }
-    return { poolCopies, mainFromPool, distinctMain, mainNonPool };
+    return { poolCopies, mainFromPool, mainNonPool };
   }, [deckCards, poolCardIDs, poolCards]);
 
   const mainColorCounts = useMemo(() => {
@@ -254,34 +231,25 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
     return null;
   }
 
-  const statusOrder: PoolCardStatus[] = ["main", "side", "unused"];
-  const sortedPoolCards = [...poolCards].sort((a, b) => {
-    const statusDelta = statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
-    if (statusDelta !== 0) {
-      return statusDelta;
-    }
-    const manaA = a.manaValue ?? Number.POSITIVE_INFINITY;
-    const manaB = b.manaValue ?? Number.POSITIVE_INFINITY;
-    if (manaA !== manaB) {
-      return manaA - manaB;
-    }
-    return (a.cardName ?? "").localeCompare(b.cardName ?? "");
-  });
-
   return (
     <section className="panel draft-pool-panel">
       <div className="panel-head">
         <div>
-          <h3>Pool vs Submitted Deck</h3>
+          <h3>Draft Pool &amp; Deck</h3>
           <p>
             {deckSummary
-              ? `Compared against the current list of the event deck`
+              ? "How your picks became the submitted event deck"
               : "No submitted deck found for this event yet"}
           </p>
         </div>
         {deckSummary ? (
-          <Link className="text-link" to={`/decks/${deckSummary.deckId}`}>
-            Open deck
+          <Link
+            className="draft-deck-cta"
+            to={`/decks/${deckSummary.deckId}`}
+            title={`View ${deckSummary.deckName || `Deck ${deckSummary.deckId}`}`}
+          >
+            <span>View draft deck</span>
+            <span aria-hidden="true">→</span>
           </Link>
         ) : null}
       </div>
@@ -290,7 +258,7 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
         <StatusMessage>Loading submitted deck…</StatusMessage>
       ) : !deckSummary ? (
         <StatusMessage>
-          The drafted pool is shown once Arena reports the event deck for this draft.
+          Arena has not reported a submitted deck for this draft yet.
         </StatusMessage>
       ) : (
         <>
@@ -349,36 +317,8 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
             <CurveBars title="Main deck curve" buckets={curveBuckets(poolCards, (card) => card.mainCopies)} />
           </div>
           {isMetadataLoading ? <StatusMessage>Loading card metadata…</StatusMessage> : null}
-
-          <div className="table-wrap">
-            <table className="data-table draft-pool-table">
-              <thead>
-                <tr>
-                  <th>Card</th>
-                  <th>Picked</th>
-                  <th>Main</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedPoolCards.map((card) => (
-                  <tr key={card.cardId} className={`is-${card.status}`}>
-                    <td>
-                      <CardPreviewName cardId={card.cardId} cardName={card.cardName} />
-                    </td>
-                    <td>{card.poolCopies}</td>
-                    <td>{card.mainCopies > 0 ? card.mainCopies : "—"}</td>
-                    <td>
-                      <span className={`draft-pool-status is-${card.status}`}>{STATUS_LABELS[card.status]}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
           <p className="analytics-method-note">
-            Compared against the deck's current list; later edits to the deck move cards between main and sideboard
-            here too.
+            Compared against the deck's current list; later edits update this summary too.
           </p>
         </>
       )}

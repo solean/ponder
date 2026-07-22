@@ -336,7 +336,15 @@ export function DeckMatchupsPanel({ deckId }: { deckId: number }) {
  * shows every set (Drafts page); with one it scopes to that set (draft and
  * draft-deck detail pages).
  */
-export function LimitedMatchupsPanel({ setCode }: { setCode?: string | null }) {
+export function LimitedMatchupsPanel({
+  setCode,
+  title = "Set Matchups",
+  description = "Your record against opponent color pairs, pooled across every draft of a set — single draft decks are too short-lived for per-deck matchup data to mean much.",
+}: {
+  setCode?: string | null;
+  title?: string;
+  description?: string;
+}) {
   const [selection, setSelection] = useState<{ setCode: string; colorsKey: string } | null>(null);
   // Per-set filter by the player's own deck colors; missing key = all decks.
   const [ownColorsFilter, setOwnColorsFilter] = useState<Record<string, string>>({});
@@ -370,7 +378,7 @@ export function LimitedMatchupsPanel({ setCode }: { setCode?: string | null }) {
     return (
       <section className="panel">
         <div className="panel-head">
-          <h3>Set Matchups</h3>
+          <h3>{title}</h3>
         </div>
         <StatusMessage tone="error">{(query.error as Error).message}</StatusMessage>
       </section>
@@ -384,11 +392,8 @@ export function LimitedMatchupsPanel({ setCode }: { setCode?: string | null }) {
     <section className="panel">
       <div className="panel-head">
         <div>
-          <h3>Set Matchups</h3>
-          <p>
-            Your record against opponent color pairs, pooled across every draft of a set — single draft decks are too
-            short-lived for per-deck matchup data to mean much.
-          </p>
+          <h3>{title}</h3>
+          <p>{description}</p>
         </div>
       </div>
 

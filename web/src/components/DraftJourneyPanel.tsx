@@ -296,24 +296,6 @@ export function DraftJourneyPanel({ picks }: { picks: DraftPick[] }) {
                 </text>
               </g>
             ))}
-            {establishedAt != null && establishedAt > 0 ? (
-              <g>
-                <line
-                  x1={xForIndex(establishedAt)}
-                  y1={padTop}
-                  x2={xForIndex(establishedAt)}
-                  y2={padTop + plotHeight}
-                  className="draft-chart-established"
-                />
-                <text
-                  x={xForIndex(establishedAt) + 3}
-                  y={padTop + plotHeight - 6}
-                  className="draft-chart-label is-established"
-                >
-                  locked
-                </text>
-              </g>
-            ) : null}
             {activeColors.map((color) => {
               const path = series
                 .map((counts, index) => {
@@ -355,13 +337,7 @@ export function DraftJourneyPanel({ picks }: { picks: DraftPick[] }) {
             </div>
             <p>
               {finalTopColors.length >= 2 ? (
-                <>
-                  Final colors {finalTopColors.join("")}
-                  {establishedAt != null
-                    ? `, locked in at pack ${ordered[establishedAt].displayPack} pick ${ordered[establishedAt].displayPick}`
-                    : ", never firmly established"}
-                  .
-                </>
+                <>Final colors {finalTopColors.join("")}.</>
               ) : (
                 "Not enough colored picks to name a color pair."
               )}

@@ -6,6 +6,7 @@ import { LimitedMatchupsPanel } from "../components/MatchupPanels";
 import { SetSymbol } from "../components/SetSymbol";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { draftSessionType } from "../lib/draftReport";
 import { parseEventName } from "../lib/events";
 import { pct } from "../lib/format";
 import type { DeckSummary, DraftSession } from "../lib/types";
@@ -49,14 +50,6 @@ function formatDraftSessionDate(draft: DraftSession): string {
   }
 
   return "-";
-}
-
-function formatDraftSessionType(draft: DraftSession): string {
-  const parsed = parseEventName(draft.eventName);
-  if (parsed.kindLabel !== "Unknown event") {
-    return parsed.kindLabel;
-  }
-  return draft.isBotDraft ? "Bot Draft" : "Player Draft";
 }
 
 function DraftSessionSet({ draft, lookup }: { draft: DraftSession; lookup: SetLookup }) {
@@ -103,7 +96,7 @@ function DraftSessionRow({ draft, setLookup }: { draft: DraftSession; setLookup:
         </Link>
       </td>
       <td>{formatDraftSessionDate(draft)}</td>
-      <td>{formatDraftSessionType(draft)}</td>
+      <td>{draftSessionType(draft)}</td>
       <td>
         <DraftSessionSet draft={draft} lookup={setLookup} />
       </td>

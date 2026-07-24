@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
+import { ContextualLink, useBreadcrumbNavigationState } from "../components/Breadcrumbs";
 import { EventLabel } from "../components/EventLabel";
 import { LimitedMatchupsPanel } from "../components/MatchupPanels";
 import { SetSymbol } from "../components/SetSymbol";
@@ -107,14 +108,16 @@ function DraftSessionRow({ draft, setLookup }: { draft: DraftSession; setLookup:
 }
 
 function DraftDeckRow({ deck, setLookup }: { deck: DeckSummary; setLookup: SetLookup }) {
-  const rowLink = useRowLink(`/decks/${deck.deckId}`);
+  const to = `/decks/${deck.deckId}`;
+  const breadcrumbState = useBreadcrumbNavigationState(to);
+  const rowLink = useRowLink(to, breadcrumbState);
   return (
     <tr {...rowLink}>
       <td>{formatDraftDeckDate(deck)}</td>
       <td>
-        <Link to={`/decks/${deck.deckId}`} className="text-link">
+        <ContextualLink to={to} className="text-link">
           {deck.deckName || `Deck ${deck.deckId}`}
-        </Link>
+        </ContextualLink>
       </td>
       <td>{deck.format || "-"}</td>
       <td>

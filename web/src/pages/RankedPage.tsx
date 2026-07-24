@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
-import { Link } from "react-router-dom";
 
+import { ContextualLink } from "../components/Breadcrumbs";
 import { RankProgressPanel } from "../components/RankProgressPanel";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
@@ -446,7 +446,9 @@ export function RankedPage() {
                     <tr key={row.deckId ?? "unknown"}>
                       <td>
                         {row.deckId != null ? (
-                          <Link to={`/decks/${row.deckId}`}>{row.deckName}</Link>
+                          <ContextualLink to={`/decks/${row.deckId}`}>
+                            {row.deckName}
+                          </ContextualLink>
                         ) : (
                           row.deckName
                         )}

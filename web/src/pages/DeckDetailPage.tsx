@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { DeckAnalyticsPanel } from "../components/DeckAnalyticsPanel";
+import { ContextualLink, useBreadcrumbLabel } from "../components/Breadcrumbs";
 import { DeckColorIdentity } from "../components/MatchDeckColors";
 import { DeckPrimerPanel } from "../components/DeckPrimerPanel";
 import { EventLabel } from "../components/EventLabel";
@@ -1059,6 +1060,7 @@ function DeckDetailSkeleton() {
 }
 
 export function DeckDetailPage() {
+  const location = useLocation();
   const params = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const deckId = Number(params.deckId);
@@ -1252,6 +1254,8 @@ export function DeckDetailPage() {
   const mainboardSkeletonRows = clampSkeletonRows(Math.ceil(mainboardCards.length / MAINBOARD_CATEGORY_ORDER.length), 6);
   const sideboardSkeletonRows = clampSkeletonRows(sideboardCards.length, 5);
 
+  useBreadcrumbLabel(data ? (data.name || `Deck #${deckId}`) : null);
+
   if (!Number.isFinite(deckId)) return <StatusMessage tone="error">Invalid deck id.</StatusMessage>;
   if (isLoading) return <DeckDetailSkeleton />;
   if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
@@ -1270,7 +1274,7 @@ export function DeckDetailPage() {
         }
         return next;
       },
-      { replace: true },
+      { replace: true, state: location.state },
     );
   };
 
@@ -1318,9 +1322,6 @@ export function DeckDetailPage() {
                 Visual
               </button>
             </div>
-            <Link className="text-link" to="/decks">
-              Back to decks
-            </Link>
           </div>
         </div>
 
@@ -1541,9 +1542,12 @@ export function DeckDetailPage() {
                   <td>{match.turnCount ?? "-"}</td>
                   <td>{formatDuration(match.secondsCount ?? undefined)}</td>
                   <td>
-                    <Link className="text-link" to={`/matches/${match.id}`}>
+                    <ContextualLink
+                      className="text-link"
+                      to={`/matches/${match.id}`}
+                    >
                       View
-                    </Link>
+                    </ContextualLink>
                   </td>
                 </tr>
               ))}

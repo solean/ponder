@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 import { eventDisplayName, parseEventName } from "../lib/events";
 import { formatDateTime } from "../lib/format";
 import { useEventSets } from "../lib/useEventSets";
+import { RankSymbol } from "./RankSymbol";
 import {
   buildGraphPoints,
   fillMissingRankClasses,
@@ -233,10 +234,15 @@ export function RankProgressPanel() {
   // Current standing on the ladder that is not selected, so both ranks are
   // visible without toggling.
   const otherLadder: Ladder = ladder === "constructed" ? "limited" : "constructed";
-  const otherLadderRank = useMemo(() => {
+  const otherLadderStanding = useMemo(() => {
     if (!filledData) return null;
     const otherSeries = buildGraphPoints(filledData, otherLadder, "current");
-    return otherSeries?.points[otherSeries.points.length - 1]?.rankLabel ?? null;
+    const otherLatestPoint = otherSeries?.points[otherSeries.points.length - 1];
+    if (!otherSeries || !otherLatestPoint) return null;
+    return {
+      rankLabel: otherLatestPoint.rankLabel,
+      rank: otherSeries.latestState,
+    };
   }, [filledData, otherLadder]);
 
   // A one- or two-point line reads as noise; below this we show chips only.
@@ -442,11 +448,17 @@ export function RankProgressPanel() {
         <div className="rank-summary">
           <div className="rank-chip rank-chip--selected">
             <span>{LADDER_CONFIG[ladder].label} · Trend</span>
-            <strong>{currentRank}</strong>
+            <div className="rank-chip-value">
+              <RankSymbol ladder={ladder} rank={readyState.series.latestState} />
+              <strong>{currentRank}</strong>
+            </div>
           </div>
           <div className="rank-chip">
             <span>{LADDER_CONFIG[otherLadder].label}</span>
-            <strong>{otherLadderRank ?? "Unranked"}</strong>
+            <div className="rank-chip-value">
+              <RankSymbol ladder={otherLadder} rank={otherLadderStanding?.rank ?? null} />
+              <strong>{otherLadderStanding?.rankLabel ?? "Unranked"}</strong>
+            </div>
           </div>
           {rankMoved ? (
             <div className="rank-chip">

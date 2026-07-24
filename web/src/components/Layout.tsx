@@ -9,6 +9,7 @@ import {
   type ThemeMode,
 } from "../lib/theme";
 import { APP_NAME } from "../lib/branding";
+import { BreadcrumbProvider, Breadcrumbs } from "./Breadcrumbs";
 import { AppErrorFallback, ErrorBoundary } from "./ErrorBoundary";
 import { LiveMatchBanner } from "./LiveMatchBanner";
 import { Plasma } from "./Plasma";
@@ -28,20 +29,6 @@ const SCHEME_STORAGE_KEY = "ponder.scheme";
 // Temporary kill switch while investigating frontend jank from the fixed WebGL background.
 const ENABLE_BACKGROUND_ANIMATION = false;
 const scrollPositions = new Map<string, number>();
-
-function pageTitle(pathname: string): string {
-  if (pathname === "/") return "Overview";
-  if (pathname === "/matches") return "Matches";
-  if (pathname.startsWith("/matches/")) return "Match Detail";
-  if (pathname === "/decks") return "Decks";
-  if (pathname.startsWith("/decks/")) return "Deck Detail";
-  if (pathname === "/drafts") return "Drafts";
-  if (pathname.startsWith("/drafts/")) return "Draft Detail";
-  if (pathname === "/ranked") return "Ranked";
-  if (pathname === "/economy") return "Economy";
-  if (pathname === "/settings") return "Settings";
-  return APP_NAME;
-}
 
 function applyThemeColorMeta(mode: ThemeMode, scheme: ColorScheme) {
   const head = document.head;
@@ -127,11 +114,6 @@ export function Layout() {
   }, [mode, modePreference, scheme]);
 
   useEffect(() => {
-    const context = pageTitle(location.pathname);
-    document.title = context === APP_NAME ? context : `${context} · ${APP_NAME}`;
-  }, [location.pathname]);
-
-  useEffect(() => {
     return () => {
       scrollPositions.set(location.key, window.scrollY);
     };
@@ -148,7 +130,7 @@ export function Layout() {
 
   return (
     <ThemeContext.Provider value={themeContextValue}>
-      <>
+      <BreadcrumbProvider>
         {ENABLE_BACKGROUND_ANIMATION ? (
           <div className="plasma-bg" aria-hidden="true">
             <Plasma
@@ -188,6 +170,7 @@ export function Layout() {
             </ErrorBoundary>
           )}
           <main id="main-content" className="content" tabIndex={-1}>
+            <Breadcrumbs />
             <ErrorBoundary
               key={location.pathname}
               label="page"
@@ -197,7 +180,7 @@ export function Layout() {
             </ErrorBoundary>
           </main>
         </div>
-      </>
+      </BreadcrumbProvider>
     </ThemeContext.Provider>
   );
 }

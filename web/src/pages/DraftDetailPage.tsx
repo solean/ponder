@@ -2,6 +2,7 @@ import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { DraftJourneyPanel, DraftPackReplayPanel } from "../components/DraftJourneyPanel";
+import { useBreadcrumbLabel } from "../components/Breadcrumbs";
 import { DraftPickLog } from "../components/DraftPickLog";
 import { DraftPoolPanel } from "../components/DraftPoolPanel";
 import { DraftSessionOverview } from "../components/DraftSessionOverview";
@@ -25,6 +26,11 @@ export function DraftDetailPage() {
     queryFn: api.drafts,
     enabled: isValidDraftID,
   });
+  const session = (sessionsQuery.data ?? []).find((row) => row.id === draftId);
+  const draftBreadcrumbLabel = session
+    ? `Draft #${session.id} · ${parseEventName(session.eventName).kindLabel}`
+    : null;
+  useBreadcrumbLabel(draftBreadcrumbLabel);
 
   if (!isValidDraftID) {
     return <StatusMessage tone="error">Invalid draft id.</StatusMessage>;
@@ -39,7 +45,6 @@ export function DraftDetailPage() {
     return <StatusMessage tone="error">{(picksQuery.error as Error).message}</StatusMessage>;
   }
 
-  const session = (sessionsQuery.data ?? []).find((row) => row.id === draftId);
   if (!session) {
     return <StatusMessage tone="error">Draft session not found.</StatusMessage>;
   }

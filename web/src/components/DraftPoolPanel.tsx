@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
+import { ContextualLink } from "./Breadcrumbs";
 import { ManaSymbol } from "./ManaSymbol";
 import { StatusMessage } from "./StatusMessage";
 import { api } from "../lib/api";
@@ -243,14 +243,14 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
           </p>
         </div>
         {deckSummary ? (
-          <Link
+          <ContextualLink
             className="draft-deck-cta"
             to={`/decks/${deckSummary.deckId}`}
             title={`View ${deckSummary.deckName || `Deck ${deckSummary.deckId}`}`}
           >
             <span>View draft deck</span>
             <span aria-hidden="true">→</span>
-          </Link>
+          </ContextualLink>
         ) : null}
       </div>
 

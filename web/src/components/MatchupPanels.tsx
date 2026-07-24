@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { ContextualLink } from "./Breadcrumbs";
 import { CardPreviewName } from "./CardPreviewName";
 import { DeckColorIdentity } from "./MatchDeckColors";
 import { EventLabel } from "./EventLabel";
@@ -109,7 +110,15 @@ function ObservedCardChips({
   );
 }
 
-function MatchupRowDetail({ contextLabel, row }: { contextLabel: string; row: MatchupRow }) {
+function MatchupRowDetail({
+  contextLabel,
+  preserveBreadcrumbContext = false,
+  row,
+}: {
+  contextLabel: string;
+  preserveBreadcrumbContext?: boolean;
+  row: MatchupRow;
+}) {
   const queryClient = useQueryClient();
   const { lookup: setLookup } = useEventSets(row.matchRefs.map((ref) => ref.eventName));
   const overrideMutation = useMutation({
@@ -215,9 +224,15 @@ function MatchupRowDetail({ contextLabel, row }: { contextLabel: string; row: Ma
                   </select>
                 </td>
                 <td>
-                  <Link className="text-link" to={`/matches/${ref.matchId}`}>
-                    View
-                  </Link>
+                  {preserveBreadcrumbContext ? (
+                    <ContextualLink className="text-link" to={`/matches/${ref.matchId}`}>
+                      View
+                    </ContextualLink>
+                  ) : (
+                    <Link className="text-link" to={`/matches/${ref.matchId}`}>
+                      View
+                    </Link>
+                  )}
                 </td>
               </tr>
             ))}
@@ -314,6 +329,7 @@ export function DeckMatchupsPanel({ deckId }: { deckId: number }) {
           {selectedRows.map((row) => (
             <MatchupRowDetail
               contextLabel={deck.deckName}
+              preserveBreadcrumbContext
               row={row}
               key={`${row.colorsKey}-${row.archetype}`}
             />

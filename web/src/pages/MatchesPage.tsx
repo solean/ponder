@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable, type Row } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
+import { ContextualLink } from "../components/Breadcrumbs";
 import { EventLabel } from "../components/EventLabel";
 import { MatchDeckColors } from "../components/MatchDeckColors";
 import { ManaSymbol } from "../components/ManaSymbol";
@@ -273,9 +274,9 @@ export function MatchesPage() {
           const label = deckName || (deckId ? `Deck ${deckId}` : "-");
           if (!deckId) return label;
           return (
-            <Link className="text-link" to={`/decks/${deckId}`}>
+            <ContextualLink className="text-link" to={`/decks/${deckId}`}>
               {label}
-            </Link>
+            </ContextualLink>
           );
         },
       }),

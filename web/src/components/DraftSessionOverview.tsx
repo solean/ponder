@@ -1,5 +1,3 @@
-import { Link } from "react-router-dom";
-
 import { EventLabel } from "./EventLabel";
 import {
   draftReplayCoverage,
@@ -58,9 +56,6 @@ export function DraftSessionOverview({
             <EventLabel eventName={session.eventName} lookup={setLookup} />
           </h2>
         </div>
-        <Link className="text-link" to="/drafts">
-          Back to drafts
-        </Link>
       </div>
 
       <dl className="draft-report-summary" aria-label="Draft session overview">

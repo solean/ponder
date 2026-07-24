@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
+import { ContextualLink } from "./Breadcrumbs";
 import { CardPreviewName } from "./CardPreviewName";
 import { EventLabel } from "./EventLabel";
 import { ResultPill } from "./ResultPill";
@@ -500,9 +500,12 @@ function DrillDownSection({
                     </td>
                   ) : null}
                   <td>
-                    <Link className="text-link" to={`/matches/${row.matchId}`}>
+                    <ContextualLink
+                      className="text-link"
+                      to={`/matches/${row.matchId}`}
+                    >
                       View match
-                    </Link>
+                    </ContextualLink>
                   </td>
                 </tr>
               ))}

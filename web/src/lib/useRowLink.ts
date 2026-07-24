@@ -14,7 +14,7 @@ function targetIsInteractive(target: EventTarget | null, currentTarget: EventTar
  * Row click/keyboard handlers for making an entire <tr> navigate to `href`,
  * while still letting nested links/buttons handle their own clicks.
  */
-export function useRowLink(href: string) {
+export function useRowLink(href: string, state?: unknown) {
   const navigate = useNavigate();
 
   function open(newTab: boolean) {
@@ -22,7 +22,7 @@ export function useRowLink(href: string) {
       window.open(href, "_blank", "noopener,noreferrer");
       return;
     }
-    navigate(href);
+    navigate(href, { state });
   }
 
   return {

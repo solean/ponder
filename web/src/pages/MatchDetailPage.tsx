@@ -12,11 +12,12 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 
 import { EventLabel } from "../components/EventLabel";
+import { ContextualLink, useBreadcrumbLabel } from "../components/Breadcrumbs";
 import { MatchDeckColors } from "../components/MatchDeckColors";
 import { ManaSymbol } from "../components/ManaSymbol";
 import { RarityDot } from "../components/RarityDot";
@@ -3953,6 +3954,11 @@ export function MatchDetailPage() {
       timelineDisplayMode === "board",
   });
   const { lookup: setLookup } = useEventSets([query.data?.match.eventName]);
+  useBreadcrumbLabel(
+    query.data
+      ? `Match #${query.data.match.id} · ${query.data.match.opponent || "Unknown opponent"}`
+      : null,
+  );
 
   const opponentObservedCards = query.data?.opponentObservedCards ?? [];
   const opponentCards = useMemo<OpponentDeckCard[]>(() => {
@@ -4248,9 +4254,6 @@ export function MatchDetailPage() {
       <section className="panel match-detail-overview-panel">
         <div className="panel-head">
           <h3>Match #{match.id}</h3>
-          <Link className="text-link" to="/matches">
-            Back to matches
-          </Link>
         </div>
         <dl className="match-detail-summary" aria-label="Match overview">
           <div className="match-detail-summary-item">
@@ -4263,10 +4266,13 @@ export function MatchDetailPage() {
             <dt>Deck</dt>
             <dd>
               {match.deckId ? (
-                <Link className="text-link" to={`/decks/${match.deckId}`}>
+                <ContextualLink
+                  className="text-link"
+                  to={`/decks/${match.deckId}`}
+                >
                   {match.deckName || `Deck ${match.deckId}`}
                   {match.deckVersionNumber ? ` · v${match.deckVersionNumber}` : ""}
-                </Link>
+                </ContextualLink>
               ) : (
                 "-"
               )}

@@ -54,7 +54,7 @@ function SplitRow({ label, record }: { label: string; record: WinLossRecord }) {
           ) : (
             <>
               {record.wins}W–{record.losses}L
-              <strong> {pct(rate)}</strong>
+              <strong className={`win-rate win-rate--${toneFor(rate)}`}> {pct(rate)}</strong>
             </>
           )}
         </span>
@@ -673,7 +673,9 @@ export function OverviewPage() {
                       </p>
                     </div>
                     <div className="list-stat">
-                      <strong>{rate == null ? "—" : pct(rate)}</strong>
+                      <strong className={`win-rate win-rate--${toneFor(rate)}`}>
+                        {rate == null ? "—" : pct(rate)}
+                      </strong>
                       <span className="split-bar" aria-hidden="true">
                         {rate != null ? (
                           <span

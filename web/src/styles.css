@@ -7966,7 +7966,7 @@ select {
 }
 
 .split-row-stat strong {
-  color: var(--text);
+  color: var(--win-rate-color, var(--text));
   font-weight: 500;
 }
 
@@ -8031,12 +8031,24 @@ select {
 }
 
 .list-stat strong {
-  color: var(--text);
+  color: var(--win-rate-color, var(--text));
   font-family: var(--font-mono);
   font-size: var(--text-md);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+}
+
+.win-rate--positive {
+  --win-rate-color: var(--metric-positive-text);
+}
+
+.win-rate--negative {
+  --win-rate-color: var(--metric-negative-text);
+}
+
+.win-rate--neutral {
+  --win-rate-color: var(--metric-neutral-text);
 }
 
 .list-stat small {

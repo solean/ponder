@@ -297,6 +297,8 @@ export type RankState = {
   rankClass: string;
   level?: number | null;
   step?: number | null;
+  percentile?: number | null;
+  leaderboardPlace?: number | null;
   matchesWon?: number | null;
   matchesLost?: number | null;
 };

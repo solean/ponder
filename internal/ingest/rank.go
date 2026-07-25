@@ -40,18 +40,22 @@ func (p *Parser) dequeueCompletedMatch() string {
 }
 
 type combinedRankInfoResponse struct {
-	ConstructedSeasonOrdinal *int64 `json:"constructedSeasonOrdinal"`
-	ConstructedClass         string `json:"constructedClass"`
-	ConstructedLevel         *int64 `json:"constructedLevel"`
-	ConstructedStep          *int64 `json:"constructedStep"`
-	ConstructedMatchesWon    *int64 `json:"constructedMatchesWon"`
-	ConstructedMatchesLost   *int64 `json:"constructedMatchesLost"`
-	LimitedSeasonOrdinal     *int64 `json:"limitedSeasonOrdinal"`
-	LimitedClass             string `json:"limitedClass"`
-	LimitedLevel             *int64 `json:"limitedLevel"`
-	LimitedStep              *int64 `json:"limitedStep"`
-	LimitedMatchesWon        *int64 `json:"limitedMatchesWon"`
-	LimitedMatchesLost       *int64 `json:"limitedMatchesLost"`
+	ConstructedSeasonOrdinal    *int64   `json:"constructedSeasonOrdinal"`
+	ConstructedClass            string   `json:"constructedClass"`
+	ConstructedLevel            *int64   `json:"constructedLevel"`
+	ConstructedStep             *int64   `json:"constructedStep"`
+	ConstructedPercentile       *float64 `json:"constructedPercentile"`
+	ConstructedLeaderboardPlace *int64   `json:"constructedLeaderboardPlace"`
+	ConstructedMatchesWon       *int64   `json:"constructedMatchesWon"`
+	ConstructedMatchesLost      *int64   `json:"constructedMatchesLost"`
+	LimitedSeasonOrdinal        *int64   `json:"limitedSeasonOrdinal"`
+	LimitedClass                string   `json:"limitedClass"`
+	LimitedLevel                *int64   `json:"limitedLevel"`
+	LimitedStep                 *int64   `json:"limitedStep"`
+	LimitedPercentile           *float64 `json:"limitedPercentile"`
+	LimitedLeaderboardPlace     *int64   `json:"limitedLeaderboardPlace"`
+	LimitedMatchesWon           *int64   `json:"limitedMatchesWon"`
+	LimitedMatchesLost          *int64   `json:"limitedMatchesLost"`
 }
 
 func (p *Parser) queueCompletedMatchIfRankPending(ctx context.Context, tx *sql.Tx, arenaMatchID, result string, terminalChange bool) error {
@@ -100,20 +104,24 @@ func (p *Parser) handleMethodResponse(ctx context.Context, tx *sql.Tx, stats *mo
 	}
 
 	if err := p.store.UpsertMatchRankSnapshot(ctx, tx, arenaMatchID, db.MatchRankSnapshot{
-		ObservedAt:               observedAt,
-		PayloadJSON:              line,
-		ConstructedSeasonOrdinal: payload.ConstructedSeasonOrdinal,
-		ConstructedRankClass:     payload.ConstructedClass,
-		ConstructedLevel:         payload.ConstructedLevel,
-		ConstructedStep:          payload.ConstructedStep,
-		ConstructedMatchesWon:    payload.ConstructedMatchesWon,
-		ConstructedMatchesLost:   payload.ConstructedMatchesLost,
-		LimitedSeasonOrdinal:     payload.LimitedSeasonOrdinal,
-		LimitedRankClass:         payload.LimitedClass,
-		LimitedLevel:             payload.LimitedLevel,
-		LimitedStep:              payload.LimitedStep,
-		LimitedMatchesWon:        payload.LimitedMatchesWon,
-		LimitedMatchesLost:       payload.LimitedMatchesLost,
+		ObservedAt:                  observedAt,
+		PayloadJSON:                 line,
+		ConstructedSeasonOrdinal:    payload.ConstructedSeasonOrdinal,
+		ConstructedRankClass:        payload.ConstructedClass,
+		ConstructedLevel:            payload.ConstructedLevel,
+		ConstructedStep:             payload.ConstructedStep,
+		ConstructedPercentile:       payload.ConstructedPercentile,
+		ConstructedLeaderboardPlace: payload.ConstructedLeaderboardPlace,
+		ConstructedMatchesWon:       payload.ConstructedMatchesWon,
+		ConstructedMatchesLost:      payload.ConstructedMatchesLost,
+		LimitedSeasonOrdinal:        payload.LimitedSeasonOrdinal,
+		LimitedRankClass:            payload.LimitedClass,
+		LimitedLevel:                payload.LimitedLevel,
+		LimitedStep:                 payload.LimitedStep,
+		LimitedPercentile:           payload.LimitedPercentile,
+		LimitedLeaderboardPlace:     payload.LimitedLeaderboardPlace,
+		LimitedMatchesWon:           payload.LimitedMatchesWon,
+		LimitedMatchesLost:          payload.LimitedMatchesLost,
 	}); err != nil {
 		return err
 	}

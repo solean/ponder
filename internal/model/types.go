@@ -149,29 +149,29 @@ type OpeningHandRow struct {
 }
 
 type GameRow struct {
-	ID                    int64            `json:"id"`
-	GameNumber            int64            `json:"gameNumber"`
-	Result                string           `json:"result"`
-	WinReason             string           `json:"winReason,omitempty"`
-	PlayDraw              string           `json:"playDraw,omitempty"`
-	StartedAt             string           `json:"startedAt,omitempty"`
-	EndedAt               string           `json:"endedAt,omitempty"`
-	TurnCount             *int64           `json:"turnCount,omitempty"`
-	OpeningLifeTotal      *int64           `json:"openingLifeTotal,omitempty"`
-	EndingLifeTotal       *int64           `json:"endingLifeTotal,omitempty"`
-	MulliganCount         *int64           `json:"mulliganCount,omitempty"`
-	KeptHandSize          *int64           `json:"keptHandSize,omitempty"`
-	MinSelfLife           *int64           `json:"minSelfLife,omitempty"`
-	MinOpponentLife       *int64           `json:"minOpponentLife,omitempty"`
-	ResultSource          string           `json:"resultSource,omitempty"`
-	ResultConfidence      string           `json:"resultConfidence"`
-	PlayDrawSource        string           `json:"playDrawSource,omitempty"`
-	PlayDrawConfidence    string           `json:"playDrawConfidence"`
-	OpeningHandSource     string           `json:"openingHandSource,omitempty"`
-	OpeningHandConfidence string           `json:"openingHandConfidence"`
-	OpeningHands          []OpeningHandRow `json:"openingHands"`
+	ID                    int64             `json:"id"`
+	GameNumber            int64             `json:"gameNumber"`
+	Result                string            `json:"result"`
+	WinReason             string            `json:"winReason,omitempty"`
+	PlayDraw              string            `json:"playDraw,omitempty"`
+	StartedAt             string            `json:"startedAt,omitempty"`
+	EndedAt               string            `json:"endedAt,omitempty"`
+	TurnCount             *int64            `json:"turnCount,omitempty"`
+	OpeningLifeTotal      *int64            `json:"openingLifeTotal,omitempty"`
+	EndingLifeTotal       *int64            `json:"endingLifeTotal,omitempty"`
+	MulliganCount         *int64            `json:"mulliganCount,omitempty"`
+	KeptHandSize          *int64            `json:"keptHandSize,omitempty"`
+	MinSelfLife           *int64            `json:"minSelfLife,omitempty"`
+	MinOpponentLife       *int64            `json:"minOpponentLife,omitempty"`
+	ResultSource          string            `json:"resultSource,omitempty"`
+	ResultConfidence      string            `json:"resultConfidence"`
+	PlayDrawSource        string            `json:"playDrawSource,omitempty"`
+	PlayDrawConfidence    string            `json:"playDrawConfidence"`
+	OpeningHandSource     string            `json:"openingHandSource,omitempty"`
+	OpeningHandConfidence string            `json:"openingHandConfidence"`
+	OpeningHands          []OpeningHandRow  `json:"openingHands"`
 	TurnStats             []GameTurnStatRow `json:"turnStats"`
-	Flags                 []GameFlagRow    `json:"flags"`
+	Flags                 []GameFlagRow     `json:"flags"`
 }
 
 // GameTurnStatRow is one turn's derived shape. Life, hand size, and land-in-hand
@@ -270,12 +270,12 @@ type DeckAnalyticsCoverage struct {
 // the turn; spells are casts on that turn. Games are only counted at turns
 // they actually reached, and averages are nil when no game qualifies.
 type DeckTurnCurvePoint struct {
-	Turn           int64    `json:"turn"`
-	WinGames       int64    `json:"winGames"`
-	LossGames      int64    `json:"lossGames"`
-	AvgLandsWins   *float64 `json:"avgLandsWins,omitempty"`
-	AvgLandsLosses *float64 `json:"avgLandsLosses,omitempty"`
-	AvgSpellsWins  *float64 `json:"avgSpellsWins,omitempty"`
+	Turn            int64    `json:"turn"`
+	WinGames        int64    `json:"winGames"`
+	LossGames       int64    `json:"lossGames"`
+	AvgLandsWins    *float64 `json:"avgLandsWins,omitempty"`
+	AvgLandsLosses  *float64 `json:"avgLandsLosses,omitempty"`
+	AvgSpellsWins   *float64 `json:"avgSpellsWins,omitempty"`
 	AvgSpellsLosses *float64 `json:"avgSpellsLosses,omitempty"`
 }
 
@@ -283,14 +283,14 @@ type DeckTurnCurvePoint struct {
 // average winning/losing turn, missed-land-drop record splits (judged games
 // only), and per-turn land/spell curves split by result.
 type DeckGameShape struct {
-	GameLengths     []AnalyticsBucket    `json:"gameLengths"`
-	AvgWinningTurn  *float64             `json:"avgWinningTurn,omitempty"`
-	AvgLosingTurn   *float64             `json:"avgLosingTurn,omitempty"`
-	LowestWinLife   *int64               `json:"lowestWinLife,omitempty"`
-	MissedDropGames RecordAgg            `json:"missedDropGames"`
-	CleanDropGames  RecordAgg            `json:"cleanDropGames"`
-	MissedDropUnknownGames int64         `json:"missedDropUnknownGames"`
-	TurnCurve       []DeckTurnCurvePoint `json:"turnCurve"`
+	GameLengths            []AnalyticsBucket    `json:"gameLengths"`
+	AvgWinningTurn         *float64             `json:"avgWinningTurn,omitempty"`
+	AvgLosingTurn          *float64             `json:"avgLosingTurn,omitempty"`
+	LowestWinLife          *int64               `json:"lowestWinLife,omitempty"`
+	MissedDropGames        RecordAgg            `json:"missedDropGames"`
+	CleanDropGames         RecordAgg            `json:"cleanDropGames"`
+	MissedDropUnknownGames int64                `json:"missedDropUnknownGames"`
+	TurnCurve              []DeckTurnCurvePoint `json:"turnCurve"`
 }
 
 type DeckAnalytics struct {
@@ -348,12 +348,12 @@ type OpponentClassification struct {
 }
 
 type MatchupObservedCard struct {
-	CardID     int64  `json:"cardId"`
-	CardName   string `json:"cardName,omitempty"`
-	Matches    int64  `json:"matches"`
-	Copies     int64  `json:"copies"`
-	WinMatches int64  `json:"winMatches"`
-	LossMatches int64 `json:"lossMatches"`
+	CardID      int64  `json:"cardId"`
+	CardName    string `json:"cardName,omitempty"`
+	Matches     int64  `json:"matches"`
+	Copies      int64  `json:"copies"`
+	WinMatches  int64  `json:"winMatches"`
+	LossMatches int64  `json:"lossMatches"`
 }
 
 type MatchupMatchRef struct {
@@ -632,12 +632,14 @@ type EconomyHistory struct {
 }
 
 type RankState struct {
-	SeasonOrdinal *int64 `json:"seasonOrdinal"`
-	RankClass     string `json:"rankClass"`
-	Level         *int64 `json:"level"`
-	Step          *int64 `json:"step"`
-	MatchesWon    *int64 `json:"matchesWon"`
-	MatchesLost   *int64 `json:"matchesLost"`
+	SeasonOrdinal    *int64   `json:"seasonOrdinal"`
+	RankClass        string   `json:"rankClass"`
+	Level            *int64   `json:"level"`
+	Step             *int64   `json:"step"`
+	Percentile       *float64 `json:"percentile"`
+	LeaderboardPlace *int64   `json:"leaderboardPlace"`
+	MatchesWon       *int64   `json:"matchesWon"`
+	MatchesLost      *int64   `json:"matchesLost"`
 }
 
 type RankHistoryPoint struct {

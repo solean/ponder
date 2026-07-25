@@ -7,6 +7,7 @@ import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { formatDuration, pct } from "../lib/format";
 import {
+  formatRankLabel,
   fillMissingRankClasses,
   LADDER_CONFIG,
   ladderMatchPoints,
@@ -102,7 +103,7 @@ function winRateLabel(summary: RecordSummary): string {
 function strictRankLabel(rank: RankState): string {
   if (rank.level == null || rank.seasonOrdinal == null) return "Unranked";
   const rankClass = rank.rankClass.trim();
-  if (rankClass === "Mythic") return "Mythic";
+  if (rankClass === "Mythic" || rank.level === 0) return formatRankLabel(rank);
   if (!rankClass) return `Level ${rank.level} (tier unknown)`;
   return `${rankClass} ${rank.level}`;
 }

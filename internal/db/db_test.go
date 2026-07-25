@@ -8,6 +8,66 @@ import (
 	"testing"
 )
 
+func TestMigrateRankSnapshotsAddsAndBackfillsMythicStanding(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database := openTempSQLiteDB(t)
+	mustExec(t, database, `CREATE TABLE match_rank_snapshots (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		payload_json TEXT NOT NULL
+	)`)
+	mustExec(t, database, `INSERT INTO match_rank_snapshots (payload_json) VALUES (
+		'{"constructedPercentile":98.5,"constructedLeaderboardPlace":42,"limitedPercentile":97.1,"limitedLeaderboardPlace":1499}'
+	)`)
+
+	if err := migrateRankSnapshots(ctx, database); err != nil {
+		t.Fatalf("migrateRankSnapshots: %v", err)
+	}
+	if err := migrateRankSnapshots(ctx, database); err != nil {
+		t.Fatalf("migrateRankSnapshots idempotent run: %v", err)
+	}
+
+	for _, column := range []string{
+		"constructed_percentile",
+		"constructed_leaderboard_place",
+		"limited_percentile",
+		"limited_leaderboard_place",
+	} {
+		assertTableHasColumn(t, database, "match_rank_snapshots", column)
+	}
+
+	var constructedPercentile, limitedPercentile sql.NullFloat64
+	var constructedPlace, limitedPlace sql.NullInt64
+	if err := database.QueryRowContext(ctx, `
+		SELECT
+			constructed_percentile,
+			constructed_leaderboard_place,
+			limited_percentile,
+			limited_leaderboard_place
+		FROM match_rank_snapshots
+	`).Scan(
+		&constructedPercentile,
+		&constructedPlace,
+		&limitedPercentile,
+		&limitedPlace,
+	); err != nil {
+		t.Fatalf("read migrated Mythic standing: %v", err)
+	}
+	if !constructedPercentile.Valid || constructedPercentile.Float64 != 98.5 {
+		t.Fatalf("constructed percentile = %v, want 98.5", constructedPercentile)
+	}
+	if !constructedPlace.Valid || constructedPlace.Int64 != 42 {
+		t.Fatalf("constructed leaderboard place = %v, want 42", constructedPlace)
+	}
+	if !limitedPercentile.Valid || limitedPercentile.Float64 != 97.1 {
+		t.Fatalf("limited percentile = %v, want 97.1", limitedPercentile)
+	}
+	if !limitedPlace.Valid || limitedPlace.Int64 != 1499 {
+		t.Fatalf("limited leaderboard place = %v, want 1499", limitedPlace)
+	}
+}
+
 func TestMigrateMatchObservationTablesRepairsReplayObjectForeignKey(t *testing.T) {
 	t.Parallel()
 

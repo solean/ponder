@@ -43,14 +43,74 @@ export const LADDER_CONFIG: Record<Ladder, LadderConfig> = {
   },
 };
 
+const leaderboardFormatter = new Intl.NumberFormat(undefined, {
+  maximumFractionDigits: 0,
+});
+const percentileFormatter = new Intl.NumberFormat(undefined, {
+  style: "percent",
+  maximumFractionDigits: 1,
+});
+
+function leaderboardPlaceFor(rank: RankState): number | null {
+  const place = rank.leaderboardPlace;
+  return place != null && Number.isInteger(place) && place > 0 ? place : null;
+}
+
+function percentileFor(rank: RankState): number | null {
+  const percentile = rank.percentile;
+  return percentile != null &&
+    Number.isFinite(percentile) &&
+    percentile >= 0 &&
+    percentile <= 100
+    ? percentile
+    : null;
+}
+
+
+function rankClassFor(rank: RankState): string {
+  const rankClass = rank.rankClass.trim();
+  if (rankClass) return rankClass;
+  const percentile = percentileFor(rank);
+  if (
+    rank.level === 0 ||
+    leaderboardPlaceFor(rank) != null ||
+    (percentile != null && percentile > 0)
+  ) {
+    return "Mythic";
+  }
+  return "Bronze";
+}
+
+function mythicScore(rank: RankState, tierIndex: number): number {
+  const leaderboardPlace = leaderboardPlaceFor(rank);
+  if (leaderboardPlace != null) {
+    // Numbered ranks are above percentile ranks. Log compression keeps both
+    // movement near the leaderboard cutoff and movement near #1 visible.
+    return tierIndex + 0.8 + 0.19 / (1 + Math.log10(leaderboardPlace));
+  }
+
+  const percentile = percentileFor(rank);
+  if (percentile != null) {
+    return tierIndex + 0.01 + 0.77 * (percentile / 100);
+  }
+  return tierIndex + 0.01;
+}
+
+function formatMythicRank(rank: RankState): string {
+  const leaderboardPlace = leaderboardPlaceFor(rank);
+  if (leaderboardPlace != null) {
+    return `Mythic #${leaderboardFormatter.format(leaderboardPlace)}`;
+  }
+  const percentile = percentileFor(rank);
+  if (percentile != null) {
+    return `Mythic ${percentileFormatter.format(percentile / 100)}`;
+  }
+  return "Mythic";
+}
 export function rankStateFor(point: RankHistoryPoint, ladder: Ladder): RankState {
   return ladder === "constructed" ? point.constructed : point.limited;
 }
 
-function normalizeRankClass(rankClass: string): string {
-  const trimmed = rankClass.trim();
-  return trimmed || "Bronze";
-}
 
 function stepsPerLevel(ladder: Ladder, rankClass: string): number {
   if (rankClass === "Mythic") return 1;
@@ -63,9 +123,10 @@ function stepsPerLevel(ladder: Ladder, rankClass: string): number {
 }
 
 export function formatRankLabel(rank: RankState): string {
-  if (rank.level == null || rank.seasonOrdinal == null) return "Unranked";
-  const rankClass = normalizeRankClass(rank.rankClass);
-  if (rankClass === "Mythic") return "Mythic";
+  if (rank.seasonOrdinal == null) return "Unranked";
+  const rankClass = rankClassFor(rank);
+  if (rankClass === "Mythic") return formatMythicRank(rank);
+  if (rank.level == null) return "Unranked";
   return `${rankClass} ${rank.level}`;
 }
 
@@ -109,7 +170,7 @@ export function ladderMatchPoints(history: RankHistoryPoint[], ladder: Ladder): 
 }
 
 export function normalizedRankClass(rank: RankState): string {
-  return normalizeRankClass(rank.rankClass);
+  return rankClassFor(rank);
 }
 
 /**
@@ -133,7 +194,10 @@ export function fillMissingRankClasses(history: RankHistoryPoint[]): RankHistory
     const bySeason = new Map<number, RankState[]>();
     for (const point of out) {
       const rank = ladder === "constructed" ? point.constructed : point.limited;
-      if (rank.seasonOrdinal == null || rank.level == null) continue;
+      const percentile = percentileFor(rank);
+      const hasMythicStanding =
+        leaderboardPlaceFor(rank) != null || (percentile != null && percentile > 0);
+      if (rank.seasonOrdinal == null || (rank.level == null && !hasMythicStanding)) continue;
       const group = bySeason.get(rank.seasonOrdinal);
       if (group) group.push(rank);
       else bySeason.set(rank.seasonOrdinal, [rank]);
@@ -142,12 +206,20 @@ export function fillMissingRankClasses(history: RankHistoryPoint[]): RankHistory
     for (const ranks of bySeason.values()) {
       const assigned: Array<number | null> = ranks.map(() => null);
 
-      const promoted = (prev: RankState, next: RankState) => prev.level === 1 && next.level === 4;
+      const promoted = (prev: RankState, next: RankState) =>
+        prev.level === 1 && (next.level === 4 || next.level === 0);
 
       let tier: number | null = null;
       for (let index = 0; index < ranks.length; index += 1) {
         const explicit = ranks[index].rankClass.trim();
-        const explicitTier = explicit ? tiers.indexOf(explicit) : -1;
+        const percentile = percentileFor(ranks[index]);
+        const hasMythicStanding =
+          leaderboardPlaceFor(ranks[index]) != null || (percentile != null && percentile > 0);
+        const explicitTier = explicit
+          ? tiers.indexOf(explicit)
+          : ranks[index].level === 0 || hasMythicStanding
+            ? tiers.length - 1
+            : -1;
         if (explicitTier !== -1) {
           tier = explicitTier;
         } else if (tier != null && index > 0 && promoted(ranks[index - 1], ranks[index])) {
@@ -183,14 +255,14 @@ export function fillMissingRankClasses(history: RankHistoryPoint[]): RankHistory
 }
 
 function rankScore(rank: RankState, ladder: Ladder): number | null {
-  if (rank.level == null || rank.seasonOrdinal == null) return null;
+  if (rank.seasonOrdinal == null) return null;
 
-  const rankClass = normalizeRankClass(rank.rankClass);
+  const rankClass = rankClassFor(rank);
   const config = LADDER_CONFIG[ladder];
   const tierIndex = config.tiers.indexOf(rankClass);
   if (tierIndex === -1) return null;
-  if (rankClass === "Mythic") return tierIndex + 0.92;
-
+  if (rankClass === "Mythic") return mythicScore(rank, tierIndex);
+  if (rank.level == null) return null;
   const level = Math.min(Math.max(rank.level, 1), 4);
   const totalSteps = stepsPerLevel(ladder, rankClass);
   const stepProgress =
@@ -208,9 +280,11 @@ function sameRankState(a: RankState | null | undefined, b: RankState | null | un
 
   return (
     sameNullableNumber(a.seasonOrdinal, b.seasonOrdinal) &&
-    normalizeRankClass(a.rankClass) === normalizeRankClass(b.rankClass) &&
+    rankClassFor(a) === rankClassFor(b) &&
     sameNullableNumber(a.level, b.level) &&
     sameNullableNumber(a.step, b.step) &&
+    sameNullableNumber(a.percentile, b.percentile) &&
+    sameNullableNumber(a.leaderboardPlace, b.leaderboardPlace) &&
     sameNullableNumber(a.matchesWon, b.matchesWon) &&
     sameNullableNumber(a.matchesLost, b.matchesLost)
   );

@@ -309,7 +309,7 @@ export function RankProgressPanel() {
             type: "value",
             min: Math.max(0, Math.floor(Math.min(...series.points.map((point) => point.score)))),
             max: Math.min(
-              LADDER_CONFIG[ladder].tiers.length - 0.02,
+              LADDER_CONFIG[ladder].tiers.length - 0.001,
               Math.ceil(Math.max(...series.points.map((point) => point.score))) + 0.25,
             ),
             interval: 1,

@@ -15,6 +15,8 @@ function rankState(values: Partial<Omit<RankState, "rankClass">> & { rankClass?:
     rankClass: values.rankClass ?? "",
     level: values.level ?? null,
     step: values.step ?? null,
+    percentile: values.percentile ?? null,
+    leaderboardPlace: values.leaderboardPlace ?? null,
     matchesWon: values.matchesWon ?? null,
     matchesLost: values.matchesLost ?? null,
   };
@@ -244,6 +246,80 @@ describe("buildGraphPoints", () => {
       "Traditional_Ladder:loss",
       "Traditional_Ladder:win",
     ]);
+  });
+
+  test("plots Mythic percentile and numbered leaderboard progress", () => {
+    const history: RankHistoryPoint[] = [
+      point(
+        1,
+        "Traditional_Ladder",
+        "win",
+        rankState({
+          seasonOrdinal: 91,
+          level: 0,
+          percentile: 97,
+          matchesWon: 1,
+          matchesLost: 0,
+        }),
+        rankState(),
+      ),
+      point(
+        2,
+        "Traditional_Ladder",
+        "loss",
+        rankState({
+          seasonOrdinal: 91,
+          level: 0,
+          percentile: 99,
+          matchesWon: 1,
+          matchesLost: 1,
+        }),
+        rankState(),
+      ),
+      point(
+        3,
+        "Traditional_Ladder",
+        "win",
+        rankState({
+          seasonOrdinal: 91,
+          level: 0,
+          percentile: 99,
+          leaderboardPlace: 1500,
+          matchesWon: 2,
+          matchesLost: 1,
+        }),
+        rankState(),
+      ),
+      point(
+        4,
+        "Traditional_Ladder",
+        "win",
+        rankState({
+          seasonOrdinal: 91,
+          level: 0,
+          percentile: 99,
+          leaderboardPlace: 3,
+          matchesWon: 3,
+          matchesLost: 1,
+        }),
+        rankState(),
+      ),
+    ];
+
+    const series = buildGraphPoints(history, "constructed");
+    expect(series?.points.map((entry) => entry.rankLabel)).toEqual([
+      "Mythic 97%",
+      "Mythic 99%",
+      "Mythic #1,500",
+      "Mythic #3",
+    ]);
+
+    const scores = series?.points.map((entry) => entry.score) ?? [];
+    expect(scores).toHaveLength(4);
+    for (let index = 1; index < scores.length; index += 1) {
+      expect(scores[index]).toBeGreaterThan(scores[index - 1]);
+    }
+    expect(fillMissingRankClasses(history)[0].constructed.rankClass).toBe("Mythic");
   });
 
   test("returns null for previous season when only one season exists", () => {

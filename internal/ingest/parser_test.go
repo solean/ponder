@@ -393,7 +393,7 @@ func TestParserBackfillsRankSnapshotForExistingCompletedMatch(t *testing.T) {
 
 	currentContents := `[UnityCrossThreadLogger]3/12/2026 7:08:37 PM
 <== RankGetCombinedRankInfo(req-1)
-{"constructedSeasonOrdinal":87,"constructedLevel":3,"constructedStep":2,"constructedMatchesWon":2,"constructedMatchesLost":2,"limitedSeasonOrdinal":87,"limitedLevel":3,"limitedMatchesWon":2,"limitedMatchesLost":3}`
+{"constructedSeasonOrdinal":87,"constructedClass":"Mythic","constructedLevel":0,"constructedPercentile":98.5,"constructedLeaderboardPlace":42,"constructedMatchesWon":2,"constructedMatchesLost":2,"limitedSeasonOrdinal":87,"limitedClass":"Mythic","limitedLevel":0,"limitedPercentile":97.1,"limitedLeaderboardPlace":1499,"limitedMatchesWon":2,"limitedMatchesLost":3}`
 	if err := os.WriteFile(currentLog, []byte(currentContents+"\n"), 0o644); err != nil {
 		t.Fatalf("write current log: %v", err)
 	}
@@ -411,6 +411,28 @@ func TestParserBackfillsRankSnapshotForExistingCompletedMatch(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("rank snapshot count = %d, want 1", count)
+	}
+
+	history, err := store.ListRankHistory(ctx)
+	if err != nil {
+		t.Fatalf("list rank history: %v", err)
+	}
+	if len(history) != 1 {
+		t.Fatalf("rank history length = %d, want 1", len(history))
+	}
+	constructed := history[0].Constructed
+	if constructed.Percentile == nil || *constructed.Percentile != 98.5 {
+		t.Fatalf("constructed percentile = %v, want 98.5", constructed.Percentile)
+	}
+	if constructed.LeaderboardPlace == nil || *constructed.LeaderboardPlace != 42 {
+		t.Fatalf("constructed leaderboard place = %v, want 42", constructed.LeaderboardPlace)
+	}
+	limited := history[0].Limited
+	if limited.Percentile == nil || *limited.Percentile != 97.1 {
+		t.Fatalf("limited percentile = %v, want 97.1", limited.Percentile)
+	}
+	if limited.LeaderboardPlace == nil || *limited.LeaderboardPlace != 1499 {
+		t.Fatalf("limited leaderboard place = %v, want 1499", limited.LeaderboardPlace)
 	}
 }
 

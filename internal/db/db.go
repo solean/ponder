@@ -95,6 +95,10 @@ func Init(ctx context.Context, db *sql.DB) error {
 		_, _ = conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`)
 	}()
 
+	if err := migrateRankSnapshots(ctx, conn); err != nil {
+		return err
+	}
+
 	if err := prepareEconomyBackfill(ctx, conn); err != nil {
 		return err
 	}

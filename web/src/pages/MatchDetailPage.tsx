@@ -214,6 +214,34 @@ type MatchReplayZoneDialogState =
       plays: MatchCardPlay[];
     };
 
+type ReplayRelationshipPill = {
+  kind: "attached-to" | "attachment" | "linked";
+  eyebrow: string;
+  cardName: string;
+};
+
+function replayRelationshipPill(label: string): ReplayRelationshipPill {
+  const attachedToPrefix = "Attached to ";
+  if (label.startsWith(attachedToPrefix)) {
+    return {
+      kind: "attached-to",
+      eyebrow: "Attached to",
+      cardName: label.slice(attachedToPrefix.length),
+    };
+  }
+
+  const attachmentPrefix = "Attached: ";
+  if (label.startsWith(attachmentPrefix)) {
+    return {
+      kind: "attachment",
+      eyebrow: "Attachment",
+      cardName: label.slice(attachmentPrefix.length),
+    };
+  }
+
+  return { kind: "linked", eyebrow: "Linked", cardName: label };
+}
+
 function cardPreviewQueryKey(card: PreviewCard): [string, number, string] {
   return ["card-preview", card.cardId, cardDisplayName(card)];
 }
@@ -683,7 +711,7 @@ function MatchReplayObjectCard({
 
   return (
     <div
-      className={`match-replay-object ${isTappedBoardCard ? "is-tapped" : ""} ${isAttackingBoardCard ? "is-attacking" : ""} ${connectionHighlighted ? "is-connection-highlighted" : ""} ${hasLinkedExileCards ? "has-linked-exile" : ""}`}
+      className={`match-replay-object ${isTappedBoardCard ? "is-tapped" : ""} ${isAttackingBoardCard ? "is-attacking" : ""} ${connectionHighlighted ? "is-connection-highlighted" : ""} ${hasLinkedExileCards ? "has-linked-exile" : ""} ${relationshipLabels.length > 0 ? "has-relationship" : ""}`}
       onMouseEnter={
         onConnectionFocusChange
           ? () => onConnectionFocusChange(object.instanceId)
@@ -760,7 +788,9 @@ function MatchReplayObjectCard({
       {statePills.length > 0 ||
       counterPills.length > 0 ||
       relationshipLabels.length > 0 ? (
-        <div className="match-replay-card-statusrow">
+        <div
+          className={`match-replay-card-statusrow ${relationshipLabels.length > 0 ? "has-relationship" : ""}`}
+        >
           {statePills.map((pill) => (
             <span
               className="match-replay-state-pill"
@@ -777,14 +807,32 @@ function MatchReplayObjectCard({
               {counter.count > 1 ? `${counter.label} x${counter.count}` : counter.label}
             </span>
           ))}
-          {relationshipLabels.map((label) => (
-            <span
-              className="match-replay-state-pill is-relationship"
-              key={`${object.instanceId}-${label}`}
-            >
-              {label}
-            </span>
-          ))}
+          {relationshipLabels.map((label) => {
+            const relationship = replayRelationshipPill(label);
+            return (
+              <span
+                className={`match-replay-relationship-pill is-${relationship.kind}`}
+                key={`${object.instanceId}-${label}`}
+                title={label}
+              >
+                <span className="match-replay-relationship-icon" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" focusable="false">
+                    <path d="M7.6 12.4 6 14a3 3 0 0 1-4.2-4.2l2.8-2.8a3 3 0 0 1 4.2 0" />
+                    <path d="m12.4 7.6 1.6-1.6a3 3 0 0 1 4.2 4.2L15.4 13a3 3 0 0 1-4.2 0" />
+                    <path d="m7 13 6-6" />
+                  </svg>
+                </span>
+                <span className="match-replay-relationship-copy">
+                  <span className="match-replay-relationship-eyebrow">
+                    {relationship.eyebrow}
+                  </span>
+                  <span className="match-replay-relationship-name">
+                    {relationship.cardName}
+                  </span>
+                </span>
+              </span>
+            );
+          })}
         </div>
       ) : null}
     </div>

@@ -4,3 +4,6 @@
 Magic: The Gathering Arena rank badges at 48px. The sprite sheets were sourced
 from [`mtgatool/mtgatool-desktop`](https://github.com/mtgatool/mtgatool-desktop)
 and retain the original MTGA artwork.
+
+The individual images under `ranks/` are 48px crops of those sheets for graph
+promotion annotations.

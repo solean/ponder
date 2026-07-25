@@ -5,12 +5,14 @@ import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
 import { api } from "../lib/api";
 import { eventDisplayName, parseEventName } from "../lib/events";
 import { formatDateTime } from "../lib/format";
+import { rankBadgeUrl } from "../lib/rankBadgeAssets";
 import { useEventSets } from "../lib/useEventSets";
 import { RankSymbol } from "./RankSymbol";
 import {
   buildGraphPoints,
   fillMissingRankClasses,
   LADDER_CONFIG,
+  rankPromotionsFor,
   seasonOrdinalsFor,
   tierLabelAt,
   type Ladder,
@@ -28,6 +30,8 @@ type ChartThemeTokens = {
   axisText: string;
   hoverBorder: string;
   pointBorder: string;
+  promotion: string;
+  promotionGlow: string;
   splitLine: string;
   tooltipBackground: string;
   tooltipBorder: string;
@@ -44,6 +48,8 @@ const CHART_THEME_TOKENS: Record<`${ColorScheme}-${ThemeMode}`, ChartThemeTokens
     axisText: "#c5a086",
     hoverBorder: "#f2e6db",
     pointBorder: "rgba(24, 16, 10, 0.94)",
+    promotion: "#38bdf8",
+    promotionGlow: "rgba(56, 189, 248, 0.42)",
     splitLine: "rgba(255, 138, 36, 0.03)",
     tooltipBackground: "rgba(12, 8, 6, 0.97)",
     tooltipBorder: "rgba(255, 168, 90, 0.3)",
@@ -58,6 +64,8 @@ const CHART_THEME_TOKENS: Record<`${ColorScheme}-${ThemeMode}`, ChartThemeTokens
     axisText: "#93b2c4",
     hoverBorder: "#e3edf4",
     pointBorder: "rgba(10, 18, 24, 0.94)",
+    promotion: "#52c7f2",
+    promotionGlow: "rgba(82, 199, 242, 0.42)",
     splitLine: "rgba(55, 183, 224, 0.03)",
     tooltipBackground: "rgba(5, 10, 15, 0.97)",
     tooltipBorder: "rgba(90, 190, 226, 0.3)",
@@ -72,6 +80,8 @@ const CHART_THEME_TOKENS: Record<`${ColorScheme}-${ThemeMode}`, ChartThemeTokens
     axisText: "#a9b4c1",
     hoverBorder: "#e6eaef",
     pointBorder: "rgba(13, 17, 22, 0.94)",
+    promotion: "#54b9ec",
+    promotionGlow: "rgba(84, 185, 236, 0.4)",
     splitLine: "rgba(138, 178, 221, 0.03)",
     tooltipBackground: "rgba(7, 10, 14, 0.97)",
     tooltipBorder: "rgba(150, 182, 216, 0.3)",
@@ -86,6 +96,8 @@ const CHART_THEME_TOKENS: Record<`${ColorScheme}-${ThemeMode}`, ChartThemeTokens
     axisText: "#5c402d",
     hoverBorder: "#fffaf4",
     pointBorder: "rgba(247, 239, 230, 0.96)",
+    promotion: "#087eae",
+    promotionGlow: "rgba(8, 126, 174, 0.28)",
     splitLine: "rgba(197, 90, 17, 0.02)",
     tooltipBackground: "rgba(250, 243, 236, 0.98)",
     tooltipBorder: "rgba(140, 62, 8, 0.28)",
@@ -100,6 +112,8 @@ const CHART_THEME_TOKENS: Record<`${ColorScheme}-${ThemeMode}`, ChartThemeTokens
     axisText: "#46647a",
     hoverBorder: "#fbfcfd",
     pointBorder: "rgba(247, 249, 250, 0.96)",
+    promotion: "#087fae",
+    promotionGlow: "rgba(8, 127, 174, 0.28)",
     splitLine: "rgba(15, 127, 178, 0.02)",
     tooltipBackground: "rgba(250, 252, 253, 0.98)",
     tooltipBorder: "rgba(30, 90, 125, 0.28)",
@@ -114,6 +128,8 @@ const CHART_THEME_TOKENS: Record<`${ColorScheme}-${ThemeMode}`, ChartThemeTokens
     axisText: "#55606e",
     hoverBorder: "#f7f9fb",
     pointBorder: "rgba(238, 241, 244, 0.96)",
+    promotion: "#247dab",
+    promotionGlow: "rgba(36, 125, 171, 0.26)",
     splitLine: "rgba(63, 105, 155, 0.02)",
     tooltipBackground: "rgba(242, 244, 247, 0.98)",
     tooltipBorder: "rgba(70, 90, 115, 0.28)",
@@ -229,6 +245,10 @@ export function RankProgressPanel() {
   const currentRank = latestPoint ? latestPoint.rankLabel : "Unranked";
   const currentRecord = series?.record ? `${series.record.wins}W-${series.record.losses}L` : null;
   const rankMoved = firstPoint != null && latestPoint != null && firstPoint.rankLabel !== latestPoint.rankLabel;
+  const promotions = useMemo(
+    () => (series ? rankPromotionsFor(series.points, ladder) : []),
+    [ladder, series],
+  );
   const chartTheme = CHART_THEME_TOKENS[`${scheme}-${mode}`];
 
   // Current standing on the ladder that is not selected, so both ranks are
@@ -245,8 +265,8 @@ export function RankProgressPanel() {
     };
   }, [filledData, otherLadder]);
 
-  // A one- or two-point line reads as noise; below this we show chips only.
-  const hasChartableTrend = (series?.points.length ?? 0) >= 3;
+  // A sparse line reads as noise unless it contains a rank-up worth showing.
+  const hasChartableTrend = (series?.points.length ?? 0) >= 3 || promotions.length > 0;
 
   const chartOption = useMemo(
     () =>
@@ -254,7 +274,7 @@ export function RankProgressPanel() {
         ? {
           backgroundColor: "transparent",
           animationDuration: 320,
-          grid: { left: 72, right: 28, top: 28, bottom: 34 },
+          grid: { left: 72, right: 28, top: 28, bottom: 46 },
           tooltip: {
             trigger: "axis",
             backgroundColor: chartTheme.tooltipBackground,
@@ -269,7 +289,10 @@ export function RankProgressPanel() {
               lineStyle: { color: chartTheme.accent, opacity: 0.26 },
             },
             formatter: (params: any) => {
-              const point = Array.isArray(params) ? params[0]?.data : params?.data;
+              const entries = Array.isArray(params) ? params : [params];
+              const point =
+                entries.find((entry: any) => entry?.seriesName === "Rank progress")?.data ??
+                entries[0]?.data;
               if (!point) return "";
               const resultLabel =
                 point.result === "win" ? "Win" : point.result === "loss" ? "Loss" : "Unknown";
@@ -279,6 +302,9 @@ export function RankProgressPanel() {
               return [
                 `<div style="display:grid;gap:4px;">`,
                 `<strong>${point.rankLabel}</strong>`,
+                point.isPromotion
+                  ? `<span style="color:${chartTheme.promotion};font-weight:600;">Rank increased to ${point.rankClass}</span>`
+                  : "",
                 `<span>Season ${point.seasonOrdinal} • Match ${point.matchNumber} • ${resultLabel}</span>`,
                 `<span>${eventLabel} vs ${point.opponent || "Unknown"}</span>`,
                 `<span>${formatDateTime(timestamp)}</span>`,
@@ -330,9 +356,11 @@ export function RankProgressPanel() {
           },
           series: [
             {
+              name: "Rank progress",
               type: "line",
               data: series.points.map((point) => ({
                 ...point,
+                isPromotion: promotions.includes(point),
                 value: [point.matchNumber, point.score],
               })),
               smooth: false,
@@ -367,6 +395,7 @@ export function RankProgressPanel() {
               },
             },
             {
+              name: "Current rank",
               type: "scatter",
               data: [
                 {
@@ -384,10 +413,49 @@ export function RankProgressPanel() {
               },
               z: 5,
             },
+            {
+              name: "Rank increase",
+              type: "scatter",
+              data: promotions.map((point) => ({
+                ...point,
+                value: [point.matchNumber, point.score],
+              })),
+              symbol: "circle",
+              symbolSize: 11,
+              itemStyle: {
+                color: chartTheme.promotion,
+                borderColor: chartTheme.hoverBorder,
+                borderWidth: 2,
+                shadowBlur: 12,
+                shadowColor: chartTheme.promotionGlow,
+              },
+              z: 7,
+            },
+            {
+              name: "Rank badge",
+              type: "scatter",
+              data: promotions.flatMap((point) => {
+                const badgeUrl = rankBadgeUrl(ladder, point.resolvedRankClass ?? "");
+                return badgeUrl
+                  ? [
+                    {
+                      ...point,
+                      value: [point.matchNumber, point.score],
+                      symbol: `image://${badgeUrl}`,
+                    },
+                  ]
+                  : [];
+              }),
+              symbolSize: 48,
+              symbolOffset: [0, 32],
+              tooltip: { show: false },
+              silent: true,
+              z: 8,
+            },
           ],
         }
         : null,
-    [chartTheme, ladder, latestPoint, series, setLookup],
+    [chartTheme, ladder, latestPoint, promotions, series, setLookup],
   );
 
   const readyState =

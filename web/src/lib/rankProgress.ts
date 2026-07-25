@@ -12,6 +12,8 @@ export type GraphPoint = {
   matchNumber: number;
   score: number;
   seasonOrdinal: number;
+  rankClass: string;
+  resolvedRankClass: string | null;
   rankLabel: string;
   result: RankHistoryPoint["result"];
   eventName: string;
@@ -79,6 +81,21 @@ function rankClassFor(rank: RankState): string {
     return "Mythic";
   }
   return "Bronze";
+}
+
+function resolvedRankClassFor(rank: RankState, ladder: Ladder): string | null {
+  const explicit = rank.rankClass.trim();
+  if (LADDER_CONFIG[ladder].tiers.includes(explicit)) return explicit;
+
+  const percentile = percentileFor(rank);
+  if (
+    rank.level === 0 ||
+    leaderboardPlaceFor(rank) != null ||
+    (percentile != null && percentile > 0)
+  ) {
+    return "Mythic";
+  }
+  return null;
 }
 
 function mythicScore(rank: RankState, tierIndex: number): number {
@@ -391,6 +408,8 @@ export function buildGraphPoints(
         matchNumber: index + 1,
         score,
         seasonOrdinal: pointSeasonOrdinal,
+        rankClass: rankClassFor(rank),
+        resolvedRankClass: resolvedRankClassFor(rank, ladder),
         rankLabel: formatRankLabel(rank),
         result: point.result,
         eventName: point.eventName,
@@ -410,6 +429,22 @@ export function buildGraphPoints(
     record: recordForSeries(filteredPoints, ladder, seasonView),
     points,
   };
+}
+
+/** Major-rank increases within a season, excluding season resets and sub-tier movement. */
+export function rankPromotionsFor(points: GraphPoint[], ladder: Ladder): GraphPoint[] {
+  const tiers = LADDER_CONFIG[ladder].tiers;
+
+  return points.filter((point, index) => {
+    const previous = points[index - 1];
+    if (!previous || previous.seasonOrdinal !== point.seasonOrdinal) return false;
+
+    if (!previous.resolvedRankClass || !point.resolvedRankClass) return false;
+
+    const previousTier = tiers.indexOf(previous.resolvedRankClass);
+    const currentTier = tiers.indexOf(point.resolvedRankClass);
+    return previousTier !== -1 && currentTier > previousTier;
+  });
 }
 
 export function tierLabelAt(value: number, ladder: Ladder): string {

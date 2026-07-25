@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildGraphPoints,
   fillMissingRankClasses,
+  rankPromotionsFor,
   rankStepIndex,
   type Ladder,
   type SeasonView,
@@ -320,6 +321,92 @@ describe("buildGraphPoints", () => {
       expect(scores[index]).toBeGreaterThan(scores[index - 1]);
     }
     expect(fillMissingRankClasses(history)[0].constructed.rankClass).toBe("Mythic");
+  });
+
+  test("identifies major-rank increases without treating sub-tiers or season resets as promotions", () => {
+    const history: RankHistoryPoint[] = [
+      point(
+        1,
+        "Traditional_Ladder",
+        "win",
+        rankState({ seasonOrdinal: 90, rankClass: "Bronze", level: 1, step: 5 }),
+        rankState(),
+      ),
+      point(
+        2,
+        "Traditional_Ladder",
+        "win",
+        rankState({ seasonOrdinal: 90, rankClass: "Silver", level: 4, step: 1 }),
+        rankState(),
+      ),
+      point(
+        3,
+        "Traditional_Ladder",
+        "win",
+        rankState({ seasonOrdinal: 90, rankClass: "Silver", level: 3, step: 1 }),
+        rankState(),
+      ),
+      point(
+        4,
+        "Traditional_Ladder",
+        "loss",
+        rankState({ seasonOrdinal: 91, rankClass: "Bronze", level: 4, step: 0 }),
+        rankState(),
+      ),
+      point(
+        5,
+        "Traditional_Ladder",
+        "win",
+        rankState({ seasonOrdinal: 91, rankClass: "Silver", level: 4, step: 1 }),
+        rankState(),
+      ),
+      point(
+        6,
+        "Traditional_Ladder",
+        "win",
+        rankState({ seasonOrdinal: 91, rankClass: "Diamond", level: 1, step: 5 }),
+        rankState(),
+      ),
+      point(
+        7,
+        "Traditional_Ladder",
+        "win",
+        rankState({ seasonOrdinal: 91, level: 0, percentile: 91 }),
+        rankState(),
+      ),
+    ];
+
+    const series = buildGraphPoints(fillMissingRankClasses(history), "constructed", "all");
+    expect(series).not.toBeNull();
+    expect(rankPromotionsFor(series!.points, "constructed").map((entry) => entry.rankLabel)).toEqual([
+      "Silver 4",
+      "Silver 4",
+      "Diamond 1",
+      "Mythic 91%",
+    ]);
+  });
+
+  test("does not invent promotions for a season whose rank classes cannot be resolved", () => {
+    const history: RankHistoryPoint[] = [
+      point(
+        1,
+        "Traditional_Ladder",
+        "win",
+        rankState({ seasonOrdinal: 91, level: 1, step: 5 }),
+        rankState(),
+      ),
+      point(
+        2,
+        "Traditional_Ladder",
+        "win",
+        rankState({ seasonOrdinal: 91, level: 4, step: 1 }),
+        rankState(),
+      ),
+    ];
+
+    const series = buildGraphPoints(fillMissingRankClasses(history), "constructed");
+    expect(series).not.toBeNull();
+    expect(rankPromotionsFor(series!.points, "constructed")).toEqual([]);
   });
 
   test("returns null for previous season when only one season exists", () => {

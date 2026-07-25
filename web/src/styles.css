@@ -2875,54 +2875,83 @@ small.settings-meta,
 }
 
 .opening-hand-cards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.4rem;
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(0.35rem, 0.8vw, 0.65rem);
+  overflow-x: auto;
   margin: 0;
-  padding: 0;
+  padding: 0.2rem 0.1rem 0.65rem;
   list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
 }
 
 .opening-hand-cards li {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.46rem;
-  min-width: 0;
-  min-height: 2rem;
-  padding: 0.38rem 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: var(--list-bg-a);
+  flex: 0 1 138px;
+  min-width: 82px;
 }
 
 .opening-hand-cards li.is-returned {
-  border-style: dashed;
-  opacity: 0.72;
+  opacity: 0.46;
+  filter: grayscale(0.38);
 }
 
-.opening-hand-cards .card-preview-trigger {
-  min-width: 0;
+.opening-hand-cards li.is-bottomed {
+  opacity: 0.62;
+  filter: grayscale(0.2);
+}
+
+.opening-hand-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 63 / 88;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: clamp(6px, 0.8vw, 10px);
+  background: linear-gradient(
+    165deg,
+    var(--surface-strong) 0%,
+    var(--surface-faint) 100%
+  );
+  box-shadow:
+    0 9px 16px rgba(0, 0, 0, 0.26),
+    0 0 0 1px var(--card-inner-border) inset;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
-.opening-hand-card-quantity,
-.opening-hand-cards small {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  font-variant-numeric: tabular-nums;
+.opening-hand-card:hover {
+  z-index: 1;
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
+  box-shadow:
+    0 13px 22px rgba(0, 0, 0, 0.3),
+    0 0 14px var(--accent-soft);
 }
 
-.opening-hand-card-quantity {
-  color: var(--muted-strong);
+.opening-hand-card:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
 }
 
-.opening-hand-cards small {
-  color: var(--muted);
-  letter-spacing: var(--track-md);
-  text-transform: uppercase;
+.opening-hand-card img,
+.opening-hand-card-fallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.opening-hand-card img {
+  object-fit: cover;
+}
+
+.opening-hand-card-fallback {
+  background:
+    radial-gradient(circle at 50% 42%, var(--accent-soft) 0 14%, transparent 15%),
+    linear-gradient(155deg, var(--surface-strong), var(--surface-faint));
 }
 
 .game-shape {
@@ -3178,7 +3207,6 @@ small.settings-meta,
 
   .analytics-coverage-grid,
   .match-game-stats,
-  .opening-hand-cards,
   .deck-version-row dl {
     grid-template-columns: 1fr 1fr;
   }
@@ -3187,7 +3215,6 @@ small.settings-meta,
 @media (max-width: 420px) {
   .analytics-coverage-grid,
   .match-game-stats,
-  .opening-hand-cards,
   .deck-version-row dl {
     grid-template-columns: 1fr;
   }
@@ -4811,6 +4838,50 @@ button.match-replay-zonechip.is-button {
   font-size: var(--text-xs);
   letter-spacing: var(--track-sm);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.24);
+}
+
+.match-replay-card-loyalty {
+  position: absolute;
+  right: 0.32rem;
+  bottom: 0.3rem;
+  z-index: 3;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: clamp(1.55rem, 3cqw, 2rem);
+  height: clamp(1.55rem, 3cqw, 2rem);
+  padding-bottom: 0.08rem;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: clamp(0.7rem, 1.15cqw, 0.86rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.58));
+}
+
+.match-replay-card-loyalty::before,
+.match-replay-card-loyalty::after {
+  position: absolute;
+  content: "";
+  clip-path: polygon(50% 0, 92% 16%, 88% 66%, 50% 100%, 12% 66%, 8% 16%);
+}
+
+.match-replay-card-loyalty::before {
+  z-index: -2;
+  inset: 0;
+  background: rgba(245, 238, 221, 0.96);
+}
+
+.match-replay-card-loyalty::after {
+  z-index: -1;
+  inset: 2px;
+  background: linear-gradient(155deg, #313748 0%, #090b12 78%);
+}
+
+.match-replay-card-loyalty > span {
+  position: relative;
+  z-index: 1;
 }
 
 .match-replay-card-statusrow {

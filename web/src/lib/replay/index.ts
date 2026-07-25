@@ -476,6 +476,29 @@ export function replayObjectCounterSummaries(
   }
 }
 
+export function replayObjectLoyalty(
+  object: MatchReplayFrameObject,
+): number | null {
+  const details = replayObjectDetails(object);
+  const rawLoyalty = details?.["loyalty"];
+  const detailValue =
+    typeof rawLoyalty === "number"
+      ? rawLoyalty
+      : rawLoyalty &&
+          typeof rawLoyalty === "object" &&
+          !Array.isArray(rawLoyalty)
+        ? (rawLoyalty as { value?: unknown }).value
+        : null;
+  if (typeof detailValue === "number" && Number.isFinite(detailValue)) {
+    return detailValue;
+  }
+
+  const loyalty = replayObjectCounterSummaries(object).find(
+    (counter) => counter.label.trim().toLowerCase() === "loyalty",
+  );
+  return loyalty?.count ?? null;
+}
+
 export function replayObjectBlockCount(object: MatchReplayFrameObject): number {
   return replayObjectBlockAttackerIDs(object).length;
 }
@@ -950,7 +973,14 @@ export function replayObjectStatusText(
   if (object.hasSummoningSickness) {
     parts.push("Summoning sick");
   }
+  const loyalty = replayObjectLoyalty(object);
+  if (loyalty != null) {
+    parts.push(`${loyalty} loyalty`);
+  }
   for (const counter of replayObjectCounterSummaries(object)) {
+    if (loyalty != null && counter.label.trim().toLowerCase() === "loyalty") {
+      continue;
+    }
     parts.push(`${counter.label} x${counter.count}`);
   }
   return parts.join(" • ");

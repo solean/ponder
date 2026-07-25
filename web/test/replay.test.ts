@@ -27,6 +27,7 @@ import {
   replayFrameTickKind,
   replayLifeDelta,
   replayLifeSeriesDomain,
+  replayObjectLoyalty,
   replayTurnBoundaryCount,
   replayTurnValue,
   summarizeReplayGame,
@@ -105,6 +106,46 @@ describe("zone classification", () => {
       "artifacts_enchantments",
     );
     expect(battlefieldSectionKind(null)).toBe("other");
+  });
+});
+
+describe("planeswalker loyalty", () => {
+  test("reads the current loyalty value from Arena object details", () => {
+    const planeswalker = object({
+      detailsJson: JSON.stringify({
+        cardTypes: ["CardType_Planeswalker"],
+        loyalty: { value: 4 },
+      }),
+      counterSummaryJson: JSON.stringify([
+        { label: "+1/+1", count: 1 },
+      ]),
+    });
+
+    expect(replayObjectLoyalty(planeswalker)).toBe(4);
+  });
+
+  test("falls back to a normalized loyalty counter", () => {
+    expect(
+      replayObjectLoyalty(
+        object({
+          counterSummaryJson: JSON.stringify([
+            { label: "LOYALTY", count: 3 },
+          ]),
+        }),
+      ),
+    ).toBe(3);
+  });
+
+  test("preserves zero and rejects absent or malformed loyalty", () => {
+    expect(
+      replayObjectLoyalty(
+        object({ detailsJson: JSON.stringify({ loyalty: { value: 0 } }) }),
+      ),
+    ).toBe(0);
+    expect(replayObjectLoyalty(object())).toBeNull();
+    expect(
+      replayObjectLoyalty(object({ detailsJson: "not-json" })),
+    ).toBeNull();
   });
 });
 

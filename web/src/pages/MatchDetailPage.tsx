@@ -35,6 +35,7 @@ import type {
   MatchAnalyticsCoverage,
   MatchReplayFrame,
   MatchReplayFrameObject,
+  OpeningHandCard,
 } from "../lib/types";
 import {
   battlefieldSectionKind,
@@ -71,6 +72,7 @@ import {
   replayObjectCounterSummaries,
   replayObjectIsAttacking,
   replayObjectIsBlocking,
+  replayObjectLoyalty,
   replayObjectName,
   replayObjectPTLabel,
   replayObjectStatePills,
@@ -599,7 +601,7 @@ function MatchReplayObjectCard({
   const statePills = replayObjectStatePills(object).filter(
     (pill) => pill.label !== "Tapped" && pill.label !== "Attacking",
   );
-  const counterPills = replayObjectCounterSummaries(object);
+  const allCounterPills = replayObjectCounterSummaries(object);
   const isTappedBoardCard =
     size === "board" &&
     boardZoneKind(object.zoneType) === "battlefield" &&
@@ -608,8 +610,24 @@ function MatchReplayObjectCard({
     size === "board" &&
     boardZoneKind(object.zoneType) === "battlefield" &&
     replayObjectIsAttacking(object);
-  const statBadge =
+  const loyalty =
     size === "board" && boardZoneKind(object.zoneType) === "battlefield"
+      ? replayObjectLoyalty(object)
+      : null;
+  const counterPills =
+    loyalty == null
+      ? allCounterPills
+      : allCounterPills.filter(
+          (counter) => counter.label.trim().toLowerCase() !== "loyalty",
+        );
+  const cardAriaDetails = [
+    loyalty == null ? null : `Current loyalty: ${loyalty}`,
+    linkedExileSummary,
+  ].filter((detail): detail is string => Boolean(detail));
+  const statBadge =
+    loyalty == null &&
+    size === "board" &&
+    boardZoneKind(object.zoneType) === "battlefield"
       ? replayObjectPTLabel(object, preview)
       : null;
   const visibleLinkedExileCards =
@@ -625,7 +643,7 @@ function MatchReplayObjectCard({
         href={href}
         target="_blank"
         rel="noreferrer"
-        aria-label={`Open ${name} on Scryfall${linkedExileSummary ? `. ${linkedExileSummary}.` : ""}`}
+        aria-label={`Open ${name} on Scryfall${cardAriaDetails.length > 0 ? `. ${cardAriaDetails.join(". ")}.` : ""}`}
         title={`${name} • ${statusText}`}
       >
         {preview ? (
@@ -649,6 +667,11 @@ function MatchReplayObjectCard({
         ) : null}
         {statBadge ? (
           <span className="match-replay-card-power">{statBadge}</span>
+        ) : null}
+        {loyalty != null ? (
+          <span className="match-replay-card-loyalty" aria-hidden="true">
+            <span>{loyalty.toLocaleString()}</span>
+          </span>
         ) : null}
       </a>
     </ReplayCardPreviewAnchor>
@@ -3749,6 +3772,43 @@ function GameShapeChart({ game }: { game: GameAnalytics }) {
   );
 }
 
+function OpeningHandCardImage({
+  card,
+  preview,
+  disposition,
+}: {
+  card: OpeningHandCard;
+  preview: CardPreview | null;
+  disposition: "kept" | "bottomed" | "returned";
+}) {
+  const name = preview?.name ?? cardDisplayName(card);
+  const href = preview?.scryfallUrl ?? cardFallbackHref(card);
+
+  return (
+    <a
+      className="opening-hand-card"
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={`${name}, ${disposition}. Open on Scryfall`}
+      title={`${name} • ${disposition}`}
+    >
+      {preview ? (
+        <img
+          src={preview.imageUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          width={488}
+          height={680}
+        />
+      ) : (
+        <span className="opening-hand-card-fallback" aria-hidden="true" />
+      )}
+    </a>
+  );
+}
+
 function MatchAnalyticsPanel({
   games,
   coverage,
@@ -3756,6 +3816,40 @@ function MatchAnalyticsPanel({
   games: GameAnalytics[];
   coverage: MatchAnalyticsCoverage;
 }) {
+  const openingHandPreviewCards = useMemo<OpeningHandCard[]>(() => {
+    const uniqueCards = new Map<number, OpeningHandCard>();
+    for (const game of games) {
+      for (const hand of game.openingHands) {
+        for (const card of hand.cards) {
+          if (!uniqueCards.has(card.cardId)) {
+            uniqueCards.set(card.cardId, card);
+          }
+        }
+      }
+    }
+    return Array.from(uniqueCards.values());
+  }, [games]);
+  const openingHandPreviewQueries = useQueries({
+    queries: openingHandPreviewCards.map((card) => ({
+      queryKey: cardPreviewQueryKey(card),
+      queryFn: () => fetchCardPreview(card.cardId, card.cardName),
+      enabled: card.cardId > 0,
+      staleTime: 1000 * 60 * 60 * 24,
+      gcTime: 1000 * 60 * 60 * 24,
+      retry: 1,
+    })),
+  });
+  const openingHandPreviewByCardID = useMemo(() => {
+    const previews = new Map<number, CardPreview | null>();
+    for (let index = 0; index < openingHandPreviewCards.length; index += 1) {
+      previews.set(
+        openingHandPreviewCards[index].cardId,
+        openingHandPreviewQueries[index]?.data ?? null,
+      );
+    }
+    return previews;
+  }, [openingHandPreviewCards, openingHandPreviewQueries]);
+
   return (
     <section className="panel match-analytics-panel">
       <div className="panel-head match-analytics-heading">
@@ -3886,14 +3980,34 @@ function MatchAnalyticsPanel({
                         </h4>
                         <span>{hand.offeredHandSize.toLocaleString()} offered</span>
                       </div>
-                      <ul className="opening-hand-cards" aria-label={`Cards in opening hand attempt ${hand.attemptNumber}`}>
-                        {hand.cards.map((card) => (
-                          <li className={card.kept ? "is-kept" : "is-returned"} key={card.cardId}>
-                            <span className="opening-hand-card-quantity">{card.quantity}×</span>
-                            <CardPreviewName card={card} />
-                            <small>{card.kept ? "kept" : hand.decision === "keep" ? "bottomed" : "returned"}</small>
-                          </li>
-                        ))}
+                      <ul
+                        className="opening-hand-cards"
+                        aria-label={`Cards in opening hand attempt ${hand.attemptNumber}`}
+                      >
+                        {hand.cards.flatMap((card, cardIndex) =>
+                          Array.from(
+                            { length: Math.max(0, Math.floor(card.quantity)) },
+                            (_, copyIndex) => {
+                              const disposition = card.kept
+                                ? "kept"
+                                : hand.decision === "keep"
+                                  ? "bottomed"
+                                  : "returned";
+                              return (
+                                <li
+                                  className={`is-${disposition}`}
+                                  key={`${card.cardId}-${cardIndex}-${copyIndex}`}
+                                >
+                                  <OpeningHandCardImage
+                                    card={card}
+                                    preview={openingHandPreviewByCardID.get(card.cardId) ?? null}
+                                    disposition={disposition}
+                                  />
+                                </li>
+                              );
+                            },
+                          ),
+                        )}
                       </ul>
                     </section>
                   ))}

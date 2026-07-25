@@ -1651,6 +1651,12 @@ body.has-wide-deck-curve .app-shell {
   text-transform: uppercase;
 }
 
+.rank-chip > strong {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+}
+
 .rank-chip-value {
   display: flex;
   align-items: center;

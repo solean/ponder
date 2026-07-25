@@ -514,7 +514,7 @@ export function RankedPage() {
         </>
       )}
 
-      <RankProgressPanel />
+      <RankProgressPanel ladder={ladder} seasonView={seasonView} />
     </div>
   );
 }

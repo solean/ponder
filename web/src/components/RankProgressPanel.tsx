@@ -204,11 +204,18 @@ function emptyStateMessage(seasonView: SeasonView): string {
   }
 }
 
-export function RankProgressPanel() {
+type RankProgressPanelProps =
+  | { ladder?: never; seasonView?: never }
+  | { ladder: Ladder; seasonView: SeasonView };
+
+export function RankProgressPanel(props: RankProgressPanelProps = {}) {
   const tabBaseId = useId();
   const { mode, scheme } = useTheme();
-  const [ladder, setLadder] = useState<Ladder>("constructed");
-  const [seasonView, setSeasonView] = useState<SeasonView>("current");
+  const [localLadder, setLocalLadder] = useState<Ladder>("constructed");
+  const [localSeasonView, setLocalSeasonView] = useState<SeasonView>("current");
+  const isControlled = props.ladder != null;
+  const ladder = props.ladder ?? localLadder;
+  const seasonView = props.seasonView ?? localSeasonView;
   const { data, isLoading, error } = useQuery({
     queryKey: ["rank-history"],
     queryFn: api.rankHistory,
@@ -231,10 +238,10 @@ export function RankProgressPanel() {
   const previousSeasonOrdinal = availableSeasons[availableSeasons.length - 2];
 
   useEffect(() => {
-    if (seasonView === "previous" && !hasPreviousSeason) {
-      setSeasonView("current");
+    if (!isControlled && localSeasonView === "previous" && !hasPreviousSeason) {
+      setLocalSeasonView("current");
     }
-  }, [hasPreviousSeason, seasonView]);
+  }, [hasPreviousSeason, isControlled, localSeasonView]);
 
   const series = useMemo(
     () => (filledData ? buildGraphPoints(filledData, ladder, seasonView) : null),
@@ -250,20 +257,6 @@ export function RankProgressPanel() {
     [ladder, series],
   );
   const chartTheme = CHART_THEME_TOKENS[`${scheme}-${mode}`];
-
-  // Current standing on the ladder that is not selected, so both ranks are
-  // visible without toggling.
-  const otherLadder: Ladder = ladder === "constructed" ? "limited" : "constructed";
-  const otherLadderStanding = useMemo(() => {
-    if (!filledData) return null;
-    const otherSeries = buildGraphPoints(filledData, otherLadder, "current");
-    const otherLatestPoint = otherSeries?.points[otherSeries.points.length - 1];
-    if (!otherSeries || !otherLatestPoint) return null;
-    return {
-      rankLabel: otherLatestPoint.rankLabel,
-      rank: otherSeries.latestState,
-    };
-  }, [filledData, otherLadder]);
 
   // A sparse line reads as noise unless it contains a rank-up worth showing.
   const hasChartableTrend = (series?.points.length ?? 0) >= 3 || promotions.length > 0;
@@ -475,41 +468,43 @@ export function RankProgressPanel() {
           <h3 id={headingId}>Rank Progress</h3>
           <p>{series ? describeSeries(series) : describeSelection(seasonView)}</p>
         </div>
-        <div className="rank-controls" role="group" aria-label="Rank trend filters">
-          <div className="tabs rank-toggle" role="group" aria-label="Trend ladder">
-            {ladderOptions.map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={ladder === value}
-                className={`tab rank-toggle-button ${ladder === value ? "is-active" : ""}`}
-                onClick={() => setLadder(value)}
-                onKeyDown={(event) =>
-                  handleSegmentedKeyDown(event, value, ladderOptions, setLadder)
-                }
+        {!isControlled ? (
+          <div className="rank-controls" role="group" aria-label="Rank trend filters">
+            <div className="tabs rank-toggle" role="group" aria-label="Trend ladder">
+              {ladderOptions.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={ladder === value}
+                  className={`tab rank-toggle-button ${ladder === value ? "is-active" : ""}`}
+                  onClick={() => setLocalLadder(value)}
+                  onKeyDown={(event) =>
+                    handleSegmentedKeyDown(event, value, ladderOptions, setLocalLadder)
+                  }
+                >
+                  {LADDER_CONFIG[value].label}
+                </button>
+              ))}
+            </div>
+            <label className="rank-season-select">
+              <span>Season</span>
+              <select
+                value={seasonView}
+                onChange={(event) => setLocalSeasonView(event.target.value as SeasonView)}
               >
-                {LADDER_CONFIG[value].label}
-              </button>
-            ))}
+                <option value="all">All seasons</option>
+                <option value="current">
+                  {currentSeasonOrdinal == null
+                    ? "Current season"
+                    : `Season ${currentSeasonOrdinal}`}
+                </option>
+                {hasPreviousSeason ? (
+                  <option value="previous">Season {previousSeasonOrdinal}</option>
+                ) : null}
+              </select>
+            </label>
           </div>
-          <label className="rank-season-select">
-            <span>Season</span>
-            <select
-              value={seasonView}
-              onChange={(event) => setSeasonView(event.target.value as SeasonView)}
-            >
-              <option value="all">All seasons</option>
-              <option value="current">
-                {currentSeasonOrdinal == null
-                  ? "Current season"
-                  : `Season ${currentSeasonOrdinal}`}
-              </option>
-              {hasPreviousSeason ? (
-                <option value="previous">Season {previousSeasonOrdinal}</option>
-              ) : null}
-            </select>
-          </label>
-        </div>
+        ) : null}
       </div>
 
       {readyState ? (
@@ -519,13 +514,6 @@ export function RankProgressPanel() {
             <div className="rank-chip-value">
               <RankSymbol ladder={ladder} rank={readyState.series.latestState} />
               <strong>{currentRank}</strong>
-            </div>
-          </div>
-          <div className="rank-chip">
-            <span>{LADDER_CONFIG[otherLadder].label}</span>
-            <div className="rank-chip-value">
-              <RankSymbol ladder={otherLadder} rank={otherLadderStanding?.rank ?? null} />
-              <strong>{otherLadderStanding?.rankLabel ?? "Unranked"}</strong>
             </div>
           </div>
           {rankMoved ? (

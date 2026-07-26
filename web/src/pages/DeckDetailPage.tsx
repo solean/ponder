@@ -1392,7 +1392,7 @@ export function DeckDetailPage() {
             ) : isSideboardMetadataLoading ? (
               <DeckSectionSkeleton rowCount={sideboardSkeletonRows} />
             ) : (
-              <article className="deck-card">
+              <article className="deck-card deck-card-sideboard">
                 <h4>
                   {formatSectionLabel("sideboard")} ({sectionTotal(enrichedSideboardCards)})
                 </h4>

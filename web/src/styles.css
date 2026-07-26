@@ -5786,6 +5786,22 @@ button.match-replay-zonechip.is-button {
   font-size: var(--text-base);
 }
 
+.deck-card-sideboard ul {
+  grid-template-columns: auto fit-content(20rem) auto;
+  justify-content: start;
+  column-gap: 20px;
+}
+
+.deck-card-sideboard li {
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  column-gap: 20px;
+}
+
+.deck-card-sideboard .deck-card-mana {
+  justify-self: auto;
+}
+
 .deck-card-qty {
   color: var(--muted);
   min-width: 2.2rem;

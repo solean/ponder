@@ -1202,6 +1202,81 @@ body.has-wide-deck-curve .app-shell {
   gap: 1.05rem;
 }
 
+.page-context-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1.05rem 1rem;
+  min-width: 0;
+}
+
+.page-context-bar:empty {
+  display: none;
+}
+
+.page-context-bar > .live-banner,
+.page-context-bar > .breadcrumbs {
+  grid-column: 1 / -1;
+}
+
+.page-context-bar > .live-banner {
+  margin-bottom: 0;
+}
+
+.page-context-bar > .live-banner.is-minimized {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  width: fit-content;
+  max-width: min(58rem, 72vw);
+}
+
+.page-context-bar > .live-banner.is-minimized + .breadcrumbs {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.page-context-bar .live-banner.is-minimized .live-banner-head {
+  flex-wrap: nowrap;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.3rem 0.38rem 0.3rem 0.62rem;
+}
+
+.page-context-bar .live-banner.is-minimized :is(.live-vs, .live-progress, .live-deck) {
+  white-space: nowrap;
+}
+
+.page-context-bar .live-banner.is-minimized .live-vs {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page-context-bar .live-banner.is-minimized :is(.live-badge, .live-progress) {
+  flex: none;
+}
+
+.page-context-bar .live-banner.is-minimized .event-label {
+  flex: 0 1 auto;
+}
+
+.page-context-bar .live-banner.is-minimized .live-deck {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 14rem;
+  margin-left: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page-context-bar .live-banner.is-minimized .live-minimize {
+  width: 1.45rem;
+  height: 1.45rem;
+  margin-left: 0.15rem;
+  font-size: var(--text-base);
+}
+
 .breadcrumbs {
   min-width: 0;
   padding: 0 0.28rem;
@@ -1267,6 +1342,36 @@ body.has-wide-deck-curve .app-shell {
   color: var(--text-soft);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .page-context-bar > .live-banner.is-minimized {
+    max-width: 66vw;
+  }
+
+  .page-context-bar .live-banner.is-minimized .live-deck {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-context-bar {
+    column-gap: 0.55rem;
+  }
+
+  .page-context-bar > .live-banner.is-minimized {
+    max-width: 62vw;
+  }
+
+  .page-context-bar .live-banner.is-minimized .live-banner-head {
+    gap: 0.42rem;
+    padding-left: 0.5rem;
+  }
+
+  .page-context-bar .live-banner.is-minimized :is(.event-label, .live-progress) {
+    display: none;
+  }
+
 }
 
 .stack-lg {

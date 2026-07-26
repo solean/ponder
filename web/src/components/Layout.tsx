@@ -164,13 +164,15 @@ export function Layout() {
             </nav>
           </div>
         </header>
-          {location.pathname === "/settings" ? null : (
-            <ErrorBoundary label="LiveMatchBanner">
-              <LiveMatchBanner />
-            </ErrorBoundary>
-          )}
           <main id="main-content" className="content" tabIndex={-1}>
-            <Breadcrumbs />
+            <div className="page-context-bar">
+              {location.pathname === "/settings" ? null : (
+                <ErrorBoundary label="LiveMatchBanner">
+                  <LiveMatchBanner />
+                </ErrorBoundary>
+              )}
+              <Breadcrumbs />
+            </div>
             <ErrorBoundary
               key={location.pathname}
               label="page"

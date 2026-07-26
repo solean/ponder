@@ -12,11 +12,12 @@ const MAX_REVEALED = 12;
 const MINIMIZED_STORAGE_KEY = "ponder.liveBannerMinimized";
 
 function readStoredMinimized(): boolean {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined") return true;
   try {
-    return window.localStorage.getItem(MINIMIZED_STORAGE_KEY) === "true";
+    const stored = window.localStorage.getItem(MINIMIZED_STORAGE_KEY);
+    return stored === null ? true : stored === "true";
   } catch {
-    return false;
+    return true;
   }
 }
 

@@ -71,6 +71,52 @@ const matchPlayDrawSQL = `
 	), '')
 `
 
+// matchFullTurnCountSQL projects a match's raw Arena half-turn ordinals into
+// user-facing full turns. Prefer the replay-derived games table per game, then
+// fill any game missing there from its latest observed card play. Applying the
+// conversion before SUM is important for a multi-game match whose games can
+// each end on an odd Arena turn. The legacy match-level business-event value
+// is only a fallback when no per-game source exists.
+//
+// This expression expects the matches table to be aliased as m.
+const matchFullTurnCountSQL = `
+	COALESCE(
+		(
+			SELECT SUM(
+				CASE
+					WHEN per_game.arena_turn_count > 0 THEN (per_game.arena_turn_count + 1) / 2
+					ELSE per_game.arena_turn_count
+				END
+			)
+			FROM (
+				SELECT g.game_number, g.turn_count AS arena_turn_count
+				FROM games g
+				WHERE g.match_id = m.id
+				  AND g.turn_count IS NOT NULL
+
+				UNION ALL
+
+				SELECT cp.game_number, MAX(cp.turn_number) AS arena_turn_count
+				FROM match_card_plays cp
+				WHERE cp.match_id = m.id
+				  AND cp.turn_number IS NOT NULL
+				  AND NOT EXISTS (
+					SELECT 1
+					FROM games g
+					WHERE g.match_id = m.id
+					  AND g.game_number = cp.game_number
+					  AND g.turn_count IS NOT NULL
+				  )
+				GROUP BY cp.game_number
+			) per_game
+		),
+		CASE
+			WHEN m.turn_count > 0 THEN (m.turn_count + 1) / 2
+			ELSE m.turn_count
+		END
+	)
+`
+
 func (s *Store) UpsertMatchStart(ctx context.Context, tx *sql.Tx, arenaMatchID, eventName string, seatID int64, startedAt string) (int64, error) {
 	resolvedEventName := eventName
 	if eventName != "" {
@@ -301,18 +347,7 @@ func (s *Store) ListMatches(ctx context.Context, limit int64, eventName, result 
 			COALESCE(m.ended_at, ''),
 			COALESCE(m.result, 'unknown'),
 			COALESCE(m.win_reason, ''),
-			COALESCE(
-				m.turn_count,
-				(
-					SELECT SUM(game_turns)
-					FROM (
-						SELECT MAX(cp.turn_number) AS game_turns
-						FROM match_card_plays cp
-						WHERE cp.match_id = m.id AND cp.turn_number IS NOT NULL
-						GROUP BY cp.game_number
-					)
-				)
-			),
+			%s,
 			COALESCE(
 				m.seconds_count,
 				CASE
@@ -357,7 +392,7 @@ func (s *Store) ListMatches(ctx context.Context, limit int64, eventName, result 
 		  AND (? = '' OR m.result = ?)
 		ORDER BY COALESCE(m.started_at, m.ended_at, m.updated_at) DESC
 		LIMIT ?
-	`, matchBestOfSQL, matchPlayDrawSQL)
+	`, matchBestOfSQL, matchPlayDrawSQL, matchFullTurnCountSQL)
 	rows, err := s.db.QueryContext(ctx, query, eventName, eventName, result, result, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list matches: %w", err)
@@ -535,18 +570,7 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 			COALESCE(m.ended_at, ''),
 			COALESCE(m.result, 'unknown'),
 			COALESCE(m.win_reason, ''),
-			COALESCE(
-				m.turn_count,
-				(
-					SELECT SUM(game_turns)
-					FROM (
-						SELECT MAX(cp.turn_number) AS game_turns
-						FROM match_card_plays cp
-						WHERE cp.match_id = m.id AND cp.turn_number IS NOT NULL
-						GROUP BY cp.game_number
-					)
-				)
-			),
+			%s,
 			COALESCE(
 				m.seconds_count,
 				CASE
@@ -589,7 +613,7 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 		FROM matches m
 		WHERE m.id = ?
 		LIMIT 1
-	`, matchBestOfSQL, matchPlayDrawSQL)
+	`, matchBestOfSQL, matchPlayDrawSQL, matchFullTurnCountSQL)
 
 	err := s.db.QueryRowContext(ctx, query, matchID).Scan(
 		&out.Match.ID,

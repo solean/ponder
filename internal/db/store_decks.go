@@ -396,7 +396,7 @@ func (s *Store) GetDeckDetail(ctx context.Context, deckID int64, matchLimit int6
 		return out, err
 	}
 
-	matchRows, err := s.db.QueryContext(ctx, `
+	matchRows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT
 			m.id,
 			m.arena_match_id,
@@ -406,18 +406,7 @@ func (s *Store) GetDeckDetail(ctx context.Context, deckID int64, matchLimit int6
 			COALESCE(m.ended_at, ''),
 			COALESCE(m.result, 'unknown'),
 			COALESCE(m.win_reason, ''),
-			COALESCE(
-				m.turn_count,
-				(
-					SELECT SUM(game_turns)
-					FROM (
-						SELECT MAX(cp.turn_number) AS game_turns
-						FROM match_card_plays cp
-						WHERE cp.match_id = m.id AND cp.turn_number IS NOT NULL
-						GROUP BY cp.game_number
-					)
-				)
-			),
+			%s,
 			COALESCE(
 				m.seconds_count,
 				CASE
@@ -434,7 +423,7 @@ func (s *Store) GetDeckDetail(ctx context.Context, deckID int64, matchLimit int6
 		WHERE md.deck_id = ?
 		ORDER BY COALESCE(m.started_at, m.ended_at, m.updated_at) DESC
 		LIMIT ?
-	`, deckID, matchLimit)
+	`, matchFullTurnCountSQL), deckID, matchLimit)
 	if err != nil {
 		return out, fmt.Errorf("get deck matches: %w", err)
 	}

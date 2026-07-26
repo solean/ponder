@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   battlefieldSectionKind,
+  boardTurnLabel,
   boardZoneKind,
   boardZoneLabel,
   buildReplayBeat,
@@ -29,6 +30,7 @@ import {
   replayLifeSeriesDomain,
   replayObjectLoyalty,
   replayTurnBoundaryCount,
+  replayTurnLabel,
   replayTurnValue,
   summarizeReplayGame,
 } from "../src/lib/replay";
@@ -269,6 +271,18 @@ describe("battlefield card stacks", () => {
 });
 
 describe("turn boundaries", () => {
+  test("displays each pair of Arena turns as one full turn", () => {
+    expect(boardTurnLabel(1)).toBe("T1");
+    expect(boardTurnLabel(2)).toBe("T1");
+    expect(boardTurnLabel(3)).toBe("T2");
+    expect(boardTurnLabel(0)).toBe("Pre");
+
+    expect(replayTurnLabel(1)).toBe("Turn 1");
+    expect(replayTurnLabel(2)).toBe("Turn 1");
+    expect(replayTurnLabel(3)).toBe("Turn 2");
+    expect(replayTurnLabel(undefined)).toBe("Pre-game");
+  });
+
   test("groups items by turn, preserving first/last index", () => {
     const boundaries = buildReplayTurnBoundaries([
       { turnNumber: 1 },
@@ -279,6 +293,8 @@ describe("turn boundaries", () => {
     expect(boundaries[0]).toMatchObject({ turnKey: 1, firstIndex: 0, lastIndex: 1 });
     expect(replayTurnBoundaryCount(boundaries[0])).toBe(2);
     expect(boundaries[1]).toMatchObject({ turnKey: 2, firstIndex: 2, lastIndex: 2 });
+    expect(replayTurnLabel(boundaries[0]?.turnKey)).toBe("Turn 1");
+    expect(replayTurnLabel(boundaries[1]?.turnKey)).toBe("Turn 1");
   });
 
   test("normalizes missing/zero turns to a sentinel", () => {

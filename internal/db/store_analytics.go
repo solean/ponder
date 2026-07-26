@@ -1079,6 +1079,9 @@ func (s *Store) ListMatchGames(ctx context.Context, matchID int64) ([]model.Game
 		}
 		games[gameIndex].TurnStats = turnStats
 		games[gameIndex].Flags = deriveGameFlags(turnStats)
+		// Turn stats and flags retain Arena's per-player turn ordinals. Project
+		// only the game's headline count after all raw-dependent derivation.
+		games[gameIndex].TurnCount = model.ArenaTurnPtrToFullTurn(games[gameIndex].TurnCount)
 	}
 
 	return games, nil

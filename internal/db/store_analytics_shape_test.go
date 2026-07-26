@@ -265,6 +265,9 @@ func TestRefreshMatchAnalyticsStoresTurnStatsAndMinLife(t *testing.T) {
 		t.Fatalf("games = %d, want 1", len(games))
 	}
 	game := games[0]
+	if game.TurnCount == nil || *game.TurnCount != 2 {
+		t.Fatalf("display turn count = %#v, want 2 full turns", game.TurnCount)
+	}
 	if game.MinSelfLife == nil || *game.MinSelfLife != 4 {
 		t.Fatalf("min self life = %#v, want 4", game.MinSelfLife)
 	}
@@ -325,7 +328,7 @@ func TestDeckAnalyticsShapeAggregatesMissedDropsAndCurves(t *testing.T) {
 		t.Fatalf("UpsertDeck: %v", err)
 	}
 
-	// Both games run four turns with the player on the play (own turns 1 and
+	// Both games run four Arena player-turns (two full turns) with the player on the play (own turns 1 and
 	// 3). Match 1 (win) drops a land on both own turns; match 2 (loss) skips
 	// the turn-3 drop while holding a land, which is a non-final turn.
 	type matchSeed struct {
@@ -368,6 +371,12 @@ func TestDeckAnalyticsShapeAggregatesMissedDropsAndCurves(t *testing.T) {
 				t.Fatalf("UpsertMatchCardPlay(%s): %v", seed.arenaID, err)
 			}
 		}
+		for playIndex, turn := range []int64{2, 4} {
+			if err := store.UpsertMatchCardPlay(ctx, tx, seed.arenaID, 1, int64(200+playIndex), spellCard, 1, turn,
+				"main1", "stack", "2026-07-18T00:00:02Z", "test"); err != nil {
+				t.Fatalf("UpsertMatchCardPlay(%s spell): %v", seed.arenaID, err)
+			}
+		}
 		_ = index
 		_ = matchID
 	}
@@ -393,18 +402,31 @@ func TestDeckAnalyticsShapeAggregatesMissedDropsAndCurves(t *testing.T) {
 	if analytics.Coverage.GamesWithTurnStats != 2 || analytics.Coverage.GamesWithLandJudged != 2 {
 		t.Fatalf("coverage = %#v, want 2 games with turn stats and 2 judged", analytics.Coverage)
 	}
-	if len(shape.GameLengths) == 0 || shape.GameLengths[0].Key != 4 {
-		t.Fatalf("game lengths = %#v, want a bucket at 4 turns", shape.GameLengths)
+	if len(shape.GameLengths) == 0 || shape.GameLengths[0].Key != 2 {
+		t.Fatalf("game lengths = %#v, want a bucket at 2 full turns", shape.GameLengths)
 	}
-	if len(shape.TurnCurve) != 4 {
-		t.Fatalf("turn curve = %d points, want 4", len(shape.TurnCurve))
+	if shape.AvgWinningTurn == nil || *shape.AvgWinningTurn != 2 ||
+		shape.AvgLosingTurn == nil || *shape.AvgLosingTurn != 2 {
+		t.Fatalf("average ending turns = win %#v loss %#v, want 2 and 2",
+			shape.AvgWinningTurn, shape.AvgLosingTurn)
 	}
-	last := shape.TurnCurve[3]
+	if len(shape.TurnCurve) != 2 {
+		t.Fatalf("turn curve = %d points, want 2 full turns", len(shape.TurnCurve))
+	}
+	last := shape.TurnCurve[1]
+	if last.Turn != 2 {
+		t.Fatalf("last turn curve point = %d, want full turn 2", last.Turn)
+	}
 	if last.AvgLandsWins == nil || *last.AvgLandsWins != 2 {
-		t.Fatalf("avg lands in wins at turn 4 = %#v, want 2", last.AvgLandsWins)
+		t.Fatalf("avg lands in wins at turn 2 = %#v, want 2", last.AvgLandsWins)
 	}
 	if last.AvgLandsLosses == nil || *last.AvgLandsLosses != 1 {
-		t.Fatalf("avg lands in losses at turn 4 = %#v, want 1", last.AvgLandsLosses)
+		t.Fatalf("avg lands in losses at turn 2 = %#v, want 1", last.AvgLandsLosses)
+	}
+	if last.AvgSpellsWins == nil || *last.AvgSpellsWins != 1 ||
+		last.AvgSpellsLosses == nil || *last.AvgSpellsLosses != 1 {
+		t.Fatalf("avg spells on full turn 2 = win %#v loss %#v, want 1 and 1",
+			last.AvgSpellsWins, last.AvgSpellsLosses)
 	}
 
 	missed, err := store.ListDeckAnalyticsGames(ctx, DeckAnalyticsGamesQuery{DeckID: deckID, LandDrops: "missed"})

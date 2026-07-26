@@ -54,6 +54,14 @@ func nullableFloat(value sql.NullFloat64) *float64 {
 	return &out
 }
 
+// arenaTurnAsFullTurnSQL converts Arena's per-player turn ordinal into the
+// full-turn number presented in analytics. Callers only pass trusted column
+// expressions; persisted values intentionally remain raw for parity and replay
+// ordering.
+func arenaTurnAsFullTurnSQL(column string) string {
+	return fmt.Sprintf("CASE WHEN %[1]s > 0 THEN CAST((%[1]s + 1) / 2 AS INTEGER) ELSE %[1]s END", column)
+}
+
 // GetDeckAnalytics aggregates the derived per-game and per-card facts for one
 // deck, optionally restricted to a single immutable deck version.
 func (s *Store) GetDeckAnalytics(ctx context.Context, deckID, deckVersionID int64) (model.DeckAnalytics, error) {
@@ -109,7 +117,8 @@ func (s *Store) loadDeckGameShape(ctx context.Context, out *model.DeckAnalytics,
 	out.Shape.TurnCurve = []model.DeckTurnCurvePoint{}
 
 	var err error
-	out.Shape.GameLengths, err = s.loadDeckGameBuckets(ctx, "g.turn_count", scope, scopeArgs)
+	fullTurnCount := arenaTurnAsFullTurnSQL("g.turn_count")
+	out.Shape.GameLengths, err = s.loadDeckGameBuckets(ctx, fullTurnCount, scope, scopeArgs)
 	if err != nil {
 		return err
 	}
@@ -121,14 +130,14 @@ func (s *Store) loadDeckGameShape(ctx context.Context, out *model.DeckAnalytics,
 	var lowestWinLife, gamesWithTurnStats sql.NullInt64
 	query := fmt.Sprintf(`
 		SELECT
-			AVG(CASE WHEN g.result = 'win' AND g.turn_count IS NOT NULL THEN CAST(g.turn_count AS REAL) END),
-			AVG(CASE WHEN g.result = 'loss' AND g.turn_count IS NOT NULL THEN CAST(g.turn_count AS REAL) END),
+			AVG(CASE WHEN g.result = 'win' AND g.turn_count IS NOT NULL THEN CAST(%[1]s AS REAL) END),
+			AVG(CASE WHEN g.result = 'loss' AND g.turn_count IS NOT NULL THEN CAST(%[1]s AS REAL) END),
 			MIN(CASE WHEN g.result = 'win' THEN g.min_self_life END),
 			SUM(CASE WHEN EXISTS (SELECT 1 FROM game_turn_stats ts WHERE ts.game_id = g.id) THEN 1 ELSE 0 END)
 		FROM games g
 		JOIN match_decks md ON md.match_id = g.match_id
-		WHERE %s
-	`, scope)
+		WHERE %[2]s
+	`, fullTurnCount, scope)
 	if err := s.db.QueryRowContext(ctx, query, scopeArgs...).Scan(
 		&avgWinningTurn, &avgLosingTurn, &lowestWinLife, &gamesWithTurnStats,
 	); err != nil {
@@ -250,21 +259,22 @@ func (s *Store) loadDeckTurnCurve(ctx context.Context, out *model.DeckAnalytics,
 			return fmt.Errorf("scan deck turn curve: %w", err)
 		}
 		if current == nil || gameID != currentID {
-			current = &gameCurve{result: result, turnCount: turnCount,
+			current = &gameCurve{result: result, turnCount: model.ArenaTurnToFullTurn(turnCount),
 				lands: make(map[int64]int64), spells: make(map[int64]int64)}
 			currentID = gameID
 			games = append(games, current)
 		}
-		current.lands[turn] = lands
-		current.spells[turn] = spells
+		fullTurn := model.ArenaTurnToFullTurn(turn)
+		current.lands[fullTurn] += lands
+		current.spells[fullTurn] += spells
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("iterate deck turn curve: %w", err)
 	}
 
 	type turnTally struct {
-		winGames, lossGames                                int64
-		winLands, lossLands, winSpells, lossSpells         float64
+		winGames, lossGames                        int64
+		winLands, lossLands, winSpells, lossSpells float64
 	}
 	tallies := make(map[int64]*turnTally)
 	maxTurn := int64(0)
@@ -542,8 +552,12 @@ func (s *Store) loadDeckCardPerformance(ctx context.Context, scope string, scope
 			SUM(CASE WHEN s.end_in_hand_copies > 0 THEN 1 ELSE 0 END),
 			SUM(CASE WHEN s.mulligan_copies > 0 THEN 1 ELSE 0 END),
 			SUM(s.mulligan_copies),
-			AVG(CASE WHEN %[1]s AND s.first_seen_turn IS NOT NULL THEN CAST(s.first_seen_turn AS REAL) END),
-			AVG(CASE WHEN s.first_played_turn IS NOT NULL THEN CAST(s.first_played_turn AS REAL) END),
+			AVG(CASE WHEN %[1]s AND s.first_seen_turn IS NOT NULL THEN CAST(
+				CASE WHEN s.first_seen_turn > 0 THEN (s.first_seen_turn + 1) / 2 ELSE s.first_seen_turn END
+				AS REAL) END),
+			AVG(CASE WHEN s.first_played_turn IS NOT NULL THEN CAST(
+				CASE WHEN s.first_played_turn > 0 THEN (s.first_played_turn + 1) / 2 ELSE s.first_played_turn END
+				AS REAL) END),
 			AVG(CASE WHEN %[2]s THEN CAST(s.opening_kept_copies + s.drawn_copies AS REAL) END),
 			AVG(CASE WHEN s.played_copies > 0 THEN CAST(s.played_copies AS REAL) END)
 		FROM game_card_stats s
@@ -709,7 +723,8 @@ func (s *Store) ListDeckAnalyticsGames(ctx context.Context, q DeckAnalyticsGames
 		if err != nil {
 			return nil, err
 		}
-		statColumns = "s.opening_kept_copies, s.drawn_copies, s.played_copies, s.end_in_hand_copies, s.first_played_turn"
+		statColumns = "s.opening_kept_copies, s.drawn_copies, s.played_copies, s.end_in_hand_copies, " +
+			arenaTurnAsFullTurnSQL("s.first_played_turn")
 		joinStats = "JOIN game_card_stats s ON s.game_id = g.id AND s.card_id = ?"
 		joinArgs = append(joinArgs, q.CardID)
 		conditions = append(conditions, facetCond)
@@ -725,7 +740,7 @@ func (s *Store) ListDeckAnalyticsGames(ctx context.Context, q DeckAnalyticsGames
 		conditionArgs = append(conditionArgs, *q.MulliganCount)
 	}
 	if q.TurnCount != nil {
-		conditions = append(conditions, "g.turn_count = ?")
+		conditions = append(conditions, arenaTurnAsFullTurnSQL("g.turn_count")+" = ?")
 		conditionArgs = append(conditionArgs, *q.TurnCount)
 	}
 	missedDropExists := fmt.Sprintf(`EXISTS (

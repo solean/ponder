@@ -7,10 +7,15 @@ import { EventLabel } from "./EventLabel";
 import { ResultPill } from "./ResultPill";
 import { StatusMessage } from "./StatusMessage";
 import { api } from "../lib/api";
+import {
+  buildDeckAnalyticsCoveragePresentation,
+  coverageSampleLabel,
+} from "../lib/deckAnalyticsCoverage";
 import { formatDateTime, pct } from "../lib/format";
 import { useEventSets } from "../lib/useEventSets";
 import type {
   AnalyticsBucket,
+  DeckAnalyticsCoverage,
   DeckAnalyticsCardFacet,
   DeckAnalyticsGamesParams,
   DeckCardPerformance,
@@ -170,6 +175,27 @@ function RecordTile({
   );
 }
 
+function CoverageSample({
+  available,
+  total,
+  label,
+}: {
+  available: number;
+  total: number;
+  label?: string;
+}) {
+  const sample = coverageSampleLabel(available, total);
+  if (!sample) {
+    return null;
+  }
+  return (
+    <span className="deck-analytics-sample">
+      {label ? `${label}: ` : "Based on "}
+      {sample}
+    </span>
+  );
+}
+
 function BucketTable({
   title,
   buckets,
@@ -177,6 +203,7 @@ function BucketTable({
   baseline,
   emptyMessage,
   footnote,
+  totalGames,
   onDrill,
 }: {
   title: string;
@@ -185,11 +212,20 @@ function BucketTable({
   baseline: number | null;
   emptyMessage: string;
   footnote?: string;
+  totalGames?: number;
   onDrill?: (bucket: AnalyticsBucket) => void;
 }) {
+  const coveredGames = buckets.reduce(
+    (total, bucket) => total + bucket.record.games + bucket.unknownResults,
+    0,
+  );
+  const sample = totalGames == null ? undefined : coverageSampleLabel(coveredGames, totalGames);
   return (
     <article className="deck-analytics-bucket-card">
-      <h4>{title}</h4>
+      <div className="deck-analytics-bucket-head">
+        <h4>{title}</h4>
+        {sample ? <span className="deck-analytics-sample">Based on {sample}</span> : null}
+      </div>
       {buckets.length === 0 ? (
         <p className="deck-analytics-empty">{emptyMessage}</p>
       ) : (
@@ -325,10 +361,12 @@ function DeckTurnCurveChart({
 
 function DeckGameShapeSection({
   shape,
+  coverage,
   baseline,
   onDrill,
 }: {
   shape: DeckGameShape;
+  coverage: DeckAnalyticsCoverage;
   baseline: number | null;
   onDrill: (drillDown: DrillDown) => void;
 }) {
@@ -341,10 +379,24 @@ function DeckGameShapeSection({
   return (
     <>
       <div className="deck-analytics-cards-head">
-        <h4>Game shape</h4>
+        <div className="deck-analytics-section-title">
+          <h4>Game shape</h4>
+          <div className="deck-analytics-sample-list">
+            <CoverageSample
+              available={coverage.gamesWithTurnStats}
+              total={coverage.gameCount}
+              label="Turn data"
+            />
+            <CoverageSample
+              available={coverage.gamesWithLandJudged}
+              total={coverage.gameCount}
+              label="Land-drop analysis"
+            />
+          </div>
+        </div>
         <p>
-          Turn-by-turn tempo derived from replay frames and observed card plays. Land-drop judgments need resolved
-          card types and are heuristics, not verdicts.
+          Turn-by-turn tempo derived from replay frames and observed card plays. Land-drop analysis needs resolved
+          card types and remains a heuristic, not a verdict.
         </p>
       </div>
       <dl className="deck-analytics-tiles" aria-label="Game shape summary">
@@ -396,6 +448,7 @@ function DeckGameShapeSection({
           formatKey={(key) => `${key} turns`}
           baseline={baseline}
           emptyMessage="No games with a known ending turn yet."
+          totalGames={coverage.gameCount}
           onDrill={(bucket) =>
             onDrill({
               label: `Games ending on turn ${bucket.key}`,
@@ -590,12 +643,9 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
   }
 
   const coverage = data.coverage;
-  const coverageState =
-    coverage.gameCount > 0 && coverage.gamesWithCardStats === coverage.gameCount && coverage.gamesWithResult === coverage.gameCount
-      ? "complete"
-      : coverage.gamesWithCardStats > 0
-        ? "partial"
-        : "unknown";
+  const coveragePresentation = buildDeckAnalyticsCoveragePresentation(coverage, versionId);
+  const resultSample = coverageSampleLabel(coverage.gamesWithResult, coverage.gameCount);
+  const playDrawSample = coverageSampleLabel(coverage.gamesWithPlayDraw, coverage.gameCount);
 
   const sortIndicator = (key: CardSortKey) => (sortKey === key ? (sortAscending ? " ↑" : " ↓") : "");
   const headerSort = (key: CardSortKey): "ascending" | "descending" | "none" =>
@@ -608,76 +658,72 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
           <h3>Performance Analytics</h3>
           <p>
             {coverage.gameCount > 0
-              ? `${coverage.gameCount.toLocaleString()} games across ${coverage.matches.toLocaleString()} matches, from local replay data`
+              ? `${coverage.gameCount.toLocaleString()} ${coverage.gameCount === 1 ? "game" : "games"} · ${coverage.matches.toLocaleString()} ${coverage.matches === 1 ? "match" : "matches"}`
               : "No games recorded with this deck yet"}
           </p>
         </div>
         <div className="deck-analytics-controls">
-          {versions.length > 1 ? (
-            <label className="deck-analytics-version-select">
-              <span>Version</span>
-              <select
-                value={versionId}
-                onChange={(event) => {
-                  setVersionId(Number(event.target.value));
-                  setDrillDown(null);
-                }}
-              >
-                <option value={0}>All versions</option>
-                {versions.map((version, index) => (
-                  <option key={version.id} value={version.id}>
-                    Version {version.versionNumber}
-                    {index === 0 ? " (current)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {versions.length > 1 || coveragePresentation.versionNote ? (
+            <div className="deck-analytics-version-control">
+              {versions.length > 1 ? (
+                <label className="deck-analytics-version-select">
+                  <span>Version</span>
+                  <select
+                    value={versionId}
+                    onChange={(event) => {
+                      setVersionId(Number(event.target.value));
+                      setDrillDown(null);
+                    }}
+                  >
+                    <option value={0}>All versions</option>
+                    {versions.map((version, index) => (
+                      <option key={version.id} value={version.id}>
+                        Version {version.versionNumber}
+                        {index === 0 ? " (current)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {coveragePresentation.versionNote ? (
+                <span className="deck-analytics-version-note">{coveragePresentation.versionNote}</span>
+              ) : null}
+            </div>
           ) : null}
-          <span className={`analytics-coverage-badge is-${coverageState}`}>
-            {coverageState === "complete"
-              ? "Complete coverage"
-              : coverageState === "partial"
-                ? "Partial coverage"
-                : "No card data"}
-          </span>
+          {coveragePresentation.state === "complete" ? (
+            <span className="analytics-coverage-badge is-complete deck-analytics-coverage-badge">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="m3.2 8.2 3 3.1 6.6-6.7" />
+              </svg>
+              {coveragePresentation.statusLabel}
+            </span>
+          ) : null}
         </div>
       </div>
 
-      <dl className="analytics-coverage-grid" aria-label="Deck analytics data coverage">
-        <div>
-          <dt>Matches</dt>
-          <dd>
-            {coverage.matches.toLocaleString()}
-            {coverage.matchesWithVersion < coverage.matches
-              ? ` (${coverage.matchesWithVersion.toLocaleString()} versioned)`
-              : ""}
-          </dd>
-        </div>
-        <div>
-          <dt>Game results</dt>
-          <dd>{coverage.gameCount > 0 ? `${coverage.gamesWithResult} of ${coverage.gameCount}` : "—"}</dd>
-        </div>
-        <div>
-          <dt>Opening hands</dt>
-          <dd>{coverage.gameCount > 0 ? `${coverage.gamesWithOpeningHand} of ${coverage.gameCount}` : "—"}</dd>
-        </div>
-        <div>
-          <dt>Play / draw</dt>
-          <dd>{coverage.gameCount > 0 ? `${coverage.gamesWithPlayDraw} of ${coverage.gameCount}` : "—"}</dd>
-        </div>
-        <div>
-          <dt>Card data</dt>
-          <dd>{coverage.gameCount > 0 ? `${coverage.gamesWithCardStats} of ${coverage.gameCount}` : "—"}</dd>
-        </div>
-        <div>
-          <dt>Turn data</dt>
-          <dd>{coverage.gameCount > 0 ? `${coverage.gamesWithTurnStats} of ${coverage.gameCount}` : "—"}</dd>
-        </div>
-        <div>
-          <dt>Land drops judged</dt>
-          <dd>{coverage.gameCount > 0 ? `${coverage.gamesWithLandJudged} of ${coverage.gameCount}` : "—"}</dd>
-        </div>
-      </dl>
+      {coveragePresentation.state === "partial" ? (
+        <details className="deck-analytics-coverage-notice">
+          <summary>
+            <span className="deck-analytics-coverage-icon" aria-hidden="true">!</span>
+            <span className="deck-analytics-coverage-copy">
+              <strong>{coveragePresentation.statusLabel}</strong>
+              <span>{coveragePresentation.issueSummary}</span>
+            </span>
+            <span className="deck-analytics-coverage-toggle" aria-hidden="true">Details</span>
+          </summary>
+          <ul>
+            {coveragePresentation.issues.map((issue) => (
+              <li key={issue.key}>
+                <div>
+                  <strong>{issue.label}</strong>
+                  <span>{issue.available} of {issue.total} games</span>
+                </div>
+                <p>{issue.impact}</p>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
       {coverage.gameCount === 0 ? (
         <StatusMessage>
@@ -685,6 +731,12 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
         </StatusMessage>
       ) : (
         <>
+          {resultSample || playDrawSample ? (
+            <div className="deck-analytics-sample-list deck-analytics-record-samples" aria-label="Record sample sizes">
+              {resultSample ? <span className="deck-analytics-sample">Results: {resultSample}</span> : null}
+              {playDrawSample ? <span className="deck-analytics-sample">Play/draw splits: {playDrawSample}</span> : null}
+            </div>
+          ) : null}
           <dl className="deck-analytics-tiles" aria-label="Deck record summary">
             <RecordTile
               label="Games"
@@ -729,6 +781,7 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
               formatKey={(key) => `${key} cards`}
               baseline={baseline}
               emptyMessage="No opening hands captured yet."
+              totalGames={coverage.gameCount}
               onDrill={(bucket) =>
                 setDrillDown({
                   label: `${bucket.key}-card keeps`,
@@ -742,6 +795,7 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
               formatKey={(key) => (key === 0 ? "None" : `${key}`)}
               baseline={baseline}
               emptyMessage="No mulligan data captured yet."
+              totalGames={coverage.gameCount}
               onDrill={(bucket) =>
                 setDrillDown({
                   label: bucket.key === 0 ? "No-mulligan games" : `Games with ${bucket.key} mulligan${bucket.key === 1 ? "" : "s"}`,
@@ -755,6 +809,7 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
               formatKey={(key) => `${key} lands`}
               baseline={baseline}
               emptyMessage="No kept hands with resolved card types yet."
+              totalGames={coverage.gameCount}
               footnote={
                 data.landCountUnknownHands > 0
                   ? `${data.landCountUnknownHands} hand${data.landCountUnknownHands === 1 ? "" : "s"} excluded: card types not resolved yet.`
@@ -763,10 +818,22 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
             />
           </div>
 
-          <DeckGameShapeSection shape={data.shape} baseline={baseline} onDrill={setDrillDown} />
+          <DeckGameShapeSection
+            shape={data.shape}
+            coverage={coverage}
+            baseline={baseline}
+            onDrill={setDrillDown}
+          />
 
           <div className="deck-analytics-cards-head">
-            <h4>Card performance</h4>
+            <div className="deck-analytics-section-title">
+              <h4>Card performance</h4>
+              <CoverageSample
+                available={coverage.gamesWithCardStats}
+                total={coverage.gameCount}
+                label="Card data"
+              />
+            </div>
             <p>
               Win rates are game-scoped and compared against the deck baseline of{" "}
               {baseline == null ? "—" : pct(baseline)}. Rates under {MIN_SAMPLE_GAMES} games are dimmed. Click a value to
@@ -921,7 +988,7 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
           ) : null}
 
           <p className="analytics-method-note">
-            Results come from GRE game state; hand and card facts are inferred from replay snapshots and labeled
+            Results come from local GRE game state; hand and card facts are inferred from replay snapshots and labeled
             derived. Correlation here is a prompt to review replays, not proof a card caused the result.
           </p>
         </>

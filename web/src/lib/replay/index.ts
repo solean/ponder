@@ -5,6 +5,7 @@ import type {
   MatchReplayFrame,
   MatchReplayFrameObject,
 } from "../types";
+import { arenaTurnToFullTurn } from "../turns";
 
 export type PreviewCard = {
   cardId: number;
@@ -253,7 +254,9 @@ export function isInspectableZoneKind(kind: BoardZoneKind): kind is InspectableZ
 }
 
 export function boardTurnLabel(turnNumber?: number): string {
-  return turnNumber && turnNumber > 0 ? `T${turnNumber}` : "Pre";
+  return turnNumber && turnNumber > 0
+    ? `T${arenaTurnToFullTurn(turnNumber)}`
+    : "Pre";
 }
 
 export function boardPlayMeta(play: MatchCardPlay): string {
@@ -271,7 +274,7 @@ export function replayTurnValue(turnNumber?: number): number {
 
 export function replayTurnLabel(turnNumber?: number): string {
   return typeof turnNumber === "number" && turnNumber > 0
-    ? `Turn ${turnNumber}`
+    ? `Turn ${arenaTurnToFullTurn(turnNumber)}`
     : "Pre-game";
 }
 

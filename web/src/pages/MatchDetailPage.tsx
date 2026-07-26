@@ -25,6 +25,7 @@ import { ResultPill } from "../components/ResultPill";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { formatDateTime, formatDuration } from "../lib/format";
+import { arenaTurnToFullTurn } from "../lib/turns";
 import { useEventSets } from "../lib/useEventSets";
 import { fetchCardPreview } from "../lib/scryfall";
 import type { CardPreview, CardRarity } from "../lib/scryfall";
@@ -3687,9 +3688,73 @@ const SHAPE_BARS_H = 30;
 const SHAPE_AXIS_Y = 138;
 const SHAPE_CHART_H = 148;
 
-function shapeTurnSummary(stat: GameTurnStat, missed: boolean): string {
+type FullTurnShapeStat = Omit<GameTurnStat, "isPlayerTurn"> & {
+  includesPlayerTurn: boolean;
+  includesOpponentTurn: boolean;
+};
+
+function aggregateGameTurnStats(stats: GameTurnStat[]): FullTurnShapeStat[] {
+  const byFullTurn = new Map<number, FullTurnShapeStat>();
+
+  for (const stat of [...stats].sort(
+    (left, right) => left.turnNumber - right.turnNumber,
+  )) {
+    const turnNumber = arenaTurnToFullTurn(stat.turnNumber);
+    if (turnNumber <= 0) {
+      continue;
+    }
+
+    const aggregate = byFullTurn.get(turnNumber) ?? {
+      turnNumber,
+      landsPlayed: 0,
+      spellsCast: 0,
+      includesPlayerTurn: false,
+      includesOpponentTurn: false,
+    };
+
+    aggregate.landsPlayed += stat.landsPlayed;
+    aggregate.spellsCast += stat.spellsCast;
+    if (stat.isPlayerTurn === true) {
+      aggregate.includesPlayerTurn = true;
+    } else if (stat.isPlayerTurn === false) {
+      aggregate.includesOpponentTurn = true;
+    }
+
+    // Each raw half-turn stores its final observed snapshot. Walking them in
+    // Arena order lets the full turn carry the latest value that was actually
+    // observed without replacing it with a missing value.
+    if (stat.selfLife != null) {
+      aggregate.selfLife = stat.selfLife;
+    }
+    if (stat.opponentLife != null) {
+      aggregate.opponentLife = stat.opponentLife;
+    }
+    if (stat.selfHandSize != null) {
+      aggregate.selfHandSize = stat.selfHandSize;
+    }
+    if (stat.landInHand != null) {
+      aggregate.landInHand = stat.landInHand;
+    }
+
+    byFullTurn.set(turnNumber, aggregate);
+  }
+
+  return [...byFullTurn.values()].sort(
+    (left, right) => left.turnNumber - right.turnNumber,
+  );
+}
+
+function shapeTurnSummary(stat: FullTurnShapeStat, missed: boolean): string {
+  const ownership =
+    stat.includesPlayerTurn && stat.includesOpponentTurn
+      ? " (you + opponent)"
+      : stat.includesPlayerTurn
+        ? " (you)"
+        : stat.includesOpponentTurn
+          ? " (opponent)"
+          : "";
   const parts = [
-    `Turn ${stat.turnNumber}${stat.isPlayerTurn == null ? "" : stat.isPlayerTurn ? " (you)" : " (opponent)"}`,
+    `Turn ${stat.turnNumber}${ownership}`,
   ];
   if (stat.selfLife != null || stat.opponentLife != null) {
     parts.push(`life ${stat.selfLife ?? "?"} vs ${stat.opponentLife ?? "?"}`);
@@ -3705,14 +3770,18 @@ function shapeTurnSummary(stat: GameTurnStat, missed: boolean): string {
 }
 
 function GameShapeChart({ game }: { game: GameAnalytics }) {
-  const stats = game.turnStats;
+  const stats = aggregateGameTurnStats(game.turnStats);
   const maxTurn = stats.reduce((max, stat) => Math.max(max, stat.turnNumber), 0);
   if (maxTurn === 0) {
     return null;
   }
   const byTurn = new Map(stats.map((stat) => [stat.turnNumber, stat]));
   const missedTurns = new Set(
-    game.flags.filter((flag) => flag.flag === "missed_land_drop" && flag.turnNumber != null).map((flag) => flag.turnNumber),
+    game.flags
+      .filter(
+        (flag) => flag.flag === "missed_land_drop" && flag.turnNumber != null,
+      )
+      .map((flag) => arenaTurnToFullTurn(flag.turnNumber as number)),
   );
 
   const viewW = SHAPE_CHART_LEFT + maxTurn * SHAPE_CHART_TURN_W + 8;
@@ -3797,7 +3866,7 @@ function GameShapeChart({ game }: { game: GameAnalytics }) {
               ) : null}
               {turn % turnLabelStep === 0 ? (
                 <text
-                  className={`game-shape-turn-label ${stat?.isPlayerTurn ? "is-own" : ""}`}
+                  className={`game-shape-turn-label ${stat?.includesPlayerTurn ? "is-own" : ""}`}
                   x={x}
                   y={SHAPE_AXIS_Y + 8}
                 >
@@ -3814,7 +3883,7 @@ function GameShapeChart({ game }: { game: GameAnalytics }) {
         <span className="game-shape-legend-item is-land">Lands</span>
         <span className="game-shape-legend-item is-spell">Spells</span>
         {missedTurns.size > 0 ? <span className="game-shape-legend-item is-missed">Possible missed land drop</span> : null}
-        <span className="game-shape-legend-note">Own turns are numbered in bold.</span>
+        <span className="game-shape-legend-note">Turns that include one of yours are numbered in bold.</span>
       </figcaption>
     </figure>
   );
@@ -4009,7 +4078,9 @@ function MatchAnalyticsPanel({
                   {game.flags.map((flag, index) => (
                     <li key={`${flag.flag}-${flag.turnNumber ?? index}`}>
                       <span className="game-shape-flag-turn">
-                        {flag.turnNumber != null ? `Turn ${flag.turnNumber}` : "Game"}
+                        {flag.turnNumber != null
+                          ? `Turn ${arenaTurnToFullTurn(flag.turnNumber)}`
+                          : "Game"}
                       </span>
                       {flag.detail || flag.flag}
                       <small>{flag.confidence}</small>
@@ -4681,7 +4752,11 @@ export function MatchDetailPage() {
                       {activeTimelinePlays.map((play, index) => (
                         <tr key={play.id}>
                           <td>{index + 1}</td>
-                          <td>{play.turnNumber ?? "-"}</td>
+                          <td>
+                            {play.turnNumber != null
+                              ? arenaTurnToFullTurn(play.turnNumber)
+                              : "-"}
+                          </td>
                           <td>{timelinePlayerLabel(play.playerSide)}</td>
                           <td>
                             <CardPreviewName

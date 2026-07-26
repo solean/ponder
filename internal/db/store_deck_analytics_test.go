@@ -175,8 +175,8 @@ func TestDeckAnalyticsAggregatesCardAndHandFacts(t *testing.T) {
 	if card107.OpeningHand.Games != 0 || card107.NotPlayed.Games != 1 {
 		t.Fatalf("card 107 = opening %+v notPlayed %+v, want drawn-only and never played", card107.OpeningHand, card107.NotPlayed)
 	}
-	if card107.AvgFirstSeenTurn == nil || *card107.AvgFirstSeenTurn != 2 {
-		t.Fatalf("card 107 avg first seen turn = %#v, want 2", card107.AvgFirstSeenTurn)
+	if card107.AvgFirstSeenTurn == nil || *card107.AvgFirstSeenTurn != 1 {
+		t.Fatalf("card 107 avg first seen turn = %#v, want full turn 1", card107.AvgFirstSeenTurn)
 	}
 
 	card201 := findCardPerformance(t, out.Cards, 201)
@@ -273,6 +273,26 @@ func TestListDeckAnalyticsGamesFacetsAndFilters(t *testing.T) {
 	}
 	if len(sixCardKeeps) != 1 || sixCardKeeps[0].GameNumber != 2 || sixCardKeeps[0].Result != "loss" {
 		t.Fatalf("six-card keeps = %+v, want the game-two loss", sixCardKeeps)
+	}
+
+	secondTurnGames, err := store.ListDeckAnalyticsGames(ctx, DeckAnalyticsGamesQuery{
+		DeckID: deckID, TurnCount: pointerInt64(2),
+	})
+	if err != nil {
+		t.Fatalf("ListDeckAnalyticsGames(turnCount=2): %v", err)
+	}
+	if len(secondTurnGames) != 1 || secondTurnGames[0].GameNumber != 1 {
+		t.Fatalf("two-turn games = %+v, want the raw-turn-3 first game", secondTurnGames)
+	}
+
+	firstTurnGames, err := store.ListDeckAnalyticsGames(ctx, DeckAnalyticsGamesQuery{
+		DeckID: deckID, TurnCount: pointerInt64(1),
+	})
+	if err != nil {
+		t.Fatalf("ListDeckAnalyticsGames(turnCount=1): %v", err)
+	}
+	if len(firstTurnGames) != 1 || firstTurnGames[0].GameNumber != 2 {
+		t.Fatalf("one-turn games = %+v, want the raw-turn-1 second game", firstTurnGames)
 	}
 
 	if _, err := store.ListDeckAnalyticsGames(ctx, DeckAnalyticsGamesQuery{

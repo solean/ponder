@@ -7,3 +7,10 @@ and retain the original MTGA artwork.
 
 The individual images under `ranks/` are 48px crops of those sheets for graph
 promotion annotations.
+
+# Mana symbol assets
+
+The SVGs under `mana-symbols/` are the mana-representing entries from
+[Scryfall's card-symbol API](https://scryfall.com/docs/api/card-symbols). They
+are bundled with the frontend so frequently rendered mana costs and color
+identities do not depend on requests to `svgs.scryfall.io`.

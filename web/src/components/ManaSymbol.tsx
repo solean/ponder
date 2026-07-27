@@ -1,26 +1,27 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-const SCRYFALL_SYMBOL_BASE_URL = "https://svgs.scryfall.io/card-symbols";
+import { manaSymbolAssetName } from "../lib/manaSymbols";
 
-function manaSymbolAssetToken(token: string): string {
-  return token.trim().toUpperCase().replace(/\//g, "").replace(/\s+/g, "");
-}
+const MANA_SYMBOL_ASSETS = import.meta.glob<string>(
+  "../assets/mana-symbols/*.svg",
+  { eager: true, import: "default", query: "?url&no-inline" },
+);
 
-function manaSymbolURL(token: string): string {
-  return `${SCRYFALL_SYMBOL_BASE_URL}/${encodeURIComponent(
-    manaSymbolAssetToken(token),
-  )}.svg`;
+function manaSymbolURL(token: string): string | undefined {
+  const assetName = manaSymbolAssetName(token);
+  if (!assetName) {
+    return undefined;
+  }
+
+  return MANA_SYMBOL_ASSETS[`../assets/mana-symbols/${assetName}.svg`];
 }
 
 export function ManaSymbol({ token }: { token: string }) {
-  const [didFail, setDidFail] = useState(false);
+  const [failedURL, setFailedURL] = useState<string | null>(null);
+  const assetURL = manaSymbolURL(token);
   const label = `{${token}}`;
 
-  useEffect(() => {
-    setDidFail(false);
-  }, [token]);
-
-  if (didFail) {
+  if (!assetURL || failedURL === assetURL) {
     return (
       <code className="mana-symbol-fallback" aria-label={label}>
         {label}
@@ -31,11 +32,11 @@ export function ManaSymbol({ token }: { token: string }) {
   return (
     <img
       className="mana-symbol-icon"
-      src={manaSymbolURL(token)}
+      src={assetURL}
       alt={label}
       loading="lazy"
       decoding="async"
-      onError={() => setDidFail(true)}
+      onError={() => setFailedURL(assetURL)}
     />
   );
 }

@@ -4438,9 +4438,6 @@ export function MatchDetailPage() {
 
     return Array.from(byGame.entries()).sort((a, b) => a[0] - b[0]);
   }, [timelineRows]);
-  const timelineSummary = hasReplayFrames
-    ? `${visibleReplayFrames.length} public replay step${visibleReplayFrames.length === 1 ? "" : "s"} across ${replayGroups.length} game${replayGroups.length === 1 ? "" : "s"}`
-    : `${timelineRows.length} observed play${timelineRows.length === 1 ? "" : "s"}${timelineRows.length > 0 ? ` across ${timelineGroups.length} game${timelineGroups.length === 1 ? "" : "s"}` : ""}`;
   const timelineGameNumbers = useMemo(() => {
     if (timelineDisplayMode === "board" && hasReplayFrames) {
       return replayGroups.map((group) => group.gameNumber);
@@ -4708,7 +4705,6 @@ export function MatchDetailPage() {
         <div className="panel-head match-timeline-toolbar">
           <div className="match-timeline-heading">
             <h3>Card Play Timeline</h3>
-            <p>{timelineSummary}</p>
           </div>
           <div
             className="tabs"

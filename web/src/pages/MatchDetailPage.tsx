@@ -87,7 +87,6 @@ import {
   replayTargetListLabel,
   shouldRenderOnBattlefield,
   sideboardChangeCardTotal,
-  sideboardChangeSummaryLabel,
   sortBattlefieldSectionObjects,
   sortReplayObjects,
   summarizeReplayFrameZones,
@@ -4730,17 +4729,7 @@ export function MatchDetailPage() {
                   handleTimelineGameTabKeyDown(event, gameNumber)
                 }
               >
-                <span>Game {gameNumber}</span>
-                {gameNumber > 1 &&
-                sideboardChangeSummaryLabel(
-                  gameAnalyticsByNumber.get(gameNumber)?.sideboardChanges,
-                ) ? (
-                  <span className="match-timeline-game-tab-sideboard">
-                    {sideboardChangeSummaryLabel(
-                      gameAnalyticsByNumber.get(gameNumber)?.sideboardChanges,
-                    )}
-                  </span>
-                ) : null}
+                Game {gameNumber}
               </button>
             ))}
           </div>

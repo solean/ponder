@@ -1,6 +1,5 @@
 import type { CardPreview } from "../scryfall";
 import type {
-  GameSideboardChanges,
   MatchCardPlay,
   MatchReplayChange,
   MatchReplayFrame,
@@ -136,16 +135,6 @@ export function sideboardChangeCardTotal(
     (total, card) => total + Math.max(0, Math.floor(card.quantity)),
     0,
   );
-}
-
-export function sideboardChangeSummaryLabel(
-  changes?: GameSideboardChanges,
-): string {
-  if (!changes) return "";
-  const cardsIn = sideboardChangeCardTotal(changes.cardsIn);
-  const cardsOut = sideboardChangeCardTotal(changes.cardsOut);
-  if (cardsIn === 0 && cardsOut === 0) return "No changes";
-  return `${cardsIn} in · ${cardsOut} out`;
 }
 export const BOARD_ZONE_ORDER: BoardZoneKind[] = [
   "hand",

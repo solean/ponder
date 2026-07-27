@@ -3377,24 +3377,6 @@ small.settings-meta,
   margin-bottom: 0.92rem;
 }
 
-.match-timeline-game-tabs .match-timeline-button {
-  gap: 0.5rem;
-}
-
-.match-timeline-game-tab-sideboard {
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-.match-timeline-game-tabs .match-timeline-button.is-active
-  .match-timeline-game-tab-sideboard {
-  color: var(--muted-strong);
-}
-
 .match-sideboard-changes {
   display: grid;
   gap: 0.72rem;
@@ -3549,11 +3531,6 @@ small.settings-meta,
 
   .match-sideboard-change-grid {
     grid-template-columns: 1fr;
-  }
-
-  .match-timeline-game-tabs .match-timeline-button {
-    display: grid;
-    gap: 0.16rem;
   }
 }
 

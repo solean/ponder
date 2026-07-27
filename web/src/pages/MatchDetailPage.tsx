@@ -3063,20 +3063,19 @@ function MatchReplayFrameBoard({
 
   return (
     <article className="panel inner match-replay-game">
-      <div className="match-replay-head">
-        <div className="match-replay-head-copy">
-          <h4>Game {gameNumber}</h4>
-          {gameSummary ? (
-            <div className="match-replay-result">
-              <ResultPill result={gameSummary.result} />
-              <p className="match-replay-result-copy">{gameSummary.detail}</p>
-            </div>
-          ) : null}
+      <div className="match-replay-command-deck">
+        <div className="match-replay-head">
+          <div className="match-replay-head-copy">
+            <h4>Game {gameNumber}</h4>
+            {gameSummary ? (
+              <div className="match-replay-result">
+                <ResultPill result={gameSummary.result} />
+                <p className="match-replay-result-copy">{gameSummary.detail}</p>
+              </div>
+            ) : null}
+          </div>
         </div>
-        <p className="match-replay-kicker">Replay</p>
-      </div>
 
-      <div className="match-replay-controls">
         <div className="match-replay-controls-bar">
           <div
             className="match-replay-button-row"
@@ -3085,27 +3084,38 @@ function MatchReplayFrameBoard({
           >
             <button
               type="button"
-              className="match-replay-button"
+              className="match-replay-button is-primary"
               onClick={togglePlay}
               aria-pressed={isPlaying}
             >
-              {isPlaying ? "Pause" : "Play"}
+              <span>{isPlaying ? "Pause" : "Play"}</span>
+              <kbd className="match-replay-button-shortcut" aria-hidden="true">
+                Space
+              </kbd>
             </button>
             <button
               type="button"
               className="match-replay-button"
               onClick={goToPrevTurn}
               disabled={!canJumpPrevTurn}
+              aria-label="Previous turn"
             >
-              Previous Turn
+              <span>Prev Turn</span>
+              <kbd className="match-replay-button-shortcut" aria-hidden="true">
+                ⇧←
+              </kbd>
             </button>
             <button
               type="button"
               className="match-replay-button"
               onClick={goToPrevStep}
               disabled={!canStepBackward}
+              aria-label="Previous step"
             >
-              Previous Step
+              <span>Prev Step</span>
+              <kbd className="match-replay-button-shortcut" aria-hidden="true">
+                ←
+              </kbd>
             </button>
             <button
               type="button"
@@ -3113,7 +3123,10 @@ function MatchReplayFrameBoard({
               onClick={goToNextStep}
               disabled={!canStepForward}
             >
-              Next Step
+              <span>Next Step</span>
+              <kbd className="match-replay-button-shortcut" aria-hidden="true">
+                →
+              </kbd>
             </button>
             <button
               type="button"
@@ -3121,16 +3134,15 @@ function MatchReplayFrameBoard({
               onClick={goToNextTurn}
               disabled={!canJumpNextTurn}
             >
-              Next Turn
+              <span>Next Turn</span>
+              <kbd className="match-replay-button-shortcut" aria-hidden="true">
+                ⇧→
+              </kbd>
             </button>
           </div>
 
           <div className="match-replay-controls-aux">
             <MatchReplaySpeedControl speed={speed} onSelectSpeed={setSpeed} />
-            <p className="match-replay-kbd-hint">
-              <kbd>←</kbd>
-              <kbd>→</kbd> step · <kbd>⇧</kbd> turn · <kbd>space</kbd> play
-            </p>
           </div>
         </div>
 
@@ -3563,18 +3575,18 @@ function MatchTimelineBoard({
 
   return (
     <article className="panel inner match-replay-game">
-      <div className="match-replay-head">
-        <div className="match-replay-head-copy">
-          <h4>Game {gameNumber}</h4>
-          <p className="match-replay-caption">
-            {replayMomentLabel(currentAction)} • Action{" "}
-            {selectedActionIndex + 1} of {plays.length}
-          </p>
+      <div className="match-replay-command-deck">
+        <div className="match-replay-head">
+          <div className="match-replay-head-copy">
+            <h4>Game {gameNumber}</h4>
+            <p className="match-replay-caption">
+              {replayMomentLabel(currentAction)} • Action{" "}
+              {selectedActionIndex + 1} of {plays.length}
+            </p>
+          </div>
+          <p className="match-replay-kicker">Observed replay</p>
         </div>
-        <p className="match-replay-kicker">Observed replay</p>
-      </div>
 
-      <div className="match-replay-controls">
         <div className="match-replay-controls-bar">
           <div
             className="match-replay-button-row"
@@ -3583,27 +3595,38 @@ function MatchTimelineBoard({
           >
             <button
               type="button"
-              className="match-replay-button"
+              className="match-replay-button is-primary"
               onClick={togglePlay}
               aria-pressed={isPlaying}
             >
-              {isPlaying ? "Pause" : "Play"}
+              <span>{isPlaying ? "Pause" : "Play"}</span>
+              <kbd className="match-replay-button-shortcut" aria-hidden="true">
+                Space
+              </kbd>
             </button>
             <button
               type="button"
               className="match-replay-button"
               onClick={goToPrevActionTurn}
               disabled={!canJumpPrevTurn}
+              aria-label="Previous turn"
             >
-              Previous Turn
+              <span>Prev Turn</span>
+              <kbd className="match-replay-button-shortcut" aria-hidden="true">
+                ⇧←
+              </kbd>
             </button>
             <button
               type="button"
               className="match-replay-button"
               onClick={goToPrevAction}
               disabled={!canStepBackward}
+              aria-label="Previous action"
             >
-              Previous Action
+              <span>Prev Action</span>
+              <kbd className="match-replay-button-shortcut" aria-hidden="true">
+                ←
+              </kbd>
             </button>
             <button
               type="button"
@@ -3611,7 +3634,10 @@ function MatchTimelineBoard({
               onClick={goToNextAction}
               disabled={!canStepForward}
             >
-              Next Action
+              <span>Next Action</span>
+              <kbd className="match-replay-button-shortcut" aria-hidden="true">
+                →
+              </kbd>
             </button>
             <button
               type="button"
@@ -3619,16 +3645,15 @@ function MatchTimelineBoard({
               onClick={goToNextActionTurn}
               disabled={!canJumpNextTurn}
             >
-              Next Turn
+              <span>Next Turn</span>
+              <kbd className="match-replay-button-shortcut" aria-hidden="true">
+                ⇧→
+              </kbd>
             </button>
           </div>
 
           <div className="match-replay-controls-aux">
             <MatchReplaySpeedControl speed={speed} onSelectSpeed={setSpeed} />
-            <p className="match-replay-kbd-hint">
-              <kbd>←</kbd>
-              <kbd>→</kbd> step · <kbd>⇧</kbd> turn · <kbd>space</kbd> play
-            </p>
           </div>
         </div>
 

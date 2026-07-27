@@ -104,6 +104,122 @@ type parseState struct {
 	pendingResponseMethod     string
 	pendingResponseRequestID  string
 	pendingResponseObservedAt string
+	collectingClientGREJSON   bool
+	clientGREJSON             strings.Builder
+	pendingGameDeckSnapshot   *pendingGameDeckSnapshot
+}
+
+type pendingGameDeckSnapshot struct {
+	MainCardIDs      []int64
+	SideboardCardIDs []int64
+	ObservedAt       string
+	Source           string
+	ArenaMatchID     string
+	ExpectedGame     int64
+}
+
+const maxClientGREJSONBytes = 4 * 1024 * 1024
+
+func (s *parseState) beginClientGREJSON() {
+	s.collectingClientGREJSON = true
+	s.clientGREJSON.Reset()
+}
+
+func (s *parseState) clearClientGREJSON() {
+	s.collectingClientGREJSON = false
+	s.clientGREJSON.Reset()
+}
+
+func (s *parseState) ingestCheckpoint(byteOffset, lineNo int64) (int64, int64) {
+	if s.collectingClientGREJSON || s.pendingGameDeckSnapshot != nil {
+		// The match/game identity used to scope a deck submission also lives in
+		// parseState. Rewind the durable cursor while a logical record is being
+		// collected or is waiting for its matching full game state, so a process
+		// restart rebuilds both that context and the pending deck before resuming.
+		return 0, 0
+	}
+	return byteOffset, lineNo
+}
+
+func (s *parseState) rememberPendingGameDeckSnapshot(
+	deck greDeck,
+	observedAt, source, arenaMatchID string,
+	expectedGame int64,
+) {
+	if len(deck.DeckCards) == 0 {
+		return
+	}
+	arenaMatchID = strings.TrimSpace(arenaMatchID)
+	if arenaMatchID == "" {
+		return
+	}
+	s.pendingGameDeckSnapshot = &pendingGameDeckSnapshot{
+		MainCardIDs:      append([]int64(nil), deck.DeckCards...),
+		SideboardCardIDs: append([]int64(nil), deck.SideboardCards...),
+		ObservedAt:       strings.TrimSpace(observedAt),
+		Source:           strings.TrimSpace(source),
+		ArenaMatchID:     arenaMatchID,
+		ExpectedGame:     expectedGame,
+	}
+}
+
+func (s *parseState) activateMatch(arenaMatchID string) {
+	arenaMatchID = strings.TrimSpace(arenaMatchID)
+	if arenaMatchID == "" {
+		return
+	}
+	if pending := s.pendingGameDeckSnapshot; pending != nil && pending.ArenaMatchID != arenaMatchID {
+		s.pendingGameDeckSnapshot = nil
+	}
+	s.activeMatchID = arenaMatchID
+}
+
+func (s *parseState) pendingGameDeckMatches(arenaMatchID string, gameNumber int64) bool {
+	pending := s.pendingGameDeckSnapshot
+	if pending == nil || strings.TrimSpace(arenaMatchID) != pending.ArenaMatchID {
+		return false
+	}
+	return pending.ExpectedGame <= 0 || pending.ExpectedGame == gameNumber
+}
+
+func (s *parseState) clearPendingGameDeckForMatch(arenaMatchID string) {
+	arenaMatchID = strings.TrimSpace(arenaMatchID)
+	if pending := s.pendingGameDeckSnapshot; pending != nil && pending.ArenaMatchID == arenaMatchID {
+		s.pendingGameDeckSnapshot = nil
+	}
+}
+
+func isClientToGREMessageHeader(line string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(line)), " to match: clienttogremessage")
+}
+
+// appendClientGREJSON collects Arena's pretty-printed ClientToGRE payload.
+// json.Valid is deliberately used as the terminator: brace counting is easy to
+// fool with strings, while these payloads are small enough to validate per line.
+func (s *parseState) appendClientGREJSON(line string) ([]byte, bool) {
+	if !s.collectingClientGREJSON {
+		return nil, false
+	}
+	trimmed := strings.TrimSpace(line)
+	if s.clientGREJSON.Len() == 0 && !strings.HasPrefix(trimmed, "{") {
+		return nil, false
+	}
+	if s.clientGREJSON.Len() > 0 {
+		s.clientGREJSON.WriteByte('\n')
+	}
+	s.clientGREJSON.WriteString(line)
+	if s.clientGREJSON.Len() > maxClientGREJSONBytes {
+		s.clearClientGREJSON()
+		return nil, false
+	}
+
+	payload := []byte(s.clientGREJSON.String())
+	if !json.Valid(payload) {
+		return nil, false
+	}
+	out := append([]byte(nil), payload...)
+	s.clearClientGREJSON()
+	return out, true
 }
 
 func (s *parseState) rememberEventDeck(eventName, arenaDeckID string) {
@@ -383,6 +499,15 @@ type eventSetDeckRequest struct {
 	} `json:"Deck"`
 }
 
+type clientToGREEnvelope struct {
+	Payload *struct {
+		Type           string `json:"type"`
+		SubmitDeckResp *struct {
+			Deck greDeck `json:"deck"`
+		} `json:"submitDeckResp"`
+	} `json:"payload"`
+}
+
 func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (model.ParseStats, error) {
 	stats := model.ParseStats{LogPath: logPath, StartedAt: time.Now().UTC()}
 
@@ -421,6 +546,12 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		startLine = 0
 		resetState = true
 	}
+	// A zero cursor can represent either a first import, a schema backfill, or
+	// recovery of a pending logical record. Keep intermediate batch commits at
+	// zero for this pass so a crash before the deck submission is reconstructed
+	// cannot strand the next restart in the middle of the log. The final commit
+	// advances to the safe tail once no collector or deck snapshot remains pending.
+	pinCheckpointUntilFinalCommit := startOffset == 0 && startLine == 0
 
 	state := p.stateForLog(logPath, resetState)
 
@@ -446,7 +577,11 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 	linesSinceCommit := int64(0)
 
 	commit := func() error {
-		if err := p.store.SaveIngestState(ctx, tx, logPath, byteOffset, lineNo); err != nil {
+		checkpointOffset, checkpointLine := state.ingestCheckpoint(byteOffset, lineNo)
+		if pinCheckpointUntilFinalCommit {
+			checkpointOffset, checkpointLine = 0, 0
+		}
+		if err := p.store.SaveIngestState(ctx, tx, logPath, checkpointOffset, checkpointLine); err != nil {
 			return err
 		}
 		if err := tx.Commit(); err != nil {
@@ -467,6 +602,12 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 			return stats, fmt.Errorf("read line: %w", readErr)
 		}
 		if len(line) == 0 && errors.Is(readErr, io.EOF) {
+			break
+		}
+		// A live read can land in the middle of Arena writing a line. Leave an
+		// unterminated tail at its original cursor so the next poll rereads the
+		// complete line instead of splitting a JSON token across parser calls.
+		if resume && errors.Is(readErr, io.EOF) {
 			break
 		}
 
@@ -492,7 +633,8 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		}
 	}
 
-	if err := p.store.SaveIngestState(ctx, tx, logPath, byteOffset, lineNo); err != nil {
+	checkpointOffset, checkpointLine := state.ingestCheckpoint(byteOffset, lineNo)
+	if err := p.store.SaveIngestState(ctx, tx, logPath, checkpointOffset, checkpointLine); err != nil {
 		return stats, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -520,6 +662,24 @@ func (p *Parser) processLine(ctx context.Context, tx *sql.Tx, stats *model.Parse
 
 	if ts := parseUnityLogTimestamp(line); ts != "" {
 		state.lastUnityLogTimestamp = ts
+	}
+
+	// ClientToGRE deck submissions are emitted as a header followed by a
+	// pretty-printed JSON object. Abort an incomplete object at the next Unity
+	// record so a truncated payload cannot swallow the rest of the log.
+	if state.collectingClientGREJSON && strings.HasPrefix(line, "[UnityCrossThreadLogger]") {
+		state.clearClientGREJSON()
+	}
+	if isClientToGREMessageHeader(line) {
+		state.beginClientGREJSON()
+		return nil
+	}
+	if state.collectingClientGREJSON {
+		payload, complete := state.appendClientGREJSON(line)
+		if !complete {
+			return nil
+		}
+		return p.handleClientToGREJSON(payload, state)
 	}
 
 	if state.personaID == "" {
@@ -620,6 +780,33 @@ func (p *Parser) processLine(ctx context.Context, tx *sql.Tx, stats *model.Parse
 		}
 	}
 
+	return nil
+}
+
+func (p *Parser) handleClientToGREJSON(payload []byte, state *parseState) error {
+	if state == nil || len(payload) == 0 {
+		return nil
+	}
+
+	var env clientToGREEnvelope
+	if err := json.Unmarshal(payload, &env); err != nil || env.Payload == nil || env.Payload.SubmitDeckResp == nil {
+		return nil
+	}
+	if !strings.EqualFold(strings.TrimSpace(env.Payload.Type), "ClientMessageType_SubmitDeckResp") {
+		return nil
+	}
+
+	expectedGame := state.gameNumber(state.activeMatchID)
+	if expectedGame > 0 {
+		expectedGame++
+	}
+	state.rememberPendingGameDeckSnapshot(
+		env.Payload.SubmitDeckResp.Deck,
+		state.lastUnityLogTimestamp,
+		"gre_submit_deck",
+		state.activeMatchID,
+		expectedGame,
+	)
 	return nil
 }
 
@@ -846,7 +1033,7 @@ func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.Pa
 			if err != nil {
 				return err
 			}
-			state.activeMatchID = strings.TrimSpace(evt.MatchID)
+			state.activateMatch(evt.MatchID)
 			state.rememberSelfSeat(evt.MatchID, evt.SeatID)
 			linked := false
 			if arenaDeckID := state.eventDeck(eventName); arenaDeckID != "" {
@@ -860,6 +1047,7 @@ func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.Pa
 			if evt.MatchID == "" {
 				return nil
 			}
+			state.clearPendingGameDeckForMatch(evt.MatchID)
 			_, result, changed, err := p.store.UpdateMatchEnd(ctx, tx, evt.MatchID, evt.TeamID, evt.WinningTeamID, evt.TurnCount, evt.SecondsCount, evt.WinningReason, evt.EventTime)
 			if err != nil {
 				return err

@@ -214,7 +214,7 @@ func (p *Parser) handleRoomStateJSON(ctx context.Context, tx *sql.Tx, stats *mod
 	if _, err := p.store.UpsertMatchStart(ctx, tx, config.MatchID, eventName, selfSeatID, matchTS); err != nil {
 		return err
 	}
-	state.activeMatchID = strings.TrimSpace(config.MatchID)
+	state.activateMatch(config.MatchID)
 	state.rememberSelfSeat(config.MatchID, selfSeatID)
 	if eventName != "" {
 		linked := false
@@ -232,7 +232,11 @@ func (p *Parser) handleRoomStateJSON(ctx context.Context, tx *sql.Tx, stats *mod
 		}
 	}
 
-	if strings.EqualFold(strings.TrimSpace(info.StateType), "MatchGameRoomStateType_MatchCompleted") && selfTeamID > 0 && info.FinalMatchResult != nil {
+	matchCompleted := strings.EqualFold(strings.TrimSpace(info.StateType), "MatchGameRoomStateType_MatchCompleted")
+	if matchCompleted {
+		state.clearPendingGameDeckForMatch(config.MatchID)
+	}
+	if matchCompleted && selfTeamID > 0 && info.FinalMatchResult != nil {
 		winningTeamID, reason := chooseMatchResult(info.FinalMatchResult.ResultList)
 		if winningTeamID > 0 {
 			if _, result, changed, err := p.store.UpdateMatchEnd(ctx, tx, config.MatchID, selfTeamID, winningTeamID, 0, 0, reason, matchTS); err != nil {

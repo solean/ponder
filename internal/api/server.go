@@ -676,7 +676,7 @@ func (s *Server) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
 
 	s.enrichOpponentObservedCardNames(r.Context(), out.OpponentObservedCards)
 	s.enrichMatchCardPlayNames(r.Context(), out.CardPlays)
-	s.enrichOpeningHandCardNames(r.Context(), out.Games)
+	s.enrichGameCardNames(r.Context(), out.Games)
 	matchRows := []model.MatchRow{out.Match}
 	s.enrichMatchDeckColors(r.Context(), matchRows)
 	out.Match = matchRows[0]
@@ -1041,11 +1041,23 @@ func (s *Server) enrichDeckCardNames(ctx context.Context, cards []model.DeckCard
 	}
 }
 
-func (s *Server) enrichOpeningHandCardNames(ctx context.Context, games []model.GameRow) {
+func (s *Server) enrichGameCardNames(ctx context.Context, games []model.GameRow) {
 	cardIDs := make([]int64, 0)
 	for _, game := range games {
 		for _, hand := range game.OpeningHands {
 			for _, card := range hand.Cards {
+				if strings.TrimSpace(card.CardName) == "" {
+					cardIDs = append(cardIDs, card.CardID)
+				}
+			}
+		}
+		if game.SideboardChanges != nil {
+			for _, card := range game.SideboardChanges.CardsIn {
+				if strings.TrimSpace(card.CardName) == "" {
+					cardIDs = append(cardIDs, card.CardID)
+				}
+			}
+			for _, card := range game.SideboardChanges.CardsOut {
 				if strings.TrimSpace(card.CardName) == "" {
 					cardIDs = append(cardIDs, card.CardID)
 				}
@@ -1060,6 +1072,20 @@ func (s *Server) enrichOpeningHandCardNames(ctx context.Context, games []model.G
 				if strings.TrimSpace(cards[cardIndex].CardName) == "" {
 					cards[cardIndex].CardName = resolved[cards[cardIndex].CardID]
 				}
+			}
+		}
+		changes := games[gameIndex].SideboardChanges
+		if changes == nil {
+			continue
+		}
+		for cardIndex := range changes.CardsIn {
+			if strings.TrimSpace(changes.CardsIn[cardIndex].CardName) == "" {
+				changes.CardsIn[cardIndex].CardName = resolved[changes.CardsIn[cardIndex].CardID]
+			}
+		}
+		for cardIndex := range changes.CardsOut {
+			if strings.TrimSpace(changes.CardsOut[cardIndex].CardName) == "" {
+				changes.CardsOut[cardIndex].CardName = resolved[changes.CardsOut[cardIndex].CardID]
 			}
 		}
 	}

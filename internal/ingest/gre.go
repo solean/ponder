@@ -117,6 +117,14 @@ type greEnvelope struct {
 type greMessage struct {
 	SystemSeatIDs    []int64          `json:"systemSeatIds"`
 	GameStateMessage *greGameStateMsg `json:"gameStateMessage"`
+	ConnectResp      *struct {
+		DeckMessage greDeck `json:"deckMessage"`
+	} `json:"connectResp"`
+}
+
+type greDeck struct {
+	DeckCards      []int64 `json:"deckCards"`
+	SideboardCards []int64 `json:"sideboardCards"`
 }
 
 type greGameStateMsg struct {
@@ -366,7 +374,15 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 	}
 
 	eventTS := parseRoomTimestamp(env.Timestamp)
+	var connectDeck *greDeck
 	for _, msg := range env.GREToClientEvent.Messages {
+		if msg.ConnectResp != nil && len(msg.ConnectResp.DeckMessage.DeckCards) > 0 {
+			deck := msg.ConnectResp.DeckMessage
+			connectDeck = &greDeck{
+				DeckCards:      append([]int64(nil), deck.DeckCards...),
+				SideboardCards: append([]int64(nil), deck.SideboardCards...),
+			}
+		}
 		if msg.GameStateMessage == nil {
 			continue
 		}
@@ -388,11 +404,19 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 			if _, err := p.store.UpsertMatchStart(ctx, tx, matchID, "", selfSeat, eventTS); err != nil {
 				return err
 			}
-			state.activeMatchID = matchID
+			state.activateMatch(matchID)
 			state.rememberSelfSeat(matchID, selfSeat)
 		}
 		if matchID == "" {
 			continue
+		}
+		// ConnectResp does not identify its match directly. Bind it to the
+		// first game state in the same GRE envelope, after GameInfo has supplied
+		// the exact match ID. This also supports parsing a log that begins at the
+		// connect response before any room-state record was retained.
+		if connectDeck != nil {
+			state.rememberPendingGameDeckSnapshot(*connectDeck, eventTS, "gre_connect", matchID, 0)
+			connectDeck = nil
 		}
 
 		if msg.GameStateMessage.TurnInfo != nil {
@@ -421,6 +445,33 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 		gameNumber := state.gameNumber(matchID)
 		if gameNumber <= 0 {
 			gameNumber = 1
+		}
+
+		// ConnectResp carries game 1's submitted list, and SubmitDeckResp
+		// carries the next submitted list. Wait for the following full state so
+		// the snapshot is paired with Arena's exact match and game number.
+		if state.pendingGameDeckMatches(matchID, gameNumber) &&
+			normalizeGREGameStateType(msg.GameStateMessage.Type) == "full" &&
+			msg.GameStateMessage.GameInfo != nil &&
+			msg.GameStateMessage.GameInfo.GameNumber > 0 {
+			pending := state.pendingGameDeckSnapshot
+			observedAt := pending.ObservedAt
+			if strings.TrimSpace(observedAt) == "" {
+				observedAt = eventTS
+			}
+			if err := p.store.ReplaceMatchGameDeckSnapshot(
+				ctx,
+				tx,
+				matchID,
+				gameNumber,
+				observedAt,
+				pending.Source,
+				pending.MainCardIDs,
+				pending.SideboardCardIDs,
+			); err != nil {
+				return err
+			}
+			state.pendingGameDeckSnapshot = nil
 		}
 
 		replayState, err := p.replayStateForGame(ctx, tx, state, matchID, gameNumber, msg.GameStateMessage.Type)
@@ -647,6 +698,12 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 				return err
 			}
 		}
+	}
+	if connectDeck != nil {
+		// Some reconnect payloads place the full state in a later envelope. A
+		// known active match still provides an exact boundary; otherwise discard
+		// the unbound deck rather than risking cross-match attribution.
+		state.rememberPendingGameDeckSnapshot(*connectDeck, eventTS, "gre_connect", state.activeMatchID, 0)
 	}
 
 	return nil

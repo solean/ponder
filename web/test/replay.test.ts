@@ -32,6 +32,8 @@ import {
   replayTurnBoundaryCount,
   replayTurnLabel,
   replayTurnValue,
+  sideboardChangeCardTotal,
+  sideboardChangeSummaryLabel,
   summarizeReplayGame,
 } from "../src/lib/replay";
 import type { CardPreview } from "../src/lib/scryfall";
@@ -1216,5 +1218,33 @@ describe("board census", () => {
     expect(snapshot.self.creatures).toBe(0);
     expect(snapshot.self.hand).toBe(0);
     expect(snapshot.opponent.hand).toBeNull();
+  });
+});
+
+describe("sideboard change summaries", () => {
+  test("counts copies rather than unique cards", () => {
+    expect(
+      sideboardChangeCardTotal([
+        { quantity: 2 },
+        { quantity: 1 },
+        { quantity: -3 },
+      ]),
+    ).toBe(3);
+    expect(
+      sideboardChangeSummaryLabel({
+        cardsIn: [{ cardId: 10, quantity: 3 }],
+        cardsOut: [
+          { cardId: 20, quantity: 1 },
+          { cardId: 30, quantity: 2 },
+        ],
+      }),
+    ).toBe("3 in · 3 out");
+  });
+
+  test("distinguishes a captured no-change submission from missing data", () => {
+    expect(
+      sideboardChangeSummaryLabel({ cardsIn: [], cardsOut: [] }),
+    ).toBe("No changes");
+    expect(sideboardChangeSummaryLabel(undefined)).toBe("");
   });
 });

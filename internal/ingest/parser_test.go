@@ -1092,6 +1092,290 @@ func TestParserIngestsEventSetDeckV3AndLinksMatchByDeckID(t *testing.T) {
 	}
 }
 
+func TestParserCapturesSubmittedDeckForEachBestOfThreeGame(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	database, err := db.Open(filepath.Join(tmpDir, "sideboarding.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	logPath := filepath.Join(tmpDir, "Player.log")
+	parser := NewParser(db.NewStore(database))
+	lines := []string{
+		`{"clientId":"self-user","screenName":"Self"}`,
+		`{"timestamp":"1785082945000","matchGameRoomStateChangedEvent":{"gameRoomInfo":{"gameRoomConfig":{"reservedPlayers":[{"userId":"opp-user","playerName":"Opp","systemSeatId":1,"teamId":1,"eventId":"Traditional_Ladder"},{"userId":"self-user","playerName":"Self","systemSeatId":2,"teamId":2,"eventId":"Traditional_Ladder"}],"matchId":"match-sideboard"},"stateType":"MatchGameRoomStateType_Playing"}}}`,
+		`{"timestamp":"1785082945444","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_ConnectResp","systemSeatIds":[2],"connectResp":{"deckMessage":{"deckCards":[100,100,200,400],"sideboardCards":[300,500]}}},{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"gameStateMessage":{"type":"GameStateType_Full","gameStateId":1,"gameInfo":{"matchID":"match-sideboard","gameNumber":1,"stage":"GameStage_Start"}}}]}}`,
+		`[UnityCrossThreadLogger]7/26/2026 9:26:47 AM: self-user to Match: ClientToGremessage`,
+		`{`,
+		`  "payload": {`,
+		`    "type": "ClientMessageType_SubmitDeckResp",`,
+		`    "submitDeckResp": {`,
+		`      "deck": {`,
+		`        "deckCards": [100, 200, 300, 400],`,
+		`        "sideboardCards": [100, 500]`,
+		`      }`,
+		`    }`,
+		`  }`,
+		`}`,
+		`{"timestamp":"1785083207407","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_SubmitDeckConfirmation","systemSeatIds":[2]},{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"gameStateMessage":{"type":"GameStateType_Full","gameStateId":1,"gameInfo":{"matchID":"match-sideboard","gameNumber":2,"stage":"GameStage_Start"}}}]}}`,
+		`[UnityCrossThreadLogger]7/26/2026 9:35:00 AM: self-user to Match: ClientToGremessage`,
+		`{`,
+		`  "payload": {`,
+		`    "type": "ClientMessageType_SubmitDeckResp",`,
+		`    "submitDeckResp": {`,
+		`      "deck": {`,
+		`        "deckCards": [400, 300, 200, 100],`,
+		`        "sideboardCards": [500, 100]`,
+		`      }`,
+		`    }`,
+		`  }`,
+		`}`,
+		`{"timestamp":"1785083700000","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"gameStateMessage":{"type":"GameStateType_Full","gameStateId":1,"gameInfo":{"matchID":"match-sideboard","gameNumber":3,"stage":"GameStage_Start"}}}]}}`,
+	}
+	if err := writeLogLines(logPath, lines, false); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+	if _, err := parser.ParseFile(ctx, logPath, false); err != nil {
+		t.Fatalf("parse log: %v", err)
+	}
+
+	var snapshotCount int64
+	if err := database.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM match_game_deck_snapshots s
+		JOIN matches m ON m.id = s.match_id
+		WHERE m.arena_match_id = 'match-sideboard'
+	`).Scan(&snapshotCount); err != nil {
+		t.Fatalf("count snapshots: %v", err)
+	}
+	if snapshotCount != 3 {
+		t.Fatalf("snapshot count = %d, want 3", snapshotCount)
+	}
+
+	var gameOneCopies, gameTwoCopies int64
+	if err := database.QueryRowContext(ctx, `
+		SELECT c.quantity
+		FROM match_game_deck_snapshot_cards c
+		JOIN match_game_deck_snapshots s ON s.id = c.snapshot_id
+		JOIN matches m ON m.id = s.match_id
+		WHERE m.arena_match_id = 'match-sideboard'
+			AND s.game_number = 1 AND c.section = 'main' AND c.card_id = 100
+	`).Scan(&gameOneCopies); err != nil {
+		t.Fatalf("query game 1 copies: %v", err)
+	}
+	if err := database.QueryRowContext(ctx, `
+		SELECT c.quantity
+		FROM match_game_deck_snapshot_cards c
+		JOIN match_game_deck_snapshots s ON s.id = c.snapshot_id
+		JOIN matches m ON m.id = s.match_id
+		WHERE m.arena_match_id = 'match-sideboard'
+			AND s.game_number = 2 AND c.section = 'main' AND c.card_id = 100
+	`).Scan(&gameTwoCopies); err != nil {
+		t.Fatalf("query game 2 copies: %v", err)
+	}
+	if gameOneCopies != 2 || gameTwoCopies != 1 {
+		t.Fatalf("card 100 copies = game 1:%d game 2:%d, want 2 and 1", gameOneCopies, gameTwoCopies)
+	}
+
+	var gameThreeMainRows int64
+	if err := database.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM match_game_deck_snapshot_cards c
+		JOIN match_game_deck_snapshots s ON s.id = c.snapshot_id
+		JOIN matches m ON m.id = s.match_id
+		WHERE m.arena_match_id = 'match-sideboard'
+			AND s.game_number = 3 AND c.section = 'main'
+	`).Scan(&gameThreeMainRows); err != nil {
+		t.Fatalf("query game 3 rows: %v", err)
+	}
+	if gameThreeMainRows != 4 {
+		t.Fatalf("game 3 main rows = %d, want 4", gameThreeMainRows)
+	}
+}
+
+func TestParserBindsConnectDeckWhenGameStateFirstEstablishesMatch(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	database, err := db.Open(filepath.Join(tmpDir, "sideboarding-connect.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	logPath := filepath.Join(tmpDir, "Player.log")
+	lines := []string{
+		`{"timestamp":"1785082945444","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_ConnectResp","systemSeatIds":[2],"connectResp":{"deckMessage":{"deckCards":[100,100,200],"sideboardCards":[300]}}},{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"gameStateMessage":{"type":"GameStateType_Full","gameStateId":1,"gameInfo":{"matchID":"match-connect-only","gameNumber":1,"stage":"GameStage_Start"}}}]}}`,
+	}
+	if err := writeLogLines(logPath, lines, false); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+	parser := NewParser(db.NewStore(database))
+	if _, err := parser.ParseFile(ctx, logPath, false); err != nil {
+		t.Fatalf("parse log: %v", err)
+	}
+
+	var copies int64
+	if err := database.QueryRowContext(ctx, `
+		SELECT c.quantity
+		FROM match_game_deck_snapshot_cards c
+		JOIN match_game_deck_snapshots s ON s.id = c.snapshot_id
+		JOIN matches m ON m.id = s.match_id
+		WHERE m.arena_match_id = 'match-connect-only'
+			AND s.game_number = 1
+			AND c.section = 'main'
+			AND c.card_id = 100
+	`).Scan(&copies); err != nil {
+		t.Fatalf("query connect-only snapshot: %v", err)
+	}
+	if copies != 2 {
+		t.Fatalf("connect-only card copies = %d, want 2", copies)
+	}
+}
+
+func TestTailParseBuffersMultilineSubmitDeckAcrossResumeCalls(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	database, err := db.Open(filepath.Join(tmpDir, "sideboarding-resume.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	logPath := filepath.Join(tmpDir, "Player.log")
+	parser := NewParser(db.NewStore(database))
+	initial := []string{
+		`{"clientId":"self-user","screenName":"Self"}`,
+		`{"timestamp":"1785082945000","matchGameRoomStateChangedEvent":{"gameRoomInfo":{"gameRoomConfig":{"reservedPlayers":[{"userId":"opp-user","playerName":"Opp","systemSeatId":1,"teamId":1,"eventId":"Traditional_Ladder"},{"userId":"self-user","playerName":"Self","systemSeatId":2,"teamId":2,"eventId":"Traditional_Ladder"}],"matchId":"match-resume"},"stateType":"MatchGameRoomStateType_Playing"}}}`,
+		`{"timestamp":"1785082945444","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"gameStateMessage":{"type":"GameStateType_Full","gameStateId":1,"gameInfo":{"matchID":"match-resume","gameNumber":1,"stage":"GameStage_Start"}}}]}}`,
+		`[UnityCrossThreadLogger]7/26/2026 9:26:47 AM: self-user to Match: ClientToGremessage`,
+		`{`,
+		`  "payload": {`,
+		`    "type": "ClientMessageType_SubmitDeckResp",`,
+		`    "submitDeckResp": { "deck": {`,
+		`      "deckCards": [100, 2`,
+	}
+	if err := os.WriteFile(logPath, []byte(strings.Join(initial, "\n")), 0o644); err != nil {
+		t.Fatalf("write first log segment: %v", err)
+	}
+	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
+		t.Fatalf("parse first segment: %v", err)
+	}
+	// Simulate the app restarting while Arena is still writing the logical
+	// ClientToGRE record. The durable cursor must replay from its header rather
+	// than depending on the first Parser's in-memory JSON builder.
+	parser = NewParser(db.NewStore(database))
+
+	completion := []string{
+		`00],`,
+		`      "sideboardCards": [300]`,
+		`    } }`,
+		`  }`,
+		`}`,
+	}
+	if err := writeLogLines(logPath, completion, true); err != nil {
+		t.Fatalf("append second log segment: %v", err)
+	}
+	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
+		t.Fatalf("parse second segment: %v", err)
+	}
+	// Restart again after the submission is complete but before Arena emits
+	// the full state that identifies its game. The pending deck must be just as
+	// durable as the multiline collector.
+	parser = NewParser(db.NewStore(database))
+	gameTwoFull := []string{
+		`{"timestamp":"1785083207407","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"gameStateMessage":{"type":"GameStateType_Full","gameStateId":1,"gameInfo":{"matchID":"match-resume","gameNumber":2,"stage":"GameStage_Start"}}}]}}`,
+	}
+	if err := writeLogLines(logPath, gameTwoFull, true); err != nil {
+		t.Fatalf("append game 2 full state: %v", err)
+	}
+	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
+		t.Fatalf("parse game 2 full state: %v", err)
+	}
+
+	var snapshots int64
+	if err := database.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM match_game_deck_snapshots s
+		JOIN matches m ON m.id = s.match_id
+		WHERE m.arena_match_id = 'match-resume' AND s.game_number = 2
+	`).Scan(&snapshots); err != nil {
+		t.Fatalf("count resumed snapshot: %v", err)
+	}
+	if snapshots != 1 {
+		t.Fatalf("resumed snapshots = %d, want 1", snapshots)
+	}
+}
+
+func TestParserBindsSubmittedDeckToExpectedGameAndMatch(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	database, err := db.Open(filepath.Join(tmpDir, "sideboarding-scope.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	logPath := filepath.Join(tmpDir, "Player.log")
+	parser := NewParser(db.NewStore(database))
+	lines := []string{
+		`{"clientId":"self-user","screenName":"Self"}`,
+		`{"timestamp":"1785082945000","matchGameRoomStateChangedEvent":{"gameRoomInfo":{"gameRoomConfig":{"reservedPlayers":[{"userId":"opp-a","playerName":"Opponent A","systemSeatId":1,"teamId":1,"eventId":"Traditional_Ladder"},{"userId":"self-user","playerName":"Self","systemSeatId":2,"teamId":2,"eventId":"Traditional_Ladder"}],"matchId":"match-a"},"stateType":"MatchGameRoomStateType_Playing"}}}`,
+		`{"timestamp":"1785082945444","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"gameStateMessage":{"type":"GameStateType_Full","gameStateId":1,"gameInfo":{"matchID":"match-a","gameNumber":1,"stage":"GameStage_Start"}}}]}}`,
+		`[UnityCrossThreadLogger]7/26/2026 9:26:47 AM: self-user to Match: ClientToGremessage`,
+		`{"payload":{"type":"ClientMessageType_SubmitDeckResp","submitDeckResp":{"deck":{"deckCards":[101,201],"sideboardCards":[301]}}}}`,
+		// A reconnect for the current game must not consume the list submitted
+		// for the next game.
+		`{"timestamp":"1785083000000","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"gameStateMessage":{"type":"GameStateType_Full","gameStateId":2,"gameInfo":{"matchID":"match-a","gameNumber":1,"stage":"GameStage_Start"}}}]}}`,
+		`{"timestamp":"1785083207407","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"gameStateMessage":{"type":"GameStateType_Full","gameStateId":1,"gameInfo":{"matchID":"match-a","gameNumber":2,"stage":"GameStage_Start"}}}]}}`,
+		`[UnityCrossThreadLogger]7/26/2026 9:35:00 AM: self-user to Match: ClientToGremessage`,
+		`{"payload":{"type":"ClientMessageType_SubmitDeckResp","submitDeckResp":{"deck":{"deckCards":[102,202],"sideboardCards":[302]}}}}`,
+		// Match A ends before game 3 starts. The pending list must never be
+		// attached to the first full state for match B.
+		`{"timestamp":"1785083700000","matchGameRoomStateChangedEvent":{"gameRoomInfo":{"gameRoomConfig":{"reservedPlayers":[{"userId":"opp-b","playerName":"Opponent B","systemSeatId":1,"teamId":1,"eventId":"Traditional_Ladder"},{"userId":"self-user","playerName":"Self","systemSeatId":2,"teamId":2,"eventId":"Traditional_Ladder"}],"matchId":"match-b"},"stateType":"MatchGameRoomStateType_Playing"}}}`,
+		`{"timestamp":"1785083701000","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"gameStateMessage":{"type":"GameStateType_Full","gameStateId":1,"gameInfo":{"matchID":"match-b","gameNumber":1,"stage":"GameStage_Start"}}}]}}`,
+	}
+	if err := writeLogLines(logPath, lines, false); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+	if _, err := parser.ParseFile(ctx, logPath, false); err != nil {
+		t.Fatalf("parse log: %v", err)
+	}
+
+	var matchAGameOne, matchAGameTwo, matchBTotal int64
+	if err := database.QueryRowContext(ctx, `
+		SELECT
+			COALESCE(SUM(CASE WHEN m.arena_match_id = 'match-a' AND s.game_number = 1 THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN m.arena_match_id = 'match-a' AND s.game_number = 2 THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN m.arena_match_id = 'match-b' THEN 1 ELSE 0 END), 0)
+		FROM match_game_deck_snapshots s
+		JOIN matches m ON m.id = s.match_id
+	`).Scan(&matchAGameOne, &matchAGameTwo, &matchBTotal); err != nil {
+		t.Fatalf("count scoped snapshots: %v", err)
+	}
+	if matchAGameOne != 0 || matchAGameTwo != 1 || matchBTotal != 0 {
+		t.Fatalf(
+			"snapshot scope = match A game 1:%d game 2:%d, match B:%d; want 0, 1, 0",
+			matchAGameOne,
+			matchAGameTwo,
+			matchBTotal,
+		)
+	}
+}
+
 func writeLogLines(path string, lines []string, appendMode bool) error {
 	if len(lines) == 0 {
 		return nil

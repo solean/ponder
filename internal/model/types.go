@@ -148,30 +148,44 @@ type OpeningHandRow struct {
 	Cards           []OpeningHandCardRow `json:"cards"`
 }
 
+type SideboardCardRow struct {
+	CardID   int64  `json:"cardId"`
+	Quantity int64  `json:"quantity"`
+	CardName string `json:"cardName,omitempty"`
+}
+
+type GameSideboardChangesRow struct {
+	CardsIn    []SideboardCardRow `json:"cardsIn"`
+	CardsOut   []SideboardCardRow `json:"cardsOut"`
+	ObservedAt string             `json:"observedAt,omitempty"`
+	Source     string             `json:"source,omitempty"`
+}
+
 type GameRow struct {
-	ID                    int64             `json:"id"`
-	GameNumber            int64             `json:"gameNumber"`
-	Result                string            `json:"result"`
-	WinReason             string            `json:"winReason,omitempty"`
-	PlayDraw              string            `json:"playDraw,omitempty"`
-	StartedAt             string            `json:"startedAt,omitempty"`
-	EndedAt               string            `json:"endedAt,omitempty"`
-	TurnCount             *int64            `json:"turnCount,omitempty"`
-	OpeningLifeTotal      *int64            `json:"openingLifeTotal,omitempty"`
-	EndingLifeTotal       *int64            `json:"endingLifeTotal,omitempty"`
-	MulliganCount         *int64            `json:"mulliganCount,omitempty"`
-	KeptHandSize          *int64            `json:"keptHandSize,omitempty"`
-	MinSelfLife           *int64            `json:"minSelfLife,omitempty"`
-	MinOpponentLife       *int64            `json:"minOpponentLife,omitempty"`
-	ResultSource          string            `json:"resultSource,omitempty"`
-	ResultConfidence      string            `json:"resultConfidence"`
-	PlayDrawSource        string            `json:"playDrawSource,omitempty"`
-	PlayDrawConfidence    string            `json:"playDrawConfidence"`
-	OpeningHandSource     string            `json:"openingHandSource,omitempty"`
-	OpeningHandConfidence string            `json:"openingHandConfidence"`
-	OpeningHands          []OpeningHandRow  `json:"openingHands"`
-	TurnStats             []GameTurnStatRow `json:"turnStats"`
-	Flags                 []GameFlagRow     `json:"flags"`
+	ID                    int64                    `json:"id"`
+	GameNumber            int64                    `json:"gameNumber"`
+	Result                string                   `json:"result"`
+	WinReason             string                   `json:"winReason,omitempty"`
+	PlayDraw              string                   `json:"playDraw,omitempty"`
+	StartedAt             string                   `json:"startedAt,omitempty"`
+	EndedAt               string                   `json:"endedAt,omitempty"`
+	TurnCount             *int64                   `json:"turnCount,omitempty"`
+	OpeningLifeTotal      *int64                   `json:"openingLifeTotal,omitempty"`
+	EndingLifeTotal       *int64                   `json:"endingLifeTotal,omitempty"`
+	MulliganCount         *int64                   `json:"mulliganCount,omitempty"`
+	KeptHandSize          *int64                   `json:"keptHandSize,omitempty"`
+	MinSelfLife           *int64                   `json:"minSelfLife,omitempty"`
+	MinOpponentLife       *int64                   `json:"minOpponentLife,omitempty"`
+	ResultSource          string                   `json:"resultSource,omitempty"`
+	ResultConfidence      string                   `json:"resultConfidence"`
+	PlayDrawSource        string                   `json:"playDrawSource,omitempty"`
+	PlayDrawConfidence    string                   `json:"playDrawConfidence"`
+	OpeningHandSource     string                   `json:"openingHandSource,omitempty"`
+	OpeningHandConfidence string                   `json:"openingHandConfidence"`
+	OpeningHands          []OpeningHandRow         `json:"openingHands"`
+	TurnStats             []GameTurnStatRow        `json:"turnStats"`
+	Flags                 []GameFlagRow            `json:"flags"`
+	SideboardChanges      *GameSideboardChangesRow `json:"sideboardChanges,omitempty"`
 }
 
 // GameTurnStatRow is one turn's derived shape. Life, hand size, and land-in-hand

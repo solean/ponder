@@ -163,6 +163,9 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 	now := nowUTC()
 
 	_, err := s.db.ExecContext(ctx, `
+		WITH valid_events AS MATERIALIZED (
+			SELECT * FROM events_raw WHERE json_valid(payload_json)
+		)
 		UPDATE draft_sessions
 		SET
 			event_name = COALESCE(
@@ -172,7 +175,7 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 						NULLIF(json_extract(er.payload_json, '$.EventId'), ''),
 						NULLIF(json_extract(er.payload_json, '$.EventName'), '')
 					)
-					FROM events_raw er
+					FROM valid_events er
 					WHERE er.kind = 'outgoing'
 					  AND er.method_name = 'LogBusinessEvents'
 					  AND json_extract(er.payload_json, '$.EventType') = 24
@@ -182,7 +185,7 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 				),
 				(
 					SELECT NULLIF(json_extract(er.payload_json, '$.EventName'), '')
-					FROM events_raw er
+					FROM valid_events er
 					WHERE er.kind = 'outgoing'
 					  AND er.method_name = 'DraftCompleteDraft'
 					  AND json_extract(er.payload_json, '$.IsBotDraft') = draft_sessions.is_bot_draft
@@ -192,7 +195,7 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 				),
 				(
 					SELECT NULLIF(json_extract(er.payload_json, '$.EventName'), '')
-					FROM events_raw er
+					FROM valid_events er
 					WHERE er.kind = 'outgoing'
 					  AND er.method_name = 'EventSetDeckV2'
 					  AND LOWER(COALESCE(json_extract(er.payload_json, '$.EventName'), '')) LIKE '%draft%'
@@ -205,7 +208,7 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 				NULLIF(draft_sessions.started_at, ''),
 				(
 					SELECT MIN(COALESCE(NULLIF(json_extract(er.payload_json, '$.EventTime'), ''), er.created_at))
-					FROM events_raw er
+					FROM valid_events er
 					WHERE er.kind = 'outgoing'
 					  AND er.method_name = 'LogBusinessEvents'
 					  AND json_extract(er.payload_json, '$.EventType') = 24
@@ -213,7 +216,7 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 				),
 				(
 					SELECT MIN(er.created_at)
-					FROM events_raw er
+					FROM valid_events er
 					WHERE er.kind = 'outgoing'
 					  AND er.method_name = 'EventPlayerDraftMakePick'
 					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
@@ -223,7 +226,7 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 				NULLIF(draft_sessions.completed_at, ''),
 				(
 					SELECT MAX(COALESCE(NULLIF(json_extract(er.payload_json, '$.EventTime'), ''), er.created_at))
-					FROM events_raw er
+					FROM valid_events er
 					WHERE er.kind = 'outgoing'
 					  AND er.method_name = 'LogBusinessEvents'
 					  AND json_extract(er.payload_json, '$.EventType') = 24
@@ -231,7 +234,7 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 				),
 				(
 					SELECT er.created_at
-					FROM events_raw er
+					FROM valid_events er
 					WHERE er.kind = 'outgoing'
 					  AND er.method_name = 'DraftCompleteDraft'
 					  AND json_extract(er.payload_json, '$.IsBotDraft') = draft_sessions.is_bot_draft
@@ -241,7 +244,7 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 				),
 				(
 					SELECT MAX(er.created_at)
-					FROM events_raw er
+					FROM valid_events er
 					WHERE er.kind = 'outgoing'
 					  AND er.method_name = 'EventPlayerDraftMakePick'
 					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
@@ -256,7 +259,7 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 		  )
 		  AND EXISTS (
 			SELECT 1
-			FROM events_raw er
+			FROM valid_events er
 			WHERE er.kind = 'outgoing'
 			  AND (
 				(
@@ -281,13 +284,16 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 	}
 
 	_, err = s.db.ExecContext(ctx, `
+		WITH valid_events AS MATERIALIZED (
+			SELECT * FROM events_raw WHERE json_valid(payload_json)
+		)
 		UPDATE draft_picks
 		SET
 			pick_ts = COALESCE(
 				NULLIF(draft_picks.pick_ts, ''),
 				(
 					SELECT COALESCE(NULLIF(json_extract(er.payload_json, '$.EventTime'), ''), er.created_at)
-					FROM events_raw er
+					FROM valid_events er
 					JOIN draft_sessions ds ON ds.draft_id = json_extract(er.payload_json, '$.DraftId')
 					WHERE er.kind = 'outgoing'
 					  AND er.method_name = 'LogBusinessEvents'
@@ -300,7 +306,7 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 				),
 				(
 					SELECT er.created_at
-					FROM events_raw er
+					FROM valid_events er
 					JOIN draft_sessions ds ON ds.draft_id = json_extract(er.payload_json, '$.DraftId')
 					WHERE er.kind = 'outgoing'
 					  AND er.method_name = 'EventPlayerDraftMakePick'
@@ -315,7 +321,7 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 				WHEN COALESCE(draft_picks.pack_card_ids, '') IN ('', '[]') THEN COALESCE(
 					(
 						SELECT json_extract(er.payload_json, '$.CardsInPack')
-						FROM events_raw er
+						FROM valid_events er
 						JOIN draft_sessions ds ON ds.draft_id = json_extract(er.payload_json, '$.DraftId')
 						WHERE er.kind = 'outgoing'
 						  AND er.method_name = 'LogBusinessEvents'
@@ -336,7 +342,7 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 		)
 		  AND EXISTS (
 			SELECT 1
-			FROM events_raw er
+			FROM valid_events er
 			JOIN draft_sessions ds ON ds.draft_id = json_extract(er.payload_json, '$.DraftId')
 			WHERE er.kind = 'outgoing'
 			  AND (

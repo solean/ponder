@@ -1084,6 +1084,10 @@ func (s *Store) ListMatchGames(ctx context.Context, matchID int64) ([]model.Game
 		games[gameIndex].TurnCount = model.ArenaTurnPtrToFullTurn(games[gameIndex].TurnCount)
 	}
 
+	if err := s.attachMatchGameSideboardChanges(ctx, matchID, games); err != nil {
+		return nil, err
+	}
+
 	return games, nil
 }
 

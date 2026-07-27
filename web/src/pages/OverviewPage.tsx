@@ -4,6 +4,8 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
 import { EventLabel } from "../components/EventLabel";
+import { ErrorBoundary } from "../components/ErrorBoundary";
+import { LiveMatchBanner } from "../components/LiveMatchBanner";
 import { MatchDeckColors } from "../components/MatchDeckColors";
 import { RankProgressPanel } from "../components/RankProgressPanel";
 import { ResultPill } from "../components/ResultPill";
@@ -506,6 +508,9 @@ export function OverviewPage() {
       ) : (
         <div />
       )}
+      <ErrorBoundary label="LiveMatchBanner">
+        <LiveMatchBanner />
+      </ErrorBoundary>
       <div className="overview-sync" aria-label="Data status">
         <p>Data status</p>
         <div className="overview-sync-line">

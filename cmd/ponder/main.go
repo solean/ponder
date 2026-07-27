@@ -207,12 +207,14 @@ func runTail(ctx context.Context, args []string) error {
 
 	parser := ingest.NewParser(db.NewStore(database))
 	activeLogPath := strings.TrimSpace(*logPath)
+	previousLogPath := ""
 	if activeLogPath == "" {
-		current, _, err := appstate.DefaultMTGALogPaths()
+		current, previous, err := appstate.DefaultMTGALogPaths()
 		if err != nil {
 			return err
 		}
 		activeLogPath = current
+		previousLogPath = previous
 	}
 	if _, err := os.Stat(activeLogPath); err != nil {
 		return fmt.Errorf("tail log path not found: %s (%w)", activeLogPath, err)
@@ -220,6 +222,25 @@ func runTail(ctx context.Context, args []string) error {
 
 	log.Printf("tailing %s every %s", activeLogPath, interval.String())
 
+	if previousLogPath != "" {
+		if info, err := os.Stat(previousLogPath); err == nil && !info.IsDir() {
+			stats, parseErr := parser.ParseFile(ctx, previousLogPath, true)
+			if parseErr != nil {
+				log.Printf("tail retained-log catch-up error: %v", parseErr)
+			} else if stats.LinesRead > 0 {
+				log.Printf(
+					"tail retained-log catch-up: file=%s lines=%d bytes=%d matches=%d duration=%s",
+					previousLogPath,
+					stats.LinesRead,
+					stats.BytesRead,
+					stats.MatchesUpserted,
+					stats.CompletedAt.Sub(stats.StartedAt),
+				)
+			}
+		} else if err != nil && !os.IsNotExist(err) {
+			log.Printf("tail retained-log catch-up stat error: %v", err)
+		}
+	}
 	go compactReplays(ctx, db.NewStore(database))
 
 	ticker := time.NewTicker(*interval)

@@ -34,6 +34,19 @@ func TestRepairDraftDataBackfillsPlayerDraftMetadataFromRawEvents(t *testing.T) 
 	} else if !stored {
 		t.Fatal("InsertRawEvent skipped a draft pick business event")
 	}
+	// A log backfill can encounter older unparsed request payloads. They must
+	// not make SQLite's json_extract abort the entire repair pass.
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO events_raw (
+			log_path, line_no, byte_offset, kind, method_name,
+			request_id, payload_json, raw_text, created_at
+		) VALUES (
+			'Player.log', 11, 200, 'outgoing', 'LogBusinessEvents',
+			'req-bad', 'not-json', '', '2026-04-04T00:33:14Z'
+		)
+	`); err != nil {
+		t.Fatalf("insert malformed legacy event: %v", err)
+	}
 
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("Commit: %v", err)

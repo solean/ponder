@@ -172,6 +172,23 @@ export type GameAnalytics = {
   openingHands: OpeningHand[];
   turnStats: GameTurnStat[];
   flags: GameFlag[];
+  sideboardChanges?: GameSideboardChanges;
+};
+
+export type SideboardChangeCard = {
+  cardId: number;
+  quantity: number;
+  cardName?: string;
+};
+
+// Present with empty card lists means Arena captured the submission and the
+// player made no changes. An absent value means the deck snapshot was not
+// available, which is intentionally distinct from "no changes."
+export type GameSideboardChanges = {
+  cardsIn: SideboardChangeCard[];
+  cardsOut: SideboardChangeCard[];
+  observedAt?: string;
+  source?: string;
 };
 
 // One turn's derived game shape. Life, hand size, and land-in-hand come from

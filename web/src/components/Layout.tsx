@@ -166,7 +166,7 @@ export function Layout() {
         </header>
           <main id="main-content" className="content" tabIndex={-1}>
             <div className="page-context-bar">
-              {location.pathname === "/settings" ? null : (
+              {location.pathname === "/" || location.pathname === "/settings" ? null : (
                 <ErrorBoundary label="LiveMatchBanner">
                   <LiveMatchBanner />
                 </ErrorBoundary>

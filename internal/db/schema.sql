@@ -181,6 +181,31 @@ CREATE TABLE IF NOT EXISTS match_decks (
   FOREIGN KEY(deck_version_id) REFERENCES deck_versions(id) ON DELETE SET NULL
 );
 
+-- Exact player decklists reported by GRE when each game connects. Keeping
+-- these separate from the match-linked starting deck version preserves the
+-- post-sideboard configuration for games two and three.
+CREATE TABLE IF NOT EXISTS match_game_deck_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  match_id INTEGER NOT NULL,
+  game_number INTEGER NOT NULL,
+  observed_at TEXT,
+  source TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(match_id, game_number),
+  FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS match_game_deck_snapshot_cards (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  snapshot_id INTEGER NOT NULL,
+  section TEXT NOT NULL CHECK(section IN ('main', 'sideboard')),
+  card_id INTEGER NOT NULL,
+  quantity INTEGER NOT NULL CHECK(quantity > 0),
+  UNIQUE(snapshot_id, section, card_id),
+  FOREIGN KEY(snapshot_id) REFERENCES match_game_deck_snapshots(id) ON DELETE CASCADE
+);
+
 -- Replay-derived game analytics. Source/confidence fields make it explicit
 -- which values came directly from GRE state and which are heuristics.
 CREATE TABLE IF NOT EXISTS games (

@@ -376,6 +376,7 @@ func (s *Service) StartLive() (Status, error) {
 	done := make(chan struct{})
 	parser := ingest.NewParser(s.store)
 	startedAt := time.Now().UTC()
+	initialLogPaths := s.initialLiveLogPaths(cfg, activeLogPath)
 
 	s.mu.Lock()
 	if s.liveRunning {
@@ -391,7 +392,7 @@ func (s *Service) StartLive() (Status, error) {
 	s.lastError = ""
 	s.mu.Unlock()
 
-	go s.runLiveLoop(ctx, done, parser, activeLogPath, poll)
+	go s.runLiveLoop(ctx, done, parser, initialLogPaths, activeLogPath, poll)
 
 	return s.Status(), nil
 }
@@ -426,25 +427,34 @@ func (s *Service) runLiveLoop(
 	ctx context.Context,
 	done chan struct{},
 	parser *ingest.Parser,
+	initialLogPaths []string,
 	activeLogPath string,
 	poll time.Duration,
 ) {
 	defer close(done)
 
-	runTick := func() bool {
-		stats, err := parser.ParseFile(ctx, activeLogPath, true)
+	runTick := func(logPaths []string) bool {
+		statsByFile := make([]model.ParseStats, 0, len(logPaths))
+		for _, logPath := range logPaths {
+			stats, err := parser.ParseFile(ctx, logPath, true)
+			if err != nil {
+				now := time.Now().UTC()
+				s.mu.Lock()
+				s.liveLastTickAt = now
+				s.lastError = fmt.Sprintf("live parse error for %s: %v", logPath, err)
+				s.mu.Unlock()
+				return false
+			}
+			statsByFile = append(statsByFile, stats)
+		}
 		now := time.Now().UTC()
 
 		s.mu.Lock()
 		s.liveLastTickAt = now
-		if err != nil {
-			s.lastError = fmt.Sprintf("live parse error: %v", err)
-			s.mu.Unlock()
-			return false
+		result := summarizeOperation("live", logPaths, statsByFile)
+		for _, stats := range statsByFile {
+			result.HasActivity = result.HasActivity || hasActivity(stats)
 		}
-
-		result := summarizeOperation("live", []string{activeLogPath}, []model.ParseStats{stats})
-		result.HasActivity = hasActivity(stats)
 		if result.HasActivity {
 			s.lastLiveActivity = cloneOperationResult(&result)
 			s.lastError = ""
@@ -453,7 +463,7 @@ func (s *Service) runLiveLoop(
 		return true
 	}
 
-	runTick()
+	runTick(initialLogPaths)
 
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
@@ -463,9 +473,24 @@ func (s *Service) runLiveLoop(
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			runTick()
+			runTick([]string{activeLogPath})
 		}
 	}
+}
+
+// initialLiveLogPaths imports the retained Player-prev.log once on each live
+// start before tailing Player.log. Resume cursors make this cheap after the
+// first pass, while ensuring one-time schema backfills that reset both cursors
+// actually revisit both retained files.
+func (s *Service) initialLiveLogPaths(cfg Config, activeLogPath string) []string {
+	paths := make([]string, 0, 2)
+	if strings.TrimSpace(cfg.LogPath) == "" && cfg.IncludePrev {
+		previousLogPath := strings.TrimSpace(s.defaultPrevLogPath)
+		if previousLogPath != "" && previousLogPath != activeLogPath && fileExists(previousLogPath) {
+			paths = append(paths, previousLogPath)
+		}
+	}
+	return append(paths, activeLogPath)
 }
 
 func (s *Service) saveConfig(cfg Config) error {

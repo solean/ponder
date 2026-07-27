@@ -1205,6 +1205,35 @@ export function replayChangeIsNoiseMove(change: MatchReplayChange): boolean {
   );
 }
 
+function replayChangeIsGenuineVisibilityLoss(
+  change: MatchReplayChange,
+): boolean {
+  if (change.action !== "leave_public") {
+    return false;
+  }
+  const from = boardZoneKind(change.fromZoneType ?? "");
+  return (
+    from === "revealed" ||
+    (from === "hand" && change.playerSide === "opponent")
+  );
+}
+
+function replayChangeIsNarratable(change: MatchReplayChange): boolean {
+  if (replayChangeIsNoiseMove(change)) {
+    return false;
+  }
+  if (change.action !== "leave_public") {
+    return true;
+  }
+
+  const from = boardZoneKind(change.fromZoneType ?? "");
+  return (
+    replayChangeIsGenuineVisibilityLoss(change) ||
+    from === "battlefield" ||
+    from === "stack"
+  );
+}
+
 function replayChangeIsCast(change: MatchReplayChange): boolean {
   if (change.action !== "enter_public" && change.action !== "move_public") {
     return false;
@@ -1216,9 +1245,7 @@ function replayChangeIsCast(change: MatchReplayChange): boolean {
 }
 
 function replayFrameHasNarratableChange(frame: MatchReplayFrame): boolean {
-  return (frame.changes ?? []).some(
-    (change) => !replayChangeIsNoiseMove(change),
-  );
+  return (frame.changes ?? []).some(replayChangeIsNarratable);
 }
 
 export function isMeaningfulReplayFrame(
@@ -2194,12 +2221,16 @@ export function buildReplayBeat(
     };
   }
 
-  const leaves = changes.filter(
-    (change) =>
-      change.action === "move_public" &&
-      boardZoneKind(change.fromZoneType ?? "") === "battlefield" &&
-      boardZoneKind(change.toZoneType ?? "") !== "battlefield",
-  );
+  const leaves = changes.filter((change) => {
+    if (boardZoneKind(change.fromZoneType ?? "") !== "battlefield") {
+      return false;
+    }
+    return (
+      change.action === "leave_public" ||
+      (change.action === "move_public" &&
+        boardZoneKind(change.toZoneType ?? "") !== "battlefield")
+    );
+  });
   if (leaves.length > 0) {
     const lead = leaves[0]!;
     const destination = boardZoneKind(lead.toZoneType ?? "");
@@ -2215,12 +2246,16 @@ export function buildReplayBeat(
     return { text };
   }
 
-  const resolves = changes.filter(
-    (change) =>
-      change.action === "move_public" &&
-      boardZoneKind(change.fromZoneType ?? "") === "stack" &&
-      boardZoneKind(change.toZoneType ?? "") !== "battlefield",
-  );
+  const resolves = changes.filter((change) => {
+    if (boardZoneKind(change.fromZoneType ?? "") !== "stack") {
+      return false;
+    }
+    return (
+      change.action === "leave_public" ||
+      (change.action === "move_public" &&
+        boardZoneKind(change.toZoneType ?? "") !== "battlefield")
+    );
+  });
   if (resolves.length > 0) {
     const lead = resolves[0]!;
     return { text: `${replayChangeName(lead)} resolves` };
@@ -2238,7 +2273,7 @@ export function buildReplayBeat(
     };
   }
 
-  const hides = changes.filter((change) => change.action === "leave_public");
+  const hides = changes.filter(replayChangeIsGenuineVisibilityLoss);
   if (hides.length > 0) {
     const lead = hides[0]!;
     return {

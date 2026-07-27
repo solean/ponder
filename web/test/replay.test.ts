@@ -343,6 +343,41 @@ describe("meaningful frame filtering", () => {
       ]),
     ).toEqual([real]);
   });
+
+  test("drops turn-boundary cleanup of stale Limbo objects", () => {
+    const cleanup = frame({
+      id: 1,
+      changes: [
+        change({
+          action: "leave_public",
+          cardName: "Colorstorm Stallion",
+          fromZoneType: "Limbo",
+        }),
+      ],
+    });
+    const real = frame({ id: 2, changes: [change({ action: "tap" })] });
+
+    expect(filterMeaningfulReplayFrames([cleanup, real])).toEqual([real]);
+  });
+
+  test("drops disappearance of a private card from your own hand", () => {
+    const privateHandDeparture = frame({
+      id: 1,
+      changes: [
+        change({
+          action: "leave_public",
+          playerSide: "self",
+          cardName: "Steam Vents",
+          fromZoneType: "Hand",
+        }),
+      ],
+    });
+    const real = frame({ id: 2, changes: [change({ action: "tap" })] });
+
+    expect(filterMeaningfulReplayFrames([privateHandDeparture, real])).toEqual([
+      real,
+    ]);
+  });
 });
 
 describe("replay game grouping", () => {
@@ -369,7 +404,7 @@ describe("replay game grouping", () => {
     });
 
     expect(buildReplayGameGroups([staleReveal, turnOneStart, firstPlay])[0]?.frames)
-      .toEqual([turnOneStart, firstPlay]);
+      .toEqual([firstPlay]);
   });
 
   test("preserves genuine pre-game frames without an inherited turn", () => {
@@ -550,6 +585,66 @@ describe("play-by-play beats", () => {
         null,
       ),
     ).toEqual({ text: "You reveal Kaito" });
+  });
+
+  test("only calls a real opponent-hand visibility loss no longer revealed", () => {
+    expect(
+      buildReplayBeat(
+        frame({
+          id: 2,
+          changes: [
+            change({
+              action: "leave_public",
+              playerSide: "opponent",
+              cardName: "Kaito",
+              fromZoneType: "Hand",
+            }),
+          ],
+        }),
+        null,
+      ),
+    ).toEqual({ text: "Kaito is no longer revealed" });
+  });
+
+  test("describes an untracked battlefield departure as leaving play", () => {
+    expect(
+      buildReplayBeat(
+        frame({
+          id: 2,
+          changes: [
+            change({
+              action: "leave_public",
+              cardName: "Wistfulness",
+              fromZoneType: "Battlefield",
+            }),
+          ],
+        }),
+        null,
+      ),
+    ).toEqual({ text: "Wistfulness leaves the battlefield" });
+  });
+
+  test("ignores Limbo cleanup when narrating a turn's untap", () => {
+    expect(
+      buildReplayBeat(
+        frame({
+          id: 2,
+          changes: [
+            change({
+              action: "leave_public",
+              cardName: "Colorstorm Stallion",
+              fromZoneType: "Limbo",
+            }),
+            change({
+              action: "untap",
+              cardName: "Steam Vents",
+              fromZoneType: "Battlefield",
+            }),
+          ],
+        }),
+        null,
+      ),
+    ).toEqual({ text: "You untap Steam Vents" });
   });
 
   test("marks a tapped land as it enters", () => {

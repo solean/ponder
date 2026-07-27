@@ -649,9 +649,32 @@ func populateReplayFrameChanges(frames []model.MatchReplayFrameRow) {
 		}
 
 		if prevObjects != nil {
+			replacementPreviousByCurrentID, replacedPreviousIDs := replayReplacementObjects(
+				prevObjects,
+				currentObjects,
+				frames[i].AnnotationsJSON,
+			)
 			for _, obj := range frames[i].Objects {
 				prev, ok := prevObjects[obj.InstanceID]
 				if !ok {
+					if replacement, replaced := replacementPreviousByCurrentID[obj.InstanceID]; replaced {
+						frames[i].Changes = append(frames[i].Changes, model.MatchReplayChangeRow{
+							InstanceID:       obj.InstanceID,
+							CardID:           obj.CardID,
+							CardName:         obj.CardName,
+							OwnerSeatID:      obj.OwnerSeatID,
+							PlayerSide:       obj.PlayerSide,
+							Action:           "move_public",
+							FromZoneID:       replacement.ZoneID,
+							FromZoneType:     replacement.ZoneType,
+							FromZonePosition: replacement.ZonePosition,
+							ToZoneID:         obj.ZoneID,
+							ToZoneType:       obj.ZoneType,
+							ToZonePosition:   obj.ZonePosition,
+							IsToken:          obj.IsToken,
+						})
+						continue
+					}
 					frames[i].Changes = append(frames[i].Changes, model.MatchReplayChangeRow{
 						InstanceID:     obj.InstanceID,
 						CardID:         obj.CardID,
@@ -730,7 +753,17 @@ func populateReplayFrameChanges(frames []model.MatchReplayFrameRow) {
 			}
 			sort.Slice(departedIDs, func(a, b int) bool { return departedIDs[a] < departedIDs[b] })
 			for _, instanceID := range departedIDs {
+				if replacedPreviousIDs[instanceID] {
+					continue
+				}
 				obj := prevObjects[instanceID]
+				// Arena retains resolved/removed objects in Limbo for several
+				// frames, then garbage-collects them during a later turn boundary.
+				// Their disappearance is snapshot housekeeping, not a card becoming
+				// hidden and should not create a play-by-play event.
+				if replayNormalizedZoneType(obj.ZoneType) == "limbo" {
+					continue
+				}
 				frames[i].Changes = append(frames[i].Changes, model.MatchReplayChangeRow{
 					InstanceID:       obj.InstanceID,
 					CardID:           obj.CardID,
@@ -748,6 +781,97 @@ func populateReplayFrameChanges(frames []model.MatchReplayFrameRow) {
 
 		prevObjects = currentObjects
 	}
+}
+
+// Arena sometimes assigns a new instance ID when a card leaves a private hand
+// for a public zone. Its ObjectIdChanged annotation supplies the authoritative
+// old/new mapping, so consumers see one real zone move instead of an unrelated
+// enter_public plus leave_public pair.
+func replayReplacementObjects(
+	previous, current map[int64]model.MatchReplayFrameObjectRow,
+	annotationsJSON string,
+) (map[int64]model.MatchReplayFrameObjectRow, map[int64]bool) {
+	previousByCurrentID := make(map[int64]model.MatchReplayFrameObjectRow)
+	replacedPreviousIDs := make(map[int64]bool)
+	for currentID, previousID := range replayObjectIDReplacements(annotationsJSON) {
+		previousObject, previousFound := previous[previousID]
+		currentObject, currentFound := current[currentID]
+		if !previousFound || !currentFound || previousID == currentID {
+			continue
+		}
+		if replayNormalizedZoneType(previousObject.ZoneType) != "hand" || !replayReplacementDestination(currentObject.ZoneType) {
+			continue
+		}
+		previousByCurrentID[currentID] = previousObject
+		replacedPreviousIDs[previousID] = true
+	}
+	return previousByCurrentID, replacedPreviousIDs
+}
+
+type replayObjectIDChangePayload struct {
+	Annotations []struct {
+		Type    []string `json:"type"`
+		Details []struct {
+			Key        string  `json:"key"`
+			ValueInt32 []int64 `json:"valueInt32"`
+		} `json:"details"`
+	} `json:"annotations"`
+}
+
+func replayObjectIDReplacements(raw string) map[int64]int64 {
+	out := make(map[int64]int64)
+	if strings.TrimSpace(raw) == "" {
+		return out
+	}
+
+	var payload replayObjectIDChangePayload
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return out
+	}
+	for _, annotation := range payload.Annotations {
+		isObjectIDChange := false
+		for _, annotationType := range annotation.Type {
+			if strings.EqualFold(strings.TrimSpace(annotationType), "AnnotationType_ObjectIdChanged") {
+				isObjectIDChange = true
+				break
+			}
+		}
+		if !isObjectIDChange {
+			continue
+		}
+
+		var previousID, currentID int64
+		for _, detail := range annotation.Details {
+			if len(detail.ValueInt32) == 0 {
+				continue
+			}
+			switch strings.ToLower(strings.TrimSpace(detail.Key)) {
+			case "orig_id":
+				previousID = detail.ValueInt32[0]
+			case "new_id":
+				currentID = detail.ValueInt32[0]
+			}
+		}
+		if previousID > 0 && currentID > 0 {
+			out[currentID] = previousID
+		}
+	}
+	return out
+}
+
+func replayReplacementDestination(zoneType string) bool {
+	switch replayNormalizedZoneType(zoneType) {
+	case "stack", "battlefield", "graveyard", "exile", "revealed":
+		return true
+	default:
+		return false
+	}
+}
+
+func replayNormalizedZoneType(zoneType string) string {
+	normalized := strings.ToLower(strings.TrimSpace(zoneType))
+	normalized = strings.TrimPrefix(normalized, "zonetype_")
+	return strings.TrimSpace(normalized)
 }
 
 func sameReplayZone(a, b model.MatchReplayFrameObjectRow) bool {

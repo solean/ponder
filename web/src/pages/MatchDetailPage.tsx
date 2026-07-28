@@ -626,24 +626,25 @@ function MatchReplayObjectCard({
   ]
     .filter((part): part is string => Boolean(part))
     .join(" • ");
-  // "Tapped" and "Attacking" are already conveyed visually (90° rotation and the
-  // red attack border), so drop those text pills to keep the board compact.
+  // Tapped, attacking, and summoning sickness are already conveyed directly on
+  // the card, so drop their text pills to keep the board compact.
   const statePills = replayObjectStatePills(object).filter(
-    (pill) => pill.label !== "Tapped" && pill.label !== "Attacking",
+    (pill) =>
+      pill.label !== "Tapped" &&
+      pill.label !== "Attacking" &&
+      pill.label !== "Summoning Sick",
   );
   const allCounterPills = replayObjectCounterSummaries(object);
+  const isBattlefieldBoardCard =
+    size === "board" && boardZoneKind(object.zoneType) === "battlefield";
   const isTappedBoardCard =
-    size === "board" &&
-    boardZoneKind(object.zoneType) === "battlefield" &&
-    object.isTapped;
+    isBattlefieldBoardCard && object.isTapped;
   const isAttackingBoardCard =
-    size === "board" &&
-    boardZoneKind(object.zoneType) === "battlefield" &&
-    replayObjectIsAttacking(object);
+    isBattlefieldBoardCard && replayObjectIsAttacking(object);
+  const isSummoningSickBoardCard =
+    isBattlefieldBoardCard && object.hasSummoningSickness;
   const loyalty =
-    size === "board" && boardZoneKind(object.zoneType) === "battlefield"
-      ? replayObjectLoyalty(object)
-      : null;
+    isBattlefieldBoardCard ? replayObjectLoyalty(object) : null;
   const counterPills =
     loyalty == null
       ? allCounterPills
@@ -652,24 +653,23 @@ function MatchReplayObjectCard({
         );
   const cardAriaDetails = [
     loyalty == null ? null : `Current loyalty: ${loyalty}`,
+    isSummoningSickBoardCard
+      ? "Summoning sick: can't attack or use tap abilities this turn"
+      : null,
     linkedExileSummary,
   ].filter((detail): detail is string => Boolean(detail));
   const statBadge =
-    loyalty == null &&
-    size === "board" &&
-    boardZoneKind(object.zoneType) === "battlefield"
+    loyalty == null && isBattlefieldBoardCard
       ? replayObjectPTLabel(object, preview)
       : null;
   const visibleLinkedExileCards =
-    size === "board" && boardZoneKind(object.zoneType) === "battlefield"
-      ? linkedExileCards.slice(0, 2)
-      : [];
+    isBattlefieldBoardCard ? linkedExileCards.slice(0, 2) : [];
   const hasLinkedExileCards = visibleLinkedExileCards.length > 0;
 
   const cardNode = (
     <ReplayCardPreviewAnchor preview={preview}>
       <a
-        className={`match-replay-card is-${size} ${active ? "is-active" : ""} ${isTappedBoardCard ? "is-tapped" : ""} ${connectionHighlighted ? "is-connection-highlighted" : ""}`}
+        className={`match-replay-card is-${size} ${active ? "is-active" : ""} ${isTappedBoardCard ? "is-tapped" : ""} ${isSummoningSickBoardCard ? "is-summoning-sick" : ""} ${connectionHighlighted ? "is-connection-highlighted" : ""}`}
         href={href}
         target="_blank"
         rel="noreferrer"
@@ -697,6 +697,14 @@ function MatchReplayObjectCard({
         ) : null}
         {statBadge ? (
           <span className="match-replay-card-power">{statBadge}</span>
+        ) : null}
+        {isSummoningSickBoardCard ? (
+          <span
+            className="match-replay-card-summoning-sick"
+            aria-hidden="true"
+          >
+            <SummoningSicknessGlyph />
+          </span>
         ) : null}
         {loyalty != null ? (
           <span className="match-replay-card-loyalty" aria-hidden="true">
@@ -838,6 +846,16 @@ function MatchReplayObjectCard({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function SummoningSicknessGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" focusable="false">
+      <path d="M5 2.75h10M5 17.25h10" />
+      <path d="M6.25 3.25v2.1c0 1.55.8 2.98 2.13 3.78L10 10l1.62-.87a4.4 4.4 0 0 0 2.13-3.78v-2.1M6.25 16.75v-2.1c0-1.55.8-2.98 2.13-3.78L10 10l1.62.87a4.4 4.4 0 0 1 2.13 3.78v2.1" />
+      <path d="m7.3 15.85 2.7-2.2 2.7 2.2" />
+    </svg>
   );
 }
 
@@ -1587,78 +1605,95 @@ function MatchReplayFrameBattlefield({
         <CompactBattlefieldRows
           side={side}
           sections={battlefieldSections}
-          renderSection={(section) => (
-            <section
-              key={section.kind}
-              className={`match-replay-zone-group is-${section.kind}`}
-              aria-label={`${timelinePlayerLabel(side)} ${section.label.toLowerCase()}`}
-            >
-              <div className="match-replay-zone-group-head">
-                <p className="match-replay-zone-group-title">{section.label}</p>
-                <p className="match-replay-zone-group-count">
-                  {section.objects.length}
-                </p>
-              </div>
-              {section.kind === "lands" ||
-              section.kind === "artifacts_enchantments" ? (
-                <MatchReplayCardStackRow
-                  objects={section.objects}
-                  previewByCardID={previewByCardID}
-                  highlightedInstanceIDs={highlightedInstanceIDs}
-                  onRegisterCardShell={onRegisterCardShell}
-                  connectionHighlightedInstanceIDs={
-                    connectionHighlightedInstanceIDs
-                  }
-                  connectionInteractiveInstanceIDs={
-                    connectionInteractiveInstanceIDs
-                  }
-                  onConnectionFocusChange={onConnectionFocusChange}
-                  linkedExileObjectsByParentId={linkedExileObjectsByParentId}
-                  relationshipLabelsByObjectId={relationshipLabelsByObjectId}
-                  stackEligible={
-                    // Lands stack whenever identical; other permanents only
-                    // consolidate duplicate tokens (e.g. a row of Mutagens).
-                    section.kind === "lands" ? undefined : stackTokensOnly
-                  }
-                />
-              ) : (
-                <div className="match-replay-card-row is-sectioned">
-                  {section.objects.map((object) => (
-                    <MatchReplayObjectCard
-                      key={object.instanceId}
-                      object={object}
-                      preview={previewByCardID.get(object.cardId) ?? null}
-                      previewByCardID={previewByCardID}
-                      active={highlightedInstanceIDs.has(object.instanceId)}
-                      shellRef={
-                        onRegisterCardShell
-                          ? (element) =>
-                              onRegisterCardShell(object.instanceId, element)
-                          : undefined
-                      }
-                      connectionHighlighted={
-                        connectionHighlightedInstanceIDs?.has(
-                          object.instanceId,
-                        ) ?? false
-                      }
-                      onConnectionFocusChange={
-                        connectionInteractiveInstanceIDs?.has(object.instanceId)
-                          ? onConnectionFocusChange
-                          : undefined
-                      }
-                      linkedExileObjects={
-                        linkedExileObjectsByParentId?.get(object.instanceId) ??
-                        []
-                      }
-                      relationshipLabels={
-                        relationshipLabelsByObjectId?.get(object.instanceId) ?? []
-                      }
-                    />
-                  ))}
+          renderSection={(section) => {
+            const summoningSickCount = section.objects.filter(
+              (object) => object.hasSummoningSickness,
+            ).length;
+
+            return (
+              <section
+                key={section.kind}
+                className={`match-replay-zone-group is-${section.kind}`}
+                aria-label={`${timelinePlayerLabel(side)} ${section.label.toLowerCase()}`}
+              >
+                <div className="match-replay-zone-group-head">
+                  <p className="match-replay-zone-group-title">{section.label}</p>
+                  <p className="match-replay-zone-group-count">
+                    {section.objects.length}
+                  </p>
+                  {summoningSickCount > 0 ? (
+                    <span
+                      className="match-replay-zone-group-summoning-sick"
+                      title={`${summoningSickCount} summoning sick`}
+                    >
+                      <SummoningSicknessGlyph />
+                      {summoningSickCount === section.objects.length
+                        ? "All summoning sick"
+                        : `${summoningSickCount} summoning sick`}
+                    </span>
+                  ) : null}
                 </div>
-              )}
-            </section>
-          )}
+                {section.kind === "lands" ||
+                section.kind === "artifacts_enchantments" ? (
+                  <MatchReplayCardStackRow
+                    objects={section.objects}
+                    previewByCardID={previewByCardID}
+                    highlightedInstanceIDs={highlightedInstanceIDs}
+                    onRegisterCardShell={onRegisterCardShell}
+                    connectionHighlightedInstanceIDs={
+                      connectionHighlightedInstanceIDs
+                    }
+                    connectionInteractiveInstanceIDs={
+                      connectionInteractiveInstanceIDs
+                    }
+                    onConnectionFocusChange={onConnectionFocusChange}
+                    linkedExileObjectsByParentId={linkedExileObjectsByParentId}
+                    relationshipLabelsByObjectId={relationshipLabelsByObjectId}
+                    stackEligible={
+                      // Lands stack whenever identical; other permanents only
+                      // consolidate duplicate tokens (e.g. a row of Mutagens).
+                      section.kind === "lands" ? undefined : stackTokensOnly
+                    }
+                  />
+                ) : (
+                  <div className="match-replay-card-row is-sectioned">
+                    {section.objects.map((object) => (
+                      <MatchReplayObjectCard
+                        key={object.instanceId}
+                        object={object}
+                        preview={previewByCardID.get(object.cardId) ?? null}
+                        previewByCardID={previewByCardID}
+                        active={highlightedInstanceIDs.has(object.instanceId)}
+                        shellRef={
+                          onRegisterCardShell
+                            ? (element) =>
+                                onRegisterCardShell(object.instanceId, element)
+                            : undefined
+                        }
+                        connectionHighlighted={
+                          connectionHighlightedInstanceIDs?.has(
+                            object.instanceId,
+                          ) ?? false
+                        }
+                        onConnectionFocusChange={
+                          connectionInteractiveInstanceIDs?.has(object.instanceId)
+                            ? onConnectionFocusChange
+                            : undefined
+                        }
+                        linkedExileObjects={
+                          linkedExileObjectsByParentId?.get(object.instanceId) ??
+                          []
+                        }
+                        relationshipLabels={
+                          relationshipLabelsByObjectId?.get(object.instanceId) ?? []
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          }}
         />
       )}
     </section>

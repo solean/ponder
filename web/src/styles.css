@@ -85,6 +85,11 @@
   --attachment-pill-text: #f2faff;
   --attachment-pill-icon-bg: #277fa9;
   --attachment-pill-icon: #fff;
+  --summoning-sick-bg-a: rgba(28, 38, 75, 0.96);
+  --summoning-sick-bg-b: rgba(12, 18, 40, 0.98);
+  --summoning-sick-border: rgba(164, 184, 255, 0.74);
+  --summoning-sick-text: #e2e8ff;
+  --summoning-sick-glow: rgba(139, 164, 255, 0.28);
 
   --link: #ffb066;
   --link-hover: #ffd0a3;
@@ -211,6 +216,11 @@
   --attachment-pill-text: #173a4e;
   --attachment-pill-icon-bg: #2e7fa9;
   --attachment-pill-icon: #fff;
+  --summoning-sick-bg-a: rgba(239, 242, 255, 0.98);
+  --summoning-sick-bg-b: rgba(218, 225, 251, 0.98);
+  --summoning-sick-border: rgba(69, 86, 161, 0.66);
+  --summoning-sick-text: #26356f;
+  --summoning-sick-glow: rgba(69, 86, 161, 0.2);
 
   --link: #9c4100;
   --link-hover: #6e2500;
@@ -4735,6 +4745,34 @@ button.match-replay-zonechip.is-button {
   font-variant-numeric: tabular-nums;
 }
 
+.match-replay-zone-group-summoning-sick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 1rem;
+  padding: 0.08rem 0.34rem;
+  border: 1px solid color-mix(in srgb, var(--summoning-sick-border) 72%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--summoning-sick-bg-a) 72%, transparent);
+  color: var(--summoning-sick-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--track-sm);
+  line-height: 1.15;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.match-replay-zone-group-summoning-sick svg {
+  width: 0.68rem;
+  height: 0.68rem;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  stroke-width: 1.55;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .match-replay-card-row {
   display: flex;
   flex-wrap: wrap;
@@ -5182,6 +5220,38 @@ button.match-replay-zonechip.is-button {
   font-size: var(--text-xs);
   letter-spacing: var(--track-sm);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.24);
+}
+
+.match-replay-card-summoning-sick {
+  position: absolute;
+  left: 0.36rem;
+  top: 0.36rem;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 1.38rem;
+  height: 1.38rem;
+  border: 1px solid var(--summoning-sick-border);
+  border-radius: 50%;
+  background: linear-gradient(
+    155deg,
+    var(--summoning-sick-bg-a),
+    var(--summoning-sick-bg-b)
+  );
+  color: var(--summoning-sick-text);
+  box-shadow:
+    0 4px 9px rgba(0, 0, 0, 0.42),
+    0 0 10px var(--summoning-sick-glow);
+  backdrop-filter: blur(5px);
+}
+
+.match-replay-card-summoning-sick svg {
+  width: 0.82rem;
+  height: 0.82rem;
+  stroke: currentColor;
+  stroke-width: 1.55;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .match-replay-card-loyalty {

@@ -637,6 +637,10 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+:root[data-theme="light"] body {
+  background: var(--bg);
+}
+
 body::before {
   content: "";
   position: fixed;

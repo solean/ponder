@@ -3350,14 +3350,21 @@ small.settings-meta,
    ══════════════════════════════════════════ */
 
 .match-timeline-toolbar {
-  align-items: flex-start;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem 1.25rem;
+  margin-bottom: 0.78rem;
 }
 
 .match-timeline-heading {
   display: grid;
   gap: 0.22rem;
   min-width: 0;
+}
+
+.match-timeline-heading h3 {
+  white-space: nowrap;
 }
 
 .match-timeline-button {
@@ -3372,9 +3379,12 @@ small.settings-meta,
 }
 
 .match-timeline-game-tabs {
-  align-self: start;
+  grid-column: 2;
+  align-self: center;
+  justify-self: start;
+  width: fit-content;
   max-width: 100%;
-  margin-bottom: 0.92rem;
+  margin: 0;
 }
 
 .match-sideboard-changes {
@@ -7382,6 +7392,21 @@ select {
 
   .match-timeline-toolbar .tabs {
     width: 100%;
+  }
+
+  .match-timeline-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0.62rem;
+  }
+
+  .match-timeline-heading,
+  .match-timeline-game-tabs {
+    grid-column: 1;
+  }
+
+  .match-timeline-game-tabs {
+    justify-self: stretch;
   }
 
   .match-timeline-toolbar .tab {

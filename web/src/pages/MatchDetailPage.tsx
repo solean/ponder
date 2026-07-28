@@ -91,7 +91,6 @@ import {
   sortReplayObjects,
   summarizeReplayFrameZones,
   summarizeReplayZones,
-  timelinePhaseLabel,
   timelinePlayerLabel,
   timelineZoneLabel,
   type BattlefieldSectionKind,
@@ -203,7 +202,6 @@ function groupOpponentCardsByType(
 }
 
 type PopoverPlacement = "left" | "right";
-type TimelineDisplayMode = "board" | "list";
 type MatchReplayZoneDialogState =
   | {
       source: "replay";
@@ -4263,8 +4261,6 @@ export function MatchDetailPage() {
   const matchId = Number(params.matchId);
   const isValidMatchID = Number.isFinite(matchId);
   const [activeSection, setActiveSection] = useState<MatchSection>("replay");
-  const [timelineDisplayMode, setTimelineDisplayMode] =
-    useState<TimelineDisplayMode>("board");
   const [selectedTimelineGameNumber, setSelectedTimelineGameNumber] =
     useState<number | null>(null);
   const timelineGameTabBaseId = useId();
@@ -4283,10 +4279,7 @@ export function MatchDetailPage() {
   const replayQuery = useQuery({
     queryKey: ["match-replay", matchId],
     queryFn: () => api.matchReplay(matchId),
-    enabled:
-      isValidMatchID &&
-      activeSection === "replay" &&
-      timelineDisplayMode === "board",
+    enabled: isValidMatchID && activeSection === "replay",
   });
   const { lookup: setLookup } = useEventSets([query.data?.match.eventName]);
   useBreadcrumbLabel(
@@ -4406,7 +4399,7 @@ export function MatchDetailPage() {
     queries: boardPreviewCards.map((card) => ({
       queryKey: cardPreviewQueryKey(card),
       queryFn: () => fetchCardPreview(card.cardId, card.cardName),
-      enabled: timelineDisplayMode === "board" && card.cardId > 0,
+      enabled: card.cardId > 0,
       staleTime: 1000 * 60 * 60 * 24,
       gcTime: 1000 * 60 * 60 * 24,
       retry: 1,
@@ -4420,9 +4413,9 @@ export function MatchDetailPage() {
     }
     return out;
   }, [boardPreviewCards, boardCardPreviewQueries]);
-  const isBoardCardPreviewLoading =
-    timelineDisplayMode === "board" &&
-    boardCardPreviewQueries.some((queryRow) => queryRow.isPending);
+  const isBoardCardPreviewLoading = boardCardPreviewQueries.some(
+    (queryRow) => queryRow.isPending,
+  );
   const timelineGroups = useMemo(() => {
     const byGame = new Map<number, MatchCardPlay[]>();
     for (const play of timelineRows) {
@@ -4439,11 +4432,11 @@ export function MatchDetailPage() {
     return Array.from(byGame.entries()).sort((a, b) => a[0] - b[0]);
   }, [timelineRows]);
   const timelineGameNumbers = useMemo(() => {
-    if (timelineDisplayMode === "board" && hasReplayFrames) {
+    if (hasReplayFrames) {
       return replayGroups.map((group) => group.gameNumber);
     }
     return timelineGroups.map(([gameNumber]) => gameNumber);
-  }, [hasReplayFrames, replayGroups, timelineDisplayMode, timelineGroups]);
+  }, [hasReplayFrames, replayGroups, timelineGroups]);
   const activeTimelineGameNumber =
     selectedTimelineGameNumber ?? timelineGameNumbers[0] ?? null;
   const gameAnalyticsByNumber = useMemo(
@@ -4469,7 +4462,6 @@ export function MatchDetailPage() {
       : timelineGroups.find(
           ([gameNumber]) => gameNumber === activeTimelineGameNumber,
         ) ?? null;
-  const activeTimelinePlays = activeTimelineGroup?.[1] ?? null;
   const showTimelineGameTabs = timelineGameNumbers.length > 1;
   const activeTimelineGameTabID =
     activeTimelineGameNumber === null
@@ -4706,55 +4698,33 @@ export function MatchDetailPage() {
           <div className="match-timeline-heading">
             <h3>Card Play Timeline</h3>
           </div>
-          <div
-            className="tabs"
-            role="group"
-            aria-label="Card play timeline display"
-          >
-            <button
-              type="button"
-              className={`tab match-timeline-button ${timelineDisplayMode === "board" ? "is-active" : ""}`}
-              aria-pressed={timelineDisplayMode === "board"}
-              onClick={() => setTimelineDisplayMode("board")}
+          {showTimelineGameTabs ? (
+            <div
+              className="tabs match-timeline-game-tabs"
+              role="tablist"
+              aria-label="Timeline game selector"
             >
-              Board
-            </button>
-            <button
-              type="button"
-              className={`tab match-timeline-button ${timelineDisplayMode === "list" ? "is-active" : ""}`}
-              aria-pressed={timelineDisplayMode === "list"}
-              onClick={() => setTimelineDisplayMode("list")}
-            >
-              List
-            </button>
-          </div>
+              {timelineGameNumbers.map((gameNumber) => (
+                <button
+                  key={gameNumber}
+                  type="button"
+                  id={`${timelineGameTabBaseId}-tab-${gameNumber}`}
+                  role="tab"
+                  aria-selected={activeTimelineGameNumber === gameNumber}
+                  aria-controls={`${timelineGameTabBaseId}-panel-${gameNumber}`}
+                  tabIndex={activeTimelineGameNumber === gameNumber ? 0 : -1}
+                  className={`tab match-timeline-button ${activeTimelineGameNumber === gameNumber ? "is-active" : ""}`}
+                  onClick={() => setSelectedTimelineGameNumber(gameNumber)}
+                  onKeyDown={(event) =>
+                    handleTimelineGameTabKeyDown(event, gameNumber)
+                  }
+                >
+                  Game {gameNumber}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
-        {showTimelineGameTabs ? (
-          <div
-            className="tabs match-timeline-game-tabs"
-            role="tablist"
-            aria-label="Timeline game selector"
-          >
-            {timelineGameNumbers.map((gameNumber) => (
-              <button
-                key={gameNumber}
-                type="button"
-                id={`${timelineGameTabBaseId}-tab-${gameNumber}`}
-                role="tab"
-                aria-selected={activeTimelineGameNumber === gameNumber}
-                aria-controls={`${timelineGameTabBaseId}-panel-${gameNumber}`}
-                tabIndex={activeTimelineGameNumber === gameNumber ? 0 : -1}
-                className={`tab match-timeline-button ${activeTimelineGameNumber === gameNumber ? "is-active" : ""}`}
-                onClick={() => setSelectedTimelineGameNumber(gameNumber)}
-                onKeyDown={(event) =>
-                  handleTimelineGameTabKeyDown(event, gameNumber)
-                }
-              >
-                Game {gameNumber}
-              </button>
-            ))}
-          </div>
-        ) : null}
         {match.bestOf === "bo3" &&
         activeTimelineGameNumber !== null &&
         activeTimelineGameNumber > 1 ? (
@@ -4763,8 +4733,7 @@ export function MatchDetailPage() {
             changes={activeTimelineGameAnalytics?.sideboardChanges}
           />
         ) : null}
-        {timelineDisplayMode === "board" ? (
-          <div className="stack-md">
+        <div className="stack-md">
             {!hasReplayFrames ? (
               <p className="match-board-disclaimer">
                 Replay frames are not available for this match yet, so this fallback board still uses first public sightings and cannot show a true stack.
@@ -4831,74 +4800,7 @@ export function MatchDetailPage() {
             {isBoardCardPreviewLoading ? (
               <StatusMessage>Loading replay card art…</StatusMessage>
             ) : null}
-          </div>
-        ) : timelineQuery.error ? (
-          <StatusMessage tone="error">
-            {(timelineQuery.error as Error).message}
-          </StatusMessage>
-        ) : timelineRows.length === 0 ? (
-          <StatusMessage>
-            No observed card plays for this match yet.
-          </StatusMessage>
-        ) : (
-          <div
-            className="stack-md"
-            id={showTimelineGameTabs ? activeTimelineGamePanelID : undefined}
-            role={showTimelineGameTabs ? "tabpanel" : undefined}
-            aria-labelledby={
-              showTimelineGameTabs ? activeTimelineGameTabID : undefined
-            }
-          >
-            {activeTimelineGameNumber !== null && activeTimelinePlays ? (
-              <div className="stack-md">
-                <h4>Game {activeTimelineGameNumber}</h4>
-                <div className="table-wrap">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Turn</th>
-                        <th>Player</th>
-                        <th>Card</th>
-                        <th>Zone</th>
-                        <th>Phase</th>
-                        <th>Seen At</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeTimelinePlays.map((play, index) => (
-                        <tr key={play.id}>
-                          <td>{index + 1}</td>
-                          <td>
-                            {play.turnNumber != null
-                              ? arenaTurnToFullTurn(play.turnNumber)
-                              : "-"}
-                          </td>
-                          <td>{timelinePlayerLabel(play.playerSide)}</td>
-                          <td>
-                            <CardPreviewName
-                              card={{
-                                cardId: play.cardId,
-                                cardName: play.cardName,
-                              }}
-                            />
-                          </td>
-                          <td>{timelineZoneLabel(play.firstPublicZone)}</td>
-                          <td>{timelinePhaseLabel(play.phase)}</td>
-                          <td>{formatDateTime(play.playedAt ?? "")}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <StatusMessage>
-                No observed card plays for this match yet.
-              </StatusMessage>
-            )}
-          </div>
-        )}
+        </div>
       </section>
         </div>
       ) : null}

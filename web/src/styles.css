@@ -856,7 +856,7 @@ body.has-wide-deck-curve .app-shell {
 .live-banner-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
   gap: 0.5rem 0.9rem;
   padding: 0.6rem 0.85rem;
   border-bottom: 1px solid var(--line);
@@ -874,6 +874,7 @@ body.has-wide-deck-curve .app-shell {
 }
 
 .live-minimize {
+  align-self: center;
   margin-left: auto;
   flex: none;
   display: inline-flex;
@@ -910,6 +911,14 @@ body.has-wide-deck-curve .app-shell {
   letter-spacing: var(--track-lg);
   text-transform: uppercase;
   color: var(--accent);
+}
+
+.live-badge,
+.live-vs,
+.live-banner-head > .event-label,
+.live-progress,
+.live-deck {
+  line-height: 1.25rem;
 }
 
 .live-badge::before {
@@ -6144,6 +6153,28 @@ button.match-replay-zonechip.is-button {
 
   .match-replay-button:last-child {
     border-radius: 0 3px 3px 0;
+  }
+}
+
+@media (min-width: 800px) and (max-width: 1359px) {
+  .match-replay-controls-bar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .match-replay-button-row {
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .match-replay-button {
+    flex: 0 0 auto;
+  }
+
+  .match-replay-controls-aux {
+    flex: 0 0 auto;
+    justify-content: flex-start;
   }
 }
 

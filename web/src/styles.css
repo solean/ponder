@@ -1698,20 +1698,9 @@ body.has-wide-deck-curve .app-shell {
 }
 
 .rank-season-select select {
-  appearance: none;
   min-height: 2.5rem;
   max-width: 14rem;
   padding: 0.44rem 2.15rem 0.44rem 0.82rem;
-  background-image:
-    var(--select-chevron),
-    linear-gradient(155deg, var(--panel-inner-a) 0%, var(--panel-inner-b) 100%);
-  background-repeat: no-repeat;
-  background-position:
-    right 0.72rem center,
-    0 0;
-  background-size:
-    10px 6px,
-    auto;
   box-shadow: inset 0 1px 0 var(--card-inner-border);
   cursor: pointer;
   font-family: var(--font-display);
@@ -7242,11 +7231,54 @@ button.match-replay-zonechip.is-button {
 }
 
 select {
+  appearance: none;
+  -webkit-appearance: none;
   background-color: var(--surface-faint);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 3px;
+  padding-right: 2.15rem;
   font-family: var(--font-mono);
+  box-shadow: inset 0 1px 0 var(--card-inner-border);
+  cursor: pointer;
+  text-overflow: ellipsis;
+  touch-action: manipulation;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease;
+}
+
+select,
+select.settings-input {
+  padding-right: 2.15rem;
+  background-image:
+    var(--select-chevron),
+    linear-gradient(155deg, var(--panel-inner-a) 0%, var(--panel-inner-b) 100%);
+  background-repeat: no-repeat;
+  background-position:
+    right 0.72rem center,
+    0 0;
+  background-size:
+    10px 6px,
+    auto;
+}
+
+select:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  box-shadow:
+    inset 0 1px 0 var(--card-inner-border),
+    0 0 0 1px var(--accent-soft);
+}
+
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+select option {
+  background: var(--surface-strong);
+  color: var(--text);
 }
 
 /* ══════════════════════════════════════════
@@ -7836,19 +7868,7 @@ select {
 }
 
 .match-filter-field select.settings-input {
-  appearance: none;
-  -webkit-appearance: none;
   padding-right: 2.1rem;
-  background-image:
-    var(--select-chevron),
-    linear-gradient(155deg, var(--panel-inner-a) 0%, var(--panel-inner-b) 100%);
-  background-repeat: no-repeat;
-  background-position:
-    right 0.7rem center,
-    0 0;
-  background-size:
-    10px 6px,
-    auto;
   cursor: pointer;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -9368,9 +9388,9 @@ select {
 .deck-analytics-version-select select {
   border: 1px solid var(--line-strong);
   border-radius: 4px;
-  padding: 0.32rem 0.5rem;
+  padding: 0.32rem 2rem 0.32rem 0.5rem;
   color: var(--text-soft);
-  background: var(--surface-faint);
+  background-color: var(--surface-faint);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
@@ -10093,9 +10113,9 @@ select {
 .matchup-archetype-select {
   border: 1px solid var(--line-strong);
   border-radius: 4px;
-  padding: 0.28rem 0.4rem;
+  padding: 0.28rem 2rem 0.28rem 0.4rem;
   color: var(--text-soft);
-  background: var(--surface-faint);
+  background-color: var(--surface-faint);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
 }
@@ -10404,9 +10424,9 @@ select {
 .draft-replay-controls select {
   border: 1px solid var(--line-strong);
   border-radius: 4px;
-  padding: 0.32rem 0.5rem;
+  padding: 0.32rem 2rem 0.32rem 0.5rem;
   color: var(--text-soft);
-  background: var(--surface-faint);
+  background-color: var(--surface-faint);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }

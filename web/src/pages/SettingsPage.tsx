@@ -6,7 +6,15 @@ import { api } from "../lib/api";
 import { APP_NAME } from "../lib/branding";
 import { formatBytes, formatDateTime, formatRelativeTime, shortenHomePath } from "../lib/format";
 import { useThemeControls, type ColorScheme, type ModePreference } from "../lib/theme";
-import type { RuntimeConfig, RuntimeOperation, RuntimeStatus, UpdateCheck } from "../lib/types";
+import type {
+  AiModelOption,
+  AiProvider,
+  AiProviderStatus,
+  RuntimeConfig,
+  RuntimeOperation,
+  RuntimeStatus,
+  UpdateCheck,
+} from "../lib/types";
 
 function StatusPill({
   tone,
@@ -206,6 +214,55 @@ const schemeOptions: Array<{ value: ColorScheme; label: string; icon: () => JSX.
 
 const runtimeStatusKey = ["runtime-status"] as const;
 const autostartKey = ["autostart-status"] as const;
+const aiStatusKey = ["ai-status"] as const;
+
+const aiUsageNumberFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+
+function formatTokenCount(value: number): string {
+  return `${aiUsageNumberFormatter.format(value)} ${value === 1 ? "token" : "tokens"}`;
+}
+
+const fallbackAIProviders: AiProviderStatus[] = [
+  {
+    id: "claude",
+    name: "Claude Code",
+    installed: false,
+    authenticated: false,
+    available: false,
+    models: [
+      { id: "opus", name: "Opus", description: "Highest-quality Claude model alias." },
+      { id: "sonnet", name: "Sonnet", description: "Balanced Claude model alias." },
+      { id: "haiku", name: "Haiku", description: "Fastest Claude model alias." },
+    ],
+  },
+  {
+    id: "openai",
+    name: "OpenAI (Codex)",
+    installed: false,
+    authenticated: false,
+    available: false,
+    models: [
+      {
+        id: "default",
+        name: "Codex default",
+        description: "Tracks the default model selected by your installed Codex CLI.",
+      },
+    ],
+  },
+];
+
+function modelsForProvider(
+  providers: AiProviderStatus[],
+  providerID: AiProvider,
+  selectedModel: string,
+): AiModelOption[] {
+  const models = [...(providers.find((provider) => provider.id === providerID)?.models ?? [])];
+  if (selectedModel && !models.some((model) => model.id === selectedModel)) {
+    models.push({ id: selectedModel, name: selectedModel, description: "Model saved in your current configuration." });
+  }
+  return models;
+}
+
 
 function summarizeUpdateCheck(result: UpdateCheck): string {
   if (result.note) {
@@ -265,6 +322,8 @@ function syncForm(status: RuntimeStatus): RuntimeConfig {
     includePrev: status.config.includePrev,
     autoStartLive: status.config.autoStartLive ?? false,
     autoCheckUpdates: status.config.autoCheckUpdates ?? false,
+    aiProvider: status.config.aiProvider ?? "claude",
+    aiModel: status.config.aiModel ?? "opus",
   };
 }
 
@@ -276,6 +335,11 @@ export function SettingsPage() {
     queryFn: api.runtimeStatus,
     refetchInterval: 3000,
   });
+  const aiStatusQuery = useQuery({
+    queryKey: aiStatusKey,
+    queryFn: api.aiStatus,
+    staleTime: 30_000,
+  });
 
   const [form, setForm] = useState<RuntimeConfig>({
     logPath: "",
@@ -283,6 +347,8 @@ export function SettingsPage() {
     includePrev: true,
     autoStartLive: false,
     autoCheckUpdates: false,
+    aiProvider: "claude",
+    aiModel: "opus",
   });
   const [hasLocalEdits, setHasLocalEdits] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -310,6 +376,7 @@ export function SettingsPage() {
       setForm(syncForm(status));
       setHasLocalEdits(false);
       setSavedFlash(true);
+      void queryClient.invalidateQueries({ queryKey: aiStatusKey });
     },
   });
 
@@ -408,6 +475,13 @@ export function SettingsPage() {
   const liveMutationPending = startLiveMutation.isPending || stopLiveMutation.isPending;
   const importDisabled = importMutation.isPending || data.liveRunning;
   const liveError = (startLiveMutation.error || stopLiveMutation.error) as Error | null;
+  const aiProviders = aiStatusQuery.data?.providers?.length ? aiStatusQuery.data.providers : fallbackAIProviders;
+  const selectedAIProvider =
+    aiProviders.find((provider) => provider.id === form.aiProvider) ??
+    fallbackAIProviders.find((provider) => provider.id === form.aiProvider)!;
+  const aiModels = modelsForProvider(aiProviders, form.aiProvider, form.aiModel);
+  const selectedAIModel = aiModels.find((model) => model.id === form.aiModel);
+  const aiUsage = aiStatusQuery.data?.usage;
 
   const discardEdits = () => {
     setForm(syncForm(data));
@@ -657,6 +731,219 @@ export function SettingsPage() {
         {liveError ? <StatusMessage tone="error">Live tracking: {liveError.message}</StatusMessage> : null}
         {pickLogMutation.error ? (
           <StatusMessage tone="error">File picker: {(pickLogMutation.error as Error).message}</StatusMessage>
+        ) : null}
+      </section>
+
+      <section className="panel">
+        <div className="panel-head panel-head--stacked">
+          <h3>AI</h3>
+          <p>
+            {hasLocalEdits ? <span className="settings-unsaved-chip">Unsaved changes</span> : null}
+            Generate deck primers through a local CLI and your existing subscription. Credentials remain managed by
+            Claude Code or Codex and are never stored by {APP_NAME}.
+          </p>
+        </div>
+
+        <div className="settings-groups">
+          <div className="settings-group">
+            <h4 className="settings-group-title">Primer Generation</h4>
+
+            <label className="settings-field">
+              <span>Provider</span>
+              <select
+                className="settings-input"
+                value={form.aiProvider}
+                onChange={(event) => {
+                  const aiProvider = event.target.value as AiProvider;
+                  const provider =
+                    aiProviders.find((candidate) => candidate.id === aiProvider) ??
+                    fallbackAIProviders.find((candidate) => candidate.id === aiProvider);
+                  setForm((current) => ({
+                    ...current,
+                    aiProvider,
+                    aiModel: provider?.models[0]?.id ?? (aiProvider === "openai" ? "default" : "opus"),
+                  }));
+                  setHasLocalEdits(true);
+                }}
+              >
+                {aiProviders.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.name}
+                  </option>
+                ))}
+              </select>
+              <small>
+                {form.aiProvider === "openai"
+                  ? "Uses Codex CLI. Run `codex login` and choose Sign in with ChatGPT to use your OpenAI plan."
+                  : "Uses Claude Code CLI and your Claude subscription login."}
+              </small>
+            </label>
+
+            <label className="settings-field">
+              <span>Model</span>
+              <select
+                className="settings-input"
+                value={form.aiModel}
+                onChange={(event) => {
+                  setForm((current) => ({ ...current, aiModel: event.target.value }));
+                  setHasLocalEdits(true);
+                }}
+              >
+                {aiModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name}
+                  </option>
+                ))}
+              </select>
+              <small>{selectedAIModel?.description ?? "Model passed to the selected CLI."}</small>
+            </label>
+          </div>
+
+          <div className="settings-group">
+            <h4 className="settings-group-title">Subscription Status</h4>
+            <div className="settings-status-grid">
+              {aiProviders.map((provider) => (
+                <article className="settings-status-card" key={provider.id}>
+                  <span>{provider.name}</span>
+                  <strong>
+                    <StatusPill
+                      tone={provider.available ? "positive" : provider.installed ? "negative" : "neutral"}
+                      compact
+                    >
+                      {provider.available
+                        ? "Ready"
+                        : provider.installed && provider.version
+                          ? "Sign-in needed"
+                          : provider.installed
+                            ? "CLI error"
+                            : "Not installed"}
+                    </StatusPill>
+                  </strong>
+                  {provider.version ? (
+                    <small>
+                      {provider.version}
+                      {provider.authMethod ? ` • ${provider.authMethod}` : ""}
+                    </small>
+                  ) : null}
+                  {provider.cliPath ? <PathValue path={provider.cliPath} copyLabel={`${provider.name} CLI path`} /> : null}
+                  <small className="settings-ai-detail">
+                    {provider.detail || "Checking installation and login…"}
+                  </small>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="settings-group">
+            <h4 className="settings-group-title">Token Usage</h4>
+            {aiUsage ? (
+              <>
+                <div className="settings-status-grid settings-ai-usage-grid">
+                  <article className="settings-status-card">
+                    <span>Metered Runs</span>
+                    <strong>{aiUsageNumberFormatter.format(aiUsage.runs)}</strong>
+                    <small>
+                      {aiUsageNumberFormatter.format(aiUsage.successfulRuns)} succeeded
+                      {aiUsage.runs > aiUsage.successfulRuns
+                        ? ` • ${aiUsageNumberFormatter.format(aiUsage.runs - aiUsage.successfulRuns)} failed`
+                        : ""}
+                    </small>
+                  </article>
+                  <article className="settings-status-card">
+                    <span>Input</span>
+                    <strong>{aiUsageNumberFormatter.format(aiUsage.inputTokens)}</strong>
+                    <small>Provider-reported input tokens</small>
+                  </article>
+                  <article className="settings-status-card">
+                    <span>Output</span>
+                    <strong>{aiUsageNumberFormatter.format(aiUsage.outputTokens)}</strong>
+                    <small>
+                      {aiUsage.reasoningOutputTokens > 0
+                        ? `${formatTokenCount(aiUsage.reasoningOutputTokens)} reasoning`
+                        : "Generated response tokens"}
+                    </small>
+                  </article>
+                  <article className="settings-status-card">
+                    <span>Cache</span>
+                    <strong>{aiUsageNumberFormatter.format(aiUsage.cachedInputTokens)}</strong>
+                    <small>
+                      Cached input
+                      {aiUsage.cacheWriteInputTokens > 0
+                        ? ` • ${formatTokenCount(aiUsage.cacheWriteInputTokens)} written`
+                        : ""}
+                    </small>
+                  </article>
+                </div>
+                {aiUsage.providers.map((usage) => (
+                  <p className="settings-note" key={usage.provider}>
+                    {aiProviders.find((provider) => provider.id === usage.provider)?.name ?? usage.provider}:{" "}
+                    {formatTokenCount(usage.inputTokens)} input • {formatTokenCount(usage.outputTokens)} output across{" "}
+                    {usage.runs} {usage.runs === 1 ? "run" : "runs"}
+                  </p>
+                ))}
+                {aiUsage.lastRun ? (
+                  <p className="settings-note">
+                    Last recorded {formatDateTime(aiUsage.lastRun.createdAt)}: {aiUsage.lastRun.provider}/
+                    {aiUsage.lastRun.model} • {formatTokenCount(aiUsage.lastRun.outputTokens)} output •{" "}
+                    {aiUsage.lastRun.succeeded ? "completed" : "failed"}
+                  </p>
+                ) : (
+                  <p className="settings-note">No provider has reported token usage yet.</p>
+                )}
+                <p className="settings-note">
+                  Cached and reasoning tokens are provider-reported subsets and are not added to the input/output totals.
+                </p>
+              </>
+            ) : (
+              <p className="settings-note">Loading token usage…</p>
+            )}
+          </div>
+        </div>
+
+        <div className="settings-action-row">
+          <button
+            type="button"
+            className={`control-button${hasLocalEdits ? " control-button--primary" : ""}${
+              savedFlash ? " is-flash" : ""
+            }`}
+            onClick={() => saveMutation.mutate()}
+            disabled={saveDisabled}
+          >
+            {saveMutation.isPending ? "Saving…" : savedFlash ? "Saved ✓" : "Save Settings"}
+          </button>
+          {hasLocalEdits ? (
+            <button
+              type="button"
+              className="control-button control-button--quiet"
+              onClick={discardEdits}
+              disabled={saveMutation.isPending}
+            >
+              Discard
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="control-button control-button--quiet"
+            onClick={() => void aiStatusQuery.refetch()}
+            disabled={aiStatusQuery.isFetching}
+          >
+            {aiStatusQuery.isFetching ? "Checking Logins…" : "Recheck Login Status"}
+          </button>
+        </div>
+
+        {saveMutation.error ? (
+          <StatusMessage tone="error">Save failed: {(saveMutation.error as Error).message}</StatusMessage>
+        ) : null}
+        {aiStatusQuery.error ? (
+          <StatusMessage tone="error">AI status: {(aiStatusQuery.error as Error).message}</StatusMessage>
+        ) : null}
+        {aiStatusQuery.data?.usageError ? (
+          <StatusMessage tone="error">Token usage: {aiStatusQuery.data.usageError}</StatusMessage>
+        ) : null}
+        {!selectedAIProvider.available ? (
+          <p className="settings-note">
+            The selected provider must be installed and signed in before primer generation is enabled.
+          </p>
         ) : null}
       </section>
 

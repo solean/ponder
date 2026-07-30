@@ -35,7 +35,7 @@ type Server struct {
 	appState     *appstate.Service
 	desktop      Desktop
 	httpClient   *http.Client
-	aiProvider   *ai.CLIProvider
+	aiProvider   *ai.Service
 	aiGenBusy    sync.Mutex
 }
 
@@ -47,7 +47,7 @@ func NewServer(store *db.Store, staticDir string, appState *appstate.Service) *S
 		httpClient: &http.Client{
 			Timeout: 8 * time.Second,
 		},
-		aiProvider: &ai.CLIProvider{},
+		aiProvider: ai.NewService(),
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/solean/ponder/internal/ai"
 	"github.com/solean/ponder/internal/db"
 )
 
@@ -17,6 +18,18 @@ func TestSupportDirPathUsesPonderName(t *testing.T) {
 	want := filepath.Join(base, "ponder")
 	if got != want {
 		t.Fatalf("support dir = %q, want %q", got, want)
+	}
+}
+
+func TestNormalizeConfigPreservesAISelection(t *testing.T) {
+	defaults := normalizeConfig(Config{}, 2*time.Second)
+	if defaults.AIProvider != ai.ProviderClaude || defaults.AIModel != ai.DefaultClaudeModel {
+		t.Fatalf("default AI config = %q/%q", defaults.AIProvider, defaults.AIModel)
+	}
+
+	openAI := normalizeConfig(Config{AIProvider: " openai ", AIModel: " gpt-test "}, 2*time.Second)
+	if openAI.AIProvider != ai.ProviderOpenAI || openAI.AIModel != "gpt-test" {
+		t.Fatalf("OpenAI config = %q/%q", openAI.AIProvider, openAI.AIModel)
 	}
 }
 

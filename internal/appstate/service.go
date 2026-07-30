@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/solean/ponder/internal/ai"
 	"github.com/solean/ponder/internal/db"
 	"github.com/solean/ponder/internal/ingest"
 	"github.com/solean/ponder/internal/model"
@@ -44,6 +45,8 @@ type Config struct {
 	IncludePrev         bool   `json:"includePrev"`
 	AutoStartLive       bool   `json:"autoStartLive"`
 	AutoCheckUpdates    bool   `json:"autoCheckUpdates"`
+	AIProvider          string `json:"aiProvider"`
+	AIModel             string `json:"aiModel"`
 }
 
 // UpdateCheck is the outcome of a GitHub release check. CheckedAt lets the UI
@@ -162,6 +165,8 @@ func NewService(opts Options) (*Service, error) {
 		PollIntervalSeconds: max(1, int(poll.Round(time.Second)/time.Second)),
 		IncludePrev:         true,
 		AutoCheckUpdates:    true,
+		AIProvider:          ai.DefaultProvider,
+		AIModel:             ai.DefaultClaudeModel,
 	}
 
 	if raw, err := os.ReadFile(configPath); err == nil {
@@ -236,6 +241,13 @@ func (s *Service) Status() Status {
 	}
 }
 
+// Config returns a snapshot of persisted runtime and AI preferences.
+func (s *Service) Config() Config {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.config
+}
+
 // SetUpdateCheck records the latest release-check result so it rides along on
 // the status payload instead of vanishing when the settings page unmounts.
 func (s *Service) SetUpdateCheck(result UpdateCheck) {
@@ -290,11 +302,11 @@ func (s *Service) UpdateConfig(next Config) (Status, error) {
 	}
 
 	s.mu.Lock()
-	wasRunning := s.liveRunning
+	restartLive := s.liveRunning && trackingConfigChanged(s.config, cfg)
 	s.config = cfg
 	s.mu.Unlock()
 
-	if wasRunning {
+	if restartLive {
 		if _, err := s.StopLive(); err != nil {
 			return s.Status(), err
 		}
@@ -539,7 +551,15 @@ func normalizeConfig(cfg Config, poll time.Duration) Config {
 	if cfg.PollIntervalSeconds <= 0 {
 		cfg.PollIntervalSeconds = max(1, int(poll.Round(time.Second)/time.Second))
 	}
+	cfg.AIProvider = ai.NormalizeProvider(cfg.AIProvider)
+	cfg.AIModel = ai.NormalizeModel(cfg.AIProvider, cfg.AIModel)
 	return cfg
+}
+func trackingConfigChanged(a, b Config) bool {
+	return a.LogPath != b.LogPath ||
+		a.PollIntervalSeconds != b.PollIntervalSeconds ||
+		a.IncludePrev != b.IncludePrev ||
+		a.AutoStartLive != b.AutoStartLive
 }
 
 func summarizeOperation(kind string, paths []string, stats []model.ParseStats) OperationResult {

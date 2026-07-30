@@ -573,3 +573,20 @@ CREATE TABLE IF NOT EXISTS deck_ai_primers (
   created_at TEXT NOT NULL,
   FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS ai_usage_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  deck_id INTEGER NOT NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  input_tokens INTEGER NOT NULL DEFAULT 0 CHECK(input_tokens >= 0),
+  cached_input_tokens INTEGER NOT NULL DEFAULT 0 CHECK(cached_input_tokens >= 0),
+  cache_write_input_tokens INTEGER NOT NULL DEFAULT 0 CHECK(cache_write_input_tokens >= 0),
+  output_tokens INTEGER NOT NULL DEFAULT 0 CHECK(output_tokens >= 0),
+  reasoning_output_tokens INTEGER NOT NULL DEFAULT 0 CHECK(reasoning_output_tokens >= 0),
+  succeeded INTEGER NOT NULL DEFAULT 0 CHECK(succeeded IN (0, 1)),
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_usage_events_created_at ON ai_usage_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_events_provider ON ai_usage_events(provider);

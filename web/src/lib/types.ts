@@ -583,11 +583,71 @@ export type LimitedMatchupsResponse = {
   sets: LimitedMatchupSet[];
 };
 
-export type AiStatus = {
+export type AiProvider = "claude" | "openai";
+
+export type AiModelOption = {
+  id: string;
+  name: string;
+  description?: string;
+};
+
+export type AiProviderStatus = {
+  id: AiProvider;
+  name: string;
+  installed: boolean;
+  authenticated: boolean;
   available: boolean;
   cliPath?: string;
   version?: string;
+  authMethod?: string;
   detail?: string;
+  models: AiModelOption[];
+};
+
+export type AiTokenUsage = {
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheWriteInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+};
+
+export type AiUsageTotals = AiTokenUsage & {
+  runs: number;
+  successfulRuns: number;
+};
+
+export type AiProviderUsage = AiUsageTotals & {
+  provider: AiProvider;
+};
+
+export type AiUsageEvent = AiTokenUsage & {
+  deckId: number;
+  provider: AiProvider;
+  model: string;
+  succeeded: boolean;
+  createdAt: string;
+};
+
+export type AiUsageSummary = AiUsageTotals & {
+  providers: AiProviderUsage[];
+  lastRun?: AiUsageEvent;
+};
+
+export type AiStatus = {
+  available: boolean;
+  provider: AiProvider;
+  providerName: string;
+  model: string;
+  installed: boolean;
+  authenticated: boolean;
+  cliPath?: string;
+  version?: string;
+  authMethod?: string;
+  detail?: string;
+  providers: AiProviderStatus[];
+  usage: AiUsageSummary;
+  usageError?: string;
 };
 
 export type DeckPrimer = {
@@ -633,6 +693,8 @@ export type RuntimeConfig = {
   includePrev: boolean;
   autoStartLive: boolean;
   autoCheckUpdates: boolean;
+  aiProvider: AiProvider;
+  aiModel: string;
 };
 
 export type RuntimeOperation = {

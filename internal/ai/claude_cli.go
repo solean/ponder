@@ -1,7 +1,5 @@
-// Package ai generates deck content (strategy primers) by shelling out to a
-// locally installed Claude Code CLI. Using `claude -p` means requests
-// authenticate against the user's existing Claude subscription login — no API
-// key is stored or billed per-token by this app.
+// Package ai generates deck content through locally installed, subscription-
+// authenticated AI CLIs. Credentials stay under each CLI's own login.
 package ai
 
 import (
@@ -18,18 +16,6 @@ import (
 	"sync"
 	"time"
 )
-
-// DefaultModel is the Claude Code model alias used for primer generation.
-// Primers are generated once and cached, so quality beats speed here.
-const DefaultModel = "opus"
-
-// Status describes whether AI generation is usable on this machine.
-type Status struct {
-	Available bool   `json:"available"`
-	CLIPath   string `json:"cliPath,omitempty"`
-	Version   string `json:"version,omitempty"`
-	Detail    string `json:"detail,omitempty"`
-}
 
 // CLIProvider locates and drives the `claude` binary. Safe for concurrent
 // use; discovery runs once and is cached.
@@ -65,57 +51,126 @@ func (p *CLIProvider) lookupCLI() {
 	p.detail = "Claude Code CLI not found. Install it and sign in with your Claude subscription to enable AI features."
 }
 
-// Status reports CLI availability, resolving and version-checking it once.
-func (p *CLIProvider) Status(ctx context.Context) Status {
+// Status checks installation and login separately. Authentication is checked
+// on every call so signing in or token expiry is reflected without a restart.
+func (p *CLIProvider) Status(ctx context.Context) ProviderStatus {
 	p.once.Do(func() {
 		p.lookupCLI()
 		if p.cliPath == "" {
 			return
 		}
-		versionCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		versionCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		out, err := exec.CommandContext(versionCtx, p.cliPath, "--version").Output()
+		out, err := exec.CommandContext(versionCtx, p.cliPath, "--version").CombinedOutput()
 		if err != nil {
-			p.detail = fmt.Sprintf("found %s but `claude --version` failed: %v", p.cliPath, err)
-			p.cliPath = ""
+			p.detail = fmt.Sprintf(
+				"Found Claude Code CLI at %s, but it could not run. Update or reinstall Claude Code. Details: %s",
+				p.cliPath,
+				commandSummary(err, out),
+			)
 			return
 		}
 		p.version = strings.TrimSpace(string(out))
 	})
-	return Status{
-		Available: p.cliPath != "",
+
+	status := ProviderStatus{
+		ID:        ProviderClaude,
+		Name:      "Claude Code",
+		Installed: p.cliPath != "",
 		CLIPath:   p.cliPath,
 		Version:   p.version,
+		Models:    providerModels(ProviderClaude),
 		Detail:    p.detail,
+	}
+	if p.cliPath == "" || p.version == "" {
+		return status
+	}
+
+	authCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	out, commandErr := exec.CommandContext(authCtx, p.cliPath, "auth", "status", "--json").CombinedOutput()
+	var auth struct {
+		LoggedIn         bool   `json:"loggedIn"`
+		AuthMethod       string `json:"authMethod"`
+		SubscriptionType string `json:"subscriptionType"`
+	}
+	if json.Unmarshal(out, &auth) == nil {
+		if !auth.LoggedIn {
+			status.Detail = "Claude Code is installed but not signed in. Run `claude auth login`."
+			return status
+		}
+		status.Authenticated = true
+		status.Available = true
+		status.AuthMethod = strings.TrimSpace(auth.SubscriptionType)
+		if status.AuthMethod == "" {
+			status.AuthMethod = strings.TrimSpace(auth.AuthMethod)
+		}
+		status.Detail = "Ready to generate with your existing Claude login."
+		return status
+	}
+	if commandErr != nil {
+		status.Detail = "Claude Code is installed but its login could not be verified. Run `claude auth login`."
+		if detail := truncate(string(out), 300); detail != "" {
+			status.Detail += " Details: " + detail
+		}
+		return status
+	}
+	status.Detail = "Claude Code returned an unreadable authentication status. Update Claude Code and retry."
+	return status
+}
+
+// claudeUsagePayload matches Claude Code's aggregate result and message-delta
+// accounting fields.
+type claudeUsagePayload struct {
+	InputTokens           int64 `json:"input_tokens"`
+	CachedInputTokens     int64 `json:"cache_read_input_tokens"`
+	CacheWriteInputTokens int64 `json:"cache_creation_input_tokens"`
+	OutputTokens          int64 `json:"output_tokens"`
+	OutputTokenDetails    struct {
+		ThinkingTokens int64 `json:"thinking_tokens"`
+	} `json:"output_tokens_details"`
+}
+
+func (u claudeUsagePayload) tokenUsage() TokenUsage {
+	return TokenUsage{
+		InputTokens:           u.InputTokens,
+		CachedInputTokens:     u.CachedInputTokens,
+		CacheWriteInputTokens: u.CacheWriteInputTokens,
+		OutputTokens:          u.OutputTokens,
+		ReasoningOutputTokens: u.OutputTokenDetails.ThinkingTokens,
 	}
 }
 
-// streamLine is the subset of Claude Code's stream-json output we care
-// about: incremental text deltas while generating, and the final result.
+// streamLine is the subset of Claude Code's stream-json output we care about.
 type streamLine struct {
-	Type    string `json:"type"`
-	Subtype string `json:"subtype"`
-	IsError bool   `json:"is_error"`
-	Result  string `json:"result"`
+	Type    string             `json:"type"`
+	Subtype string             `json:"subtype"`
+	IsError bool               `json:"is_error"`
+	Result  string             `json:"result"`
+	Usage   claudeUsagePayload `json:"usage"`
 	Event   struct {
 		Type  string `json:"type"`
 		Delta struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"delta"`
+		Usage claudeUsagePayload `json:"usage"`
 	} `json:"event"`
 }
 
 // Generate runs `claude -p` with the given prompt, invoking onDelta for each
 // streamed text fragment, and returns the final response text. onDelta may be
 // nil. Cancelling ctx kills the CLI process.
-func (p *CLIProvider) Generate(ctx context.Context, model, prompt string, onDelta func(string)) (string, error) {
+func (p *CLIProvider) Generate(ctx context.Context, model, prompt string, onDelta func(string)) (GenerationResult, error) {
 	status := p.Status(ctx)
+	if err := ctx.Err(); err != nil {
+		return GenerationResult{}, err
+	}
 	if !status.Available {
-		return "", errors.New(status.Detail)
+		return GenerationResult{}, errors.New(status.Detail)
 	}
 	if model == "" {
-		model = DefaultModel
+		model = DefaultClaudeModel
 	}
 
 	args := []string{
@@ -136,19 +191,20 @@ func (p *CLIProvider) Generate(ctx context.Context, model, prompt string, onDelt
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return "", fmt.Errorf("claude cli stdout: %w", err)
+		return GenerationResult{}, fmt.Errorf("claude cli stdout: %w", err)
 	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
 	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("start claude cli: %w", err)
+		return GenerationResult{}, fmt.Errorf("start claude cli: %w", err)
 	}
 
 	var (
 		result    string
 		gotResult bool
 		runErr    error
+		usage     TokenUsage
 	)
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
@@ -163,11 +219,13 @@ func (p *CLIProvider) Generate(ctx context.Context, model, prompt string, onDelt
 		}
 		switch parsed.Type {
 		case "stream_event":
+			usage = mergeTokenUsage(usage, parsed.Event.Usage.tokenUsage())
 			if parsed.Event.Type == "content_block_delta" && parsed.Event.Delta.Type == "text_delta" && onDelta != nil {
 				onDelta(parsed.Event.Delta.Text)
 			}
 		case "result":
 			gotResult = true
+			usage = mergeTokenUsage(usage, parsed.Usage.tokenUsage())
 			if parsed.IsError {
 				// The CLI can report subtype "success" alongside is_error
 				// (e.g. auth failures), so only mention informative subtypes.
@@ -191,17 +249,17 @@ func (p *CLIProvider) Generate(ctx context.Context, model, prompt string, onDelt
 
 	if err := cmd.Wait(); err != nil && runErr == nil {
 		if ctx.Err() != nil {
-			return "", ctx.Err()
+			return GenerationResult{Usage: usage}, ctx.Err()
 		}
 		runErr = fmt.Errorf("claude cli failed: %v: %s", err, truncate(stderr.String(), 500))
 	}
 	if runErr != nil {
-		return "", runErr
+		return GenerationResult{Usage: usage}, actionableGenerationError(ProviderClaude, runErr)
 	}
 	if !gotResult || strings.TrimSpace(result) == "" {
-		return "", fmt.Errorf("claude cli produced no result: %s", truncate(stderr.String(), 500))
+		return GenerationResult{Usage: usage}, fmt.Errorf("claude cli produced no result: %s", truncate(stderr.String(), 500))
 	}
-	return result, nil
+	return GenerationResult{Content: result, Usage: usage}, nil
 }
 
 func truncate(s string, max int) string {

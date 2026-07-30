@@ -1920,6 +1920,10 @@ h4.settings-group-title::after {
   line-height: 1.45;
 }
 
+.settings-ai-detail {
+  overflow-wrap: anywhere;
+}
+
 .settings-input {
   width: 100%;
   min-height: 2.75rem;
@@ -2413,6 +2417,10 @@ small.settings-meta,
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
   gap: 0.75rem;
+}
+
+.settings-ai-usage-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .settings-status-card {

@@ -47,6 +47,11 @@ export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: read
   }, [streamText, generation]);
 
   const available = statusQuery.data?.available ?? false;
+  const providerStatus = statusQuery.data?.providers.find(
+    (provider) => provider.id === statusQuery.data?.provider,
+  );
+  const modelName =
+    providerStatus?.models.find((model) => model.id === statusQuery.data?.model)?.name ?? statusQuery.data?.model;
   const primer = primerQuery.data ?? null;
   const cardsById = useMemo(() => {
     const result = new Map<number, PrimerCard>();
@@ -74,8 +79,8 @@ export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: read
     [cardsById],
   );
 
-  // Feature stays invisible unless the Claude CLI is installed or a primer
-  // was generated in the past — keeps the app fully local by default.
+  // Feature stays invisible unless a configured subscription CLI is ready or
+  // a primer was generated in the past — keeps the app fully local by default.
   if (!available && !primer) {
     return null;
   }
@@ -98,6 +103,7 @@ export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: read
         },
         onError: (message) => {
           setErrorMessage(message);
+          void queryClient.invalidateQueries({ queryKey: ["ai-status"] });
           setGeneration("error");
         },
       },
@@ -142,8 +148,11 @@ export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: read
 
       {isGenerating ? (
         <div className="ai-primer-stream">
-          <div className="ai-primer-stream-note">Generating with Claude ({statusQuery.data?.version ?? "CLI"})…</div>
-          {streamText ? <pre>{streamText}</pre> : <div className="ai-primer-stream-note">Waiting for first tokens…</div>}
+          <div className="ai-primer-stream-note">
+            Generating with {statusQuery.data?.providerName ?? "AI"}
+            {modelName ? ` (${modelName})` : ""}…
+          </div>
+          {streamText ? <pre>{streamText}</pre> : <div className="ai-primer-stream-note">Waiting for response…</div>}
           <div ref={streamEndRef} />
         </div>
       ) : primer ? (
@@ -156,7 +165,8 @@ export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: read
         <div className="ai-primer-stream-note">{statusQuery.data?.detail}</div>
       ) : (
         <div className="ai-primer-stream-note">
-          No primer yet. Generation uses your local Claude Code login and usually takes a minute or two.
+          No primer yet. Generation uses your local {statusQuery.data?.providerName ?? "AI"} subscription login and
+          usually takes a minute or two.
         </div>
       )}
     </section>

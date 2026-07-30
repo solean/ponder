@@ -1499,7 +1499,7 @@ export function DeckDetailPage() {
         <DeckMatchupsPanel deckId={deckId} />
       )}
 
-      <DeckPrimerPanel deckId={deckId} />
+      <DeckPrimerPanel deckId={deckId} cards={cards} />
 
       <section className="panel">
         <div className="panel-head">

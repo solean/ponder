@@ -55,17 +55,20 @@ export function CardPreviewName({
   cardName,
   label,
   resolveName = false,
+  inline = false,
 }: {
   cardId: number;
   cardName?: string;
   label?: ReactNode;
   /** Resolve a missing Arena card name before hover so audit-style lists stay readable. */
   resolveName?: boolean;
+  /** Render a phrasing-content wrapper when the name appears inside prose. */
+  inline?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<FloatingPosition | null>(null);
   const anchorRef = useRef<HTMLAnchorElement | null>(null);
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const wrapperRef = useRef<HTMLElement | null>(null);
   const knownName = cardName?.trim() ?? "";
 
   const openPopover = () => {
@@ -90,9 +93,15 @@ export function CardPreviewName({
       return;
     }
     const reposition = () => {
-      if (anchorRef.current) {
-        setPosition(floatingPosition(anchorRef.current));
+      const anchor = anchorRef.current;
+      if (!anchor) {
+        return;
       }
+      if (!anchor.matches(":hover") && document.activeElement !== anchor) {
+        setIsOpen(false);
+        return;
+      }
+      setPosition(floatingPosition(anchor));
     };
     window.addEventListener("resize", reposition);
     window.addEventListener("scroll", reposition, true);
@@ -102,13 +111,8 @@ export function CardPreviewName({
     };
   }, [isOpen]);
 
-  return (
-    <div
-      className="card-preview-anchor"
-      ref={wrapperRef}
-      onMouseEnter={openPopover}
-      onMouseLeave={() => setIsOpen(false)}
-    >
+  const content = (
+    <>
       <a
         className="card-preview-trigger"
         ref={anchorRef}
@@ -145,6 +149,21 @@ export function CardPreviewName({
             document.body,
           )
         : null}
+    </>
+  );
+  const anchorProps = {
+    className: "card-preview-anchor",
+    onMouseEnter: openPopover,
+    onMouseLeave: () => setIsOpen(false),
+  };
+
+  return inline ? (
+    <span ref={(element) => { wrapperRef.current = element; }} {...anchorProps}>
+      {content}
+    </span>
+  ) : (
+    <div ref={(element) => { wrapperRef.current = element; }} {...anchorProps}>
+      {content}
     </div>
   );
 }

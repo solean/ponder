@@ -9301,6 +9301,28 @@ select {
   font-size: var(--text-sm);
 }
 
+.ai-primer-content .card-preview-anchor {
+  display: inline;
+}
+
+.ai-primer-content .card-preview-trigger {
+  color: var(--accent);
+  font-weight: 600;
+  white-space: normal;
+  overflow: visible;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 48%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.16em;
+}
+
+.ai-primer-content .card-preview-trigger:hover,
+.ai-primer-content .card-preview-trigger:focus-visible {
+  color: var(--card-trigger-hover);
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+}
+
 /* ============================================================
    Phase 2 analytics: deck performance dashboards and card table
    ============================================================ */

@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 
+import { CardPreviewName } from "./CardPreviewName";
 import { api, generateDeckPrimer } from "../lib/api";
+import { primerCardIdFromHref, remarkPrimerCardNames, type PrimerCard } from "../lib/primerCards";
 import type { DeckPrimer } from "../lib/types";
 
 type GenerationState = "idle" | "generating" | "error";
@@ -15,7 +17,7 @@ function formatGeneratedAt(iso: string): string {
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
-export function DeckPrimerPanel({ deckId }: { deckId: number }) {
+export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: readonly PrimerCard[] }) {
   const queryClient = useQueryClient();
   const [generation, setGeneration] = useState<GenerationState>("idle");
   const [streamText, setStreamText] = useState("");
@@ -46,6 +48,31 @@ export function DeckPrimerPanel({ deckId }: { deckId: number }) {
 
   const available = statusQuery.data?.available ?? false;
   const primer = primerQuery.data ?? null;
+  const cardsById = useMemo(() => {
+    const result = new Map<number, PrimerCard>();
+    for (const card of cards) {
+      if (card.cardName?.trim() && card.cardId > 0 && !result.has(card.cardId)) {
+        result.set(card.cardId, card);
+      }
+    }
+    return result;
+  }, [cards]);
+  const markdownComponents = useMemo<Components>(
+    () => ({
+      a: ({ href, children, node: _node, ...props }) => {
+        const cardId = primerCardIdFromHref(href);
+        const card = cardId == null ? null : cardsById.get(cardId);
+        return card ? (
+          <CardPreviewName cardId={card.cardId} cardName={card.cardName} label={children} inline />
+        ) : (
+          <a href={href} {...props}>
+            {children}
+          </a>
+        );
+      },
+    }),
+    [cardsById],
+  );
 
   // Feature stays invisible unless the Claude CLI is installed or a primer
   // was generated in the past — keeps the app fully local by default.
@@ -121,7 +148,9 @@ export function DeckPrimerPanel({ deckId }: { deckId: number }) {
         </div>
       ) : primer ? (
         <div className="ai-primer-content">
-          <ReactMarkdown>{primer.content}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[[remarkPrimerCardNames, { cards }]]} components={markdownComponents}>
+            {primer.content}
+          </ReactMarkdown>
         </div>
       ) : !available ? (
         <div className="ai-primer-stream-note">{statusQuery.data?.detail}</div>

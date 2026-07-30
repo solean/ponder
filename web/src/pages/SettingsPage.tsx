@@ -320,7 +320,7 @@ function syncForm(status: RuntimeStatus): RuntimeConfig {
     logPath: status.config.logPath ?? "",
     pollIntervalSeconds: status.config.pollIntervalSeconds,
     includePrev: status.config.includePrev,
-    autoStartLive: status.config.autoStartLive ?? false,
+    autoStartLive: status.config.autoStartLive ?? true,
     autoCheckUpdates: status.config.autoCheckUpdates ?? false,
     aiProvider: status.config.aiProvider ?? "claude",
     aiModel: status.config.aiModel ?? "opus",
@@ -345,7 +345,7 @@ export function SettingsPage() {
     logPath: "",
     pollIntervalSeconds: 2,
     includePrev: true,
-    autoStartLive: false,
+    autoStartLive: true,
     autoCheckUpdates: false,
     aiProvider: "claude",
     aiModel: "opus",
@@ -473,7 +473,7 @@ export function SettingsPage() {
   const updateResult = data.updateCheck ?? updateCheckMutation.data;
   const saveDisabled = saveMutation.isPending || !hasLocalEdits;
   const liveMutationPending = startLiveMutation.isPending || stopLiveMutation.isPending;
-  const importDisabled = importMutation.isPending || data.liveRunning;
+  const importDisabled = importMutation.isPending || data.liveRunning || hasLocalEdits;
   const liveError = (startLiveMutation.error || stopLiveMutation.error) as Error | null;
   const aiProviders = aiStatusQuery.data?.providers?.length ? aiStatusQuery.data.providers : fallbackAIProviders;
   const selectedAIProvider =
@@ -543,10 +543,10 @@ export function SettingsPage() {
           <div className="settings-strip-item">
             <span>Last Activity</span>
             <small>
-              {data.liveRunning && data.liveLastTickAt
-                ? `Live update ${formatRelativeTime(data.liveLastTickAt)}`
-                : lastActivity?.completedAt
-                  ? `${lastActivity.kind === "import" ? "Import" : "Live"} ${formatRelativeTime(lastActivity.completedAt)}`
+              {lastActivity?.completedAt
+                ? `${lastActivity.kind === "import" ? "Manual check" : "Live"} · ${summarizeOperation(lastActivity)} · ${formatRelativeTime(lastActivity.completedAt)}`
+                : data.liveRunning
+                  ? "Watching for Arena activity"
                   : "No activity yet"}
             </small>
           </div>
@@ -558,135 +558,51 @@ export function SettingsPage() {
           <h3>Tracking</h3>
           <p>
             {hasLocalEdits ? <span className="settings-unsaved-chip">Unsaved changes</span> : null}
-            Where match data is read from and how often. Blank log path uses the default MTGA macOS location.
+            Ponder checks Arena&apos;s retained logs, then records new matches while tracking is active.
           </p>
         </div>
 
-        <div className="settings-groups">
-          <div className="settings-group">
-            <h4 className="settings-group-title">Log Source</h4>
-
-            <label className="settings-field">
-              <span>
-                Custom Log Path
-                {form.logPath.trim() ? (
-                  <button
-                    type="button"
-                    className="settings-text-button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      setForm((current) => ({ ...current, logPath: "" }));
-                      setHasLocalEdits(true);
-                    }}
-                  >
-                    Use default
-                  </button>
-                ) : null}
-              </span>
-              <span className="settings-input-row">
-                <input
-                  className="settings-input"
-                  type="text"
-                  value={form.logPath}
-                  onChange={(event) => {
-                    setForm((current) => ({ ...current, logPath: event.target.value }));
-                    setHasLocalEdits(true);
-                  }}
-                  placeholder={data.defaultLogPath}
-                  spellCheck={false}
-                />
-                {canPickFile ? (
-                  <button
-                    type="button"
-                    className="settings-browse-button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      pickLogMutation.mutate();
-                    }}
-                    disabled={pickLogMutation.isPending}
-                  >
-                    {pickLogMutation.isPending ? "Choosing…" : "Browse…"}
-                  </button>
-                ) : null}
-              </span>
-              <small className="settings-meta">
-                Effective path
-                <PathValue path={effectiveActivePath} copyLabel="log path" canReveal={canReveal} />
-              </small>
-            </label>
-
-            <div className="settings-option">
-              <label className="settings-checkbox">
-                <input
-                  type="checkbox"
-                  checked={form.includePrev}
-                  onChange={(event) => {
-                    setForm((current) => ({ ...current, includePrev: event.target.checked }));
-                    setHasLocalEdits(true);
-                  }}
-                  disabled={form.logPath.trim().length > 0}
-                />
-                <span>
-                  Include <code>Player-prev.log</code> in full imports.
-                </span>
-              </label>
-              {form.logPath.trim().length > 0 ? (
-                <p className="settings-checkbox-hint">Disabled while a custom log path is set.</p>
-              ) : (
-                <p className="settings-checkbox-hint settings-meta">
-                  <PathValue
-                    path={data.previousLogPath || data.defaultPrevLogPath}
-                    copyLabel="previous log path"
-                    canReveal={canReveal}
-                  />
-                  <StatusPill tone={data.previousLogPathExists ? "positive" : "negative"} compact>
-                    {data.previousLogPathExists ? "Found" : "Missing"}
-                  </StatusPill>
-                </p>
-              )}
-            </div>
+        <div className="settings-tracking-primary">
+          <div className="settings-tracking-copy">
+            <span>Automatic tracking</span>
+            <strong>{data.liveRunning ? "Recording Arena activity" : "Tracking is stopped"}</strong>
+            <small>
+              {data.activeLogPathExists
+                ? "Arena log found. Starting tracking also recovers any unprocessed recent activity."
+                : "Arena log not found. Open Advanced tracking to choose a different source."}
+            </small>
           </div>
 
-          <div className="settings-group">
-            <h4 className="settings-group-title">Live Tracking</h4>
-
-            <label className="settings-field settings-field--narrow">
-              <span>Poll Interval</span>
-              <select
-                className="settings-input"
-                value={String(form.pollIntervalSeconds)}
-                onChange={(event) => {
-                  setForm((current) => ({
-                    ...current,
-                    pollIntervalSeconds: normalizePollInterval(event.target.value),
-                  }));
-                  setHasLocalEdits(true);
-                }}
-              >
-                {pollOptions.map((seconds) => (
-                  <option key={seconds} value={String(seconds)}>
-                    {seconds === 1 ? "1 second" : `${seconds} seconds`}
-                  </option>
-                ))}
-              </select>
-              <small>Lower values update faster but keep the parser busier.</small>
-            </label>
-
-            <label className="settings-checkbox">
-              <input
-                type="checkbox"
-                checked={form.autoStartLive}
-                onChange={(event) => {
-                  setForm((current) => ({ ...current, autoStartLive: event.target.checked }));
-                  setHasLocalEdits(true);
-                }}
-              />
-              <span>Start live tracking automatically when the app launches.</span>
-            </label>
-          </div>
+          <label className="settings-checkbox">
+            <input
+              type="checkbox"
+              checked={form.autoStartLive}
+              onChange={(event) => {
+                setForm((current) => ({ ...current, autoStartLive: event.target.checked }));
+                setHasLocalEdits(true);
+              }}
+            />
+            <span>Start tracking automatically whenever Ponder opens.</span>
+          </label>
         </div>
 
         <div className="settings-action-row">
+          <button
+            type="button"
+            className={`control-button${
+              data.liveRunning ? " control-button--quiet" : hasLocalEdits ? "" : " control-button--primary"
+            }`}
+            onClick={() => void handleLiveToggle()}
+            disabled={liveMutationPending || saveMutation.isPending}
+          >
+            {liveMutationPending
+              ? data.liveRunning
+                ? "Stopping…"
+                : "Starting…"
+              : data.liveRunning
+                ? "Stop Tracking"
+                : "Start Tracking"}
+          </button>
           <button
             type="button"
             className={`control-button${hasLocalEdits ? " control-button--primary" : ""}${
@@ -707,28 +623,166 @@ export function SettingsPage() {
               Discard
             </button>
           ) : null}
-          <button
-            type="button"
-            className={`control-button${
-              data.liveRunning ? " control-button--quiet" : hasLocalEdits ? "" : " control-button--primary"
-            }`}
-            onClick={() => void handleLiveToggle()}
-            disabled={liveMutationPending || saveMutation.isPending}
-          >
-            {liveMutationPending
-              ? data.liveRunning
-                ? "Stopping…"
-                : "Starting…"
-              : data.liveRunning
-                ? "Stop Live Tracking"
-                : "Start Live Tracking"}
-          </button>
         </div>
+
+        <details className="settings-advanced" open={!data.activeLogPathExists}>
+          <summary>
+            <span>Advanced tracking</span>
+            <small>Custom log source, scan interval, and manual checks</small>
+          </summary>
+
+          <div className="settings-advanced-body">
+            <div className="settings-groups">
+              <div className="settings-group">
+                <h4 className="settings-group-title">Log Source</h4>
+
+                <label className="settings-field">
+                  <span>
+                    Custom Log Path
+                    {form.logPath.trim() ? (
+                      <button
+                        type="button"
+                        className="settings-text-button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setForm((current) => ({ ...current, logPath: "" }));
+                          setHasLocalEdits(true);
+                        }}
+                      >
+                        Use default
+                      </button>
+                    ) : null}
+                  </span>
+                  <span className="settings-input-row">
+                    <input
+                      className="settings-input"
+                      type="text"
+                      value={form.logPath}
+                      onChange={(event) => {
+                        setForm((current) => ({ ...current, logPath: event.target.value }));
+                        setHasLocalEdits(true);
+                      }}
+                      placeholder={data.defaultLogPath}
+                      spellCheck={false}
+                    />
+                    {canPickFile ? (
+                      <button
+                        type="button"
+                        className="settings-browse-button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          pickLogMutation.mutate();
+                        }}
+                        disabled={pickLogMutation.isPending}
+                      >
+                        {pickLogMutation.isPending ? "Choosing…" : "Browse…"}
+                      </button>
+                    ) : null}
+                  </span>
+                  <small className="settings-meta">
+                    Effective path
+                    <PathValue path={effectiveActivePath} copyLabel="log path" canReveal={canReveal} />
+                  </small>
+                </label>
+
+                <div className="settings-option">
+                  <label className="settings-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={form.includePrev}
+                      onChange={(event) => {
+                        setForm((current) => ({ ...current, includePrev: event.target.checked }));
+                        setHasLocalEdits(true);
+                      }}
+                      disabled={form.logPath.trim().length > 0}
+                    />
+                    <span>
+                      Include <code>Player-prev.log</code> when checking retained logs.
+                    </span>
+                  </label>
+                  {form.logPath.trim().length > 0 ? (
+                    <p className="settings-checkbox-hint">Disabled while a custom log path is set.</p>
+                  ) : (
+                    <p className="settings-checkbox-hint settings-meta">
+                      <PathValue
+                        path={data.previousLogPath || data.defaultPrevLogPath}
+                        copyLabel="previous log path"
+                        canReveal={canReveal}
+                      />
+                      <StatusPill tone={data.previousLogPathExists ? "positive" : "negative"} compact>
+                        {data.previousLogPathExists ? "Found" : "Missing"}
+                      </StatusPill>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="settings-group">
+                <h4 className="settings-group-title">Processing</h4>
+
+                <label className="settings-field settings-field--narrow">
+                  <span>Scan Interval</span>
+                  <select
+                    className="settings-input"
+                    value={String(form.pollIntervalSeconds)}
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        pollIntervalSeconds: normalizePollInterval(event.target.value),
+                      }));
+                      setHasLocalEdits(true);
+                    }}
+                  >
+                    {pollOptions.map((seconds) => (
+                      <option key={seconds} value={String(seconds)}>
+                        {seconds === 1 ? "1 second" : `${seconds} seconds`}
+                      </option>
+                    ))}
+                  </select>
+                  <small>Lower values update faster but keep the parser busier.</small>
+                </label>
+              </div>
+            </div>
+
+            <div className="settings-advanced-import">
+              <h4 className="settings-group-title">Manual Check</h4>
+              <p>
+                Process the configured logs without enabling tracking. Starting tracking already performs the same
+                retained-log check, and resume mode skips lines processed earlier.
+              </p>
+              <div className="settings-action-row">
+                <button
+                  type="button"
+                  className="control-button control-button--quiet"
+                  onClick={() => importMutation.mutate()}
+                  disabled={importDisabled}
+                  title={
+                    hasLocalEdits
+                      ? "Save tracking settings before checking the configured logs."
+                      : data.liveRunning
+                        ? "Stop tracking before running a manual check."
+                        : undefined
+                  }
+                >
+                  {importMutation.isPending ? "Checking…" : "Check Configured Logs"}
+                </button>
+              </div>
+              <p className="settings-meta">
+                {data.lastImport?.completedAt
+                  ? `Last checked ${formatDateTime(data.lastImport.completedAt)} · ${summarizeOperation(data.lastImport)}`
+                  : "No manual checks yet."}
+              </p>
+              {importMutation.error ? (
+                <StatusMessage tone="error">Log check failed: {(importMutation.error as Error).message}</StatusMessage>
+              ) : null}
+            </div>
+          </div>
+        </details>
 
         {saveMutation.error ? (
           <StatusMessage tone="error">Save failed: {(saveMutation.error as Error).message}</StatusMessage>
         ) : null}
-        {liveError ? <StatusMessage tone="error">Live tracking: {liveError.message}</StatusMessage> : null}
+        {liveError ? <StatusMessage tone="error">Tracking: {liveError.message}</StatusMessage> : null}
         {pickLogMutation.error ? (
           <StatusMessage tone="error">File picker: {(pickLogMutation.error as Error).message}</StatusMessage>
         ) : null}
@@ -950,7 +1004,7 @@ export function SettingsPage() {
       <section className="panel">
         <div className="panel-head panel-head--stacked">
           <h3>Data</h3>
-          <p>Local database, config file, and import history.</p>
+          <p>Local database and configuration files used by Ponder.</p>
         </div>
 
         <div className="settings-status-grid">
@@ -964,44 +1018,7 @@ export function SettingsPage() {
             <PathValue path={data.configPath} copyLabel="config path" canReveal={canReveal} />
             <small title={data.supportDir}>{shortenHomePath(data.supportDir)}</small>
           </article>
-          <article className="settings-status-card">
-            <span>Last Import</span>
-            <strong>{summarizeOperation(data.lastImport)}</strong>
-            <small>
-              {data.lastImport?.completedAt ? `Completed ${formatDateTime(data.lastImport.completedAt)}` : "No import run yet"}
-            </small>
-          </article>
-          <article className="settings-status-card">
-            <span>Last Live Activity</span>
-            <strong>{summarizeOperation(data.lastLiveActivity)}</strong>
-            <small>
-              {data.lastLiveActivity?.completedAt
-                ? `Observed ${formatDateTime(data.lastLiveActivity.completedAt)}`
-                : "No live activity yet"}
-            </small>
-          </article>
         </div>
-
-        <div className="settings-action-row">
-          <button
-            type="button"
-            className="control-button"
-            onClick={() => importMutation.mutate()}
-            disabled={importDisabled}
-            title={data.liveRunning ? "Stop live tracking before running a manual import." : undefined}
-          >
-            {importMutation.isPending ? "Importing…" : "Import Logs Now"}
-          </button>
-        </div>
-
-        {importMutation.error ? (
-          <StatusMessage tone="error">Import failed: {(importMutation.error as Error).message}</StatusMessage>
-        ) : null}
-
-        <p className="settings-note">
-          Manual import uses resume mode, so an empty database still gets full history and later runs only ingest new data.
-          {data.liveRunning ? " Importing is unavailable while live tracking runs." : ""}
-        </p>
       </section>
 
       <section className="panel">

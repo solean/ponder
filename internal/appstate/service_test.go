@@ -33,6 +33,53 @@ func TestNormalizeConfigPreservesAISelection(t *testing.T) {
 	}
 }
 
+func TestNewServiceAutoStartsLiveByDefault(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "ponder.db")
+	database, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	currentLogPath := filepath.Join(tmpDir, "Player.log")
+	if err := os.WriteFile(currentLogPath, nil, 0o644); err != nil {
+		t.Fatalf("write current log: %v", err)
+	}
+
+	service, err := NewService(Options{
+		Store:               db.NewStore(database),
+		DBPath:              dbPath,
+		SupportDir:          filepath.Join(tmpDir, "support"),
+		DefaultLogPath:      currentLogPath,
+		DefaultPrevLogPath:  filepath.Join(tmpDir, "Player-prev.log"),
+		DefaultPollInterval: time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	if !service.Config().AutoStartLive {
+		t.Fatal("new service should enable automatic live tracking")
+	}
+
+	started, err := service.MaybeAutoStartLive()
+	if err != nil {
+		t.Fatalf("auto-start live: %v", err)
+	}
+	if !started || !service.Status().LiveRunning {
+		t.Fatalf("auto-start result = %v, live running = %v", started, service.Status().LiveRunning)
+	}
+	if _, err := service.StopLive(); err != nil {
+		t.Fatalf("stop live: %v", err)
+	}
+}
+
 func TestStartLiveInitialPassIncludesRetainedPreviousLog(t *testing.T) {
 	t.Parallel()
 

@@ -164,6 +164,7 @@ func NewService(opts Options) (*Service, error) {
 	cfg := Config{
 		PollIntervalSeconds: max(1, int(poll.Round(time.Second)/time.Second)),
 		IncludePrev:         true,
+		AutoStartLive:       true,
 		AutoCheckUpdates:    true,
 		AIProvider:          ai.DefaultProvider,
 		AIModel:             ai.DefaultClaudeModel,

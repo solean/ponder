@@ -1887,6 +1887,120 @@ h4.settings-group-title::after {
   max-width: 12rem;
 }
 
+.settings-tracking-primary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, auto);
+  gap: 1.4rem 2.2rem;
+  align-items: center;
+}
+
+.settings-tracking-copy {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.settings-tracking-copy > span {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: var(--track-md);
+  text-transform: uppercase;
+}
+
+.settings-tracking-copy > strong {
+  color: var(--text);
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.settings-tracking-copy > small {
+  max-width: 62ch;
+  color: var(--muted-strong);
+  font-size: var(--text-base);
+  line-height: 1.45;
+}
+
+.settings-tracking-primary .settings-checkbox {
+  margin-top: 0;
+}
+
+.settings-advanced {
+  margin-top: 1.2rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.85rem;
+}
+
+.settings-advanced > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.22rem 1rem;
+  align-items: center;
+  color: var(--text-soft);
+  cursor: pointer;
+  list-style: none;
+}
+
+.settings-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-advanced > summary::after {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  content: "+";
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+}
+
+.settings-advanced[open] > summary::after {
+  content: "−";
+}
+
+.settings-advanced > summary > span {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: var(--track-md);
+  text-transform: uppercase;
+}
+
+.settings-advanced > summary > small {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.settings-advanced-body {
+  display: grid;
+  gap: 1.4rem;
+  margin-top: 1.2rem;
+}
+
+.settings-advanced-import {
+  display: grid;
+  gap: 0.75rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1.2rem;
+}
+
+.settings-advanced-import > p {
+  max-width: 72ch;
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+.settings-advanced-import .settings-action-row {
+  margin-top: 0;
+}
+
+@media (max-width: 760px) {
+  .settings-tracking-primary {
+    grid-template-columns: 1fr;
+  }
+}
+
 .settings-field {
   display: grid;
   gap: 0.42rem;

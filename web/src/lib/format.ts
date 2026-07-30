@@ -67,6 +67,19 @@ export function formatDuration(seconds?: number | null): string {
   return `${min}m ${sec}s`;
 }
 
+export function formatGameFormat(format?: string | null): string {
+  const raw = format?.trim();
+  if (!raw) return "-";
+
+  const label = raw
+    .replace(/^Traditional(?=[A-Z_\s-]|$)/, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+  return label || raw;
+}
+
 export function pct(v: number): string {
   return `${(v * 100).toFixed(1)}%`;
 }

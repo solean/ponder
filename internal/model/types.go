@@ -20,6 +20,7 @@ type MatchRow struct {
 	ID                      int64    `json:"id"`
 	ArenaMatchID            string   `json:"arenaMatchId"`
 	EventName               string   `json:"eventName"`
+	Format                  string   `json:"format"`
 	BestOf                  string   `json:"bestOf"`
 	PlayDraw                string   `json:"playDraw"`
 	Opponent                string   `json:"opponent"`

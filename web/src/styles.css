@@ -7912,8 +7912,23 @@ select {
   font-size: var(--text-sm);
 }
 
+.match-filter-toggle {
+  border-color: var(--line);
+  background: linear-gradient(
+    155deg,
+    var(--panel-inner-a) 0%,
+    var(--panel-inner-b) 100%
+  );
+  color: var(--muted-strong);
+}
+
 .match-filter-toggle.is-active {
   border-color: var(--tab-active-border);
+  background: linear-gradient(
+    155deg,
+    var(--tab-active-bg-a) 0%,
+    var(--tab-active-bg-b) 100%
+  );
   color: var(--text);
 }
 

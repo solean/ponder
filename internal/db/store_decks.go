@@ -447,6 +447,7 @@ func (s *Store) GetDeckDetail(ctx context.Context, deckID int64, matchLimit int6
 		); err != nil {
 			return out, fmt.Errorf("scan deck match row: %w", err)
 		}
+		m.Format = out.Format
 		out.Matches = append(out.Matches, m)
 	}
 	if err := matchRows.Err(); err != nil {

@@ -11,10 +11,10 @@ import { ManaSymbol } from "../components/ManaSymbol";
 import { ResultPill } from "../components/ResultPill";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
-import { eventCategory } from "../lib/events";
-import { formatCompactDateTime, formatDuration } from "../lib/format";
+import { eventCategory, parseEventName } from "../lib/events";
+import { formatCompactDateTime, formatDuration, formatGameFormat } from "../lib/format";
 import type { Match } from "../lib/types";
-import { useEventSets } from "../lib/useEventSets";
+import { useEventSets, type SetLookup } from "../lib/useEventSets";
 
 const columnHelper = createColumnHelper<Match>();
 const ROW_INTERACTIVE_SELECTOR =
@@ -64,6 +64,14 @@ function targetIsInteractive(target: EventTarget | null, currentTarget: EventTar
 
 function matchDeckLabel(match: Match): string {
   return match.deckName || (match.deckId ? `Deck ${match.deckId}` : NO_DECK_LABEL);
+}
+
+function matchFormatLabel(match: Match, setLookup: SetLookup): string {
+  const fallback = formatGameFormat(match.format);
+  if (!/draft|sealed|limited/i.test(`${match.format} ${match.eventName}`)) return fallback;
+
+  const setCode = parseEventName(match.eventName).setCode;
+  return setLookup(setCode)?.name ?? setCode ?? fallback;
 }
 
 function normalizedDeckColors(match: Match): string[] {
@@ -235,6 +243,11 @@ export function MatchesPage() {
         size: 200,
         cell: (info) => <EventLabel eventName={info.getValue()} lookup={setLookup} />,
       }),
+      columnHelper.accessor("format", {
+        header: "Format",
+        size: 160,
+        cell: (info) => matchFormatLabel(info.row.original, setLookup),
+      }),
       columnHelper.accessor("bestOf", {
         header: "Best Of",
         size: 80,
@@ -293,11 +306,6 @@ export function MatchesPage() {
             opponentDeckColorsKnown={info.row.original.opponentDeckColorsKnown}
           />
         ),
-      }),
-      columnHelper.accessor("winReason", {
-        header: "Reason",
-        size: 110,
-        cell: (info) => info.getValue() || "-",
       }),
     ],
     [setLookup],

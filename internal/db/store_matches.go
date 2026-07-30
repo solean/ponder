@@ -340,6 +340,14 @@ func (s *Store) ListMatches(ctx context.Context, limit int64, eventName, result 
 			m.id,
 			m.arena_match_id,
 			COALESCE(m.event_name, ''),
+			COALESCE((
+				SELECT d.format
+				FROM match_decks md
+				JOIN decks d ON d.id = md.deck_id
+				WHERE md.match_id = m.id
+				ORDER BY md.id ASC
+				LIMIT 1
+			), ''),
 			%s,
 			%s,
 			COALESCE(m.opponent_name, ''),
@@ -406,6 +414,7 @@ func (s *Store) ListMatches(ctx context.Context, limit int64, eventName, result 
 			&r.ID,
 			&r.ArenaMatchID,
 			&r.EventName,
+			&r.Format,
 			&r.BestOf,
 			&r.PlayDraw,
 			&r.Opponent,
@@ -563,6 +572,14 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 			m.id,
 			m.arena_match_id,
 			COALESCE(m.event_name, ''),
+			COALESCE((
+				SELECT d.format
+				FROM match_decks md
+				JOIN decks d ON d.id = md.deck_id
+				WHERE md.match_id = m.id
+				ORDER BY md.id ASC
+				LIMIT 1
+			), ''),
 			%s,
 			%s,
 			COALESCE(m.opponent_name, ''),
@@ -619,6 +636,7 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 		&out.Match.ID,
 		&out.Match.ArenaMatchID,
 		&out.Match.EventName,
+		&out.Match.Format,
 		&out.Match.BestOf,
 		&out.Match.PlayDraw,
 		&out.Match.Opponent,

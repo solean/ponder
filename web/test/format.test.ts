@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { formatBytes, shortenHomePath } from "../src/lib/format";
+import { formatBytes, formatGameFormat, shortenHomePath } from "../src/lib/format";
 
 describe("formatBytes", () => {
   test("returns dash for zero, negative, and non-finite values", () => {
@@ -31,5 +31,19 @@ describe("shortenHomePath", () => {
     expect(shortenHomePath("data/ponder.db")).toBe("data/ponder.db");
     expect(shortenHomePath("/var/log/system.log")).toBe("/var/log/system.log");
     expect(shortenHomePath("/Users/chris")).toBe("/Users/chris");
+  });
+});
+
+describe("formatGameFormat", () => {
+  test("removes the best-of-three prefix from Arena format names", () => {
+    expect(formatGameFormat("TraditionalStandard")).toBe("Standard");
+    expect(formatGameFormat("Traditional_Explorer")).toBe("Explorer");
+  });
+
+  test("adds spaces to compound format names and handles missing data", () => {
+    expect(formatGameFormat("HistoricBrawl")).toBe("Historic Brawl");
+    expect(formatGameFormat("Pioneer")).toBe("Pioneer");
+    expect(formatGameFormat("")).toBe("-");
+    expect(formatGameFormat(null)).toBe("-");
   });
 });

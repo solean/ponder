@@ -250,6 +250,17 @@ func TestLinkMatchToLatestDeckByEventPrefersMostRecentlyObservedDeck(t *testing.
 	if rows[0].DeckName == nil || *rows[0].DeckName != "Dimir Mid 2026" {
 		t.Fatalf("DeckName = %v, want Dimir Mid 2026", rows[0].DeckName)
 	}
+	if rows[0].Format != "TraditionalStandard" {
+		t.Fatalf("Format = %q, want TraditionalStandard", rows[0].Format)
+	}
+
+	detail, err := store.GetMatchDetail(ctx, rows[0].ID)
+	if err != nil {
+		t.Fatalf("GetMatchDetail: %v", err)
+	}
+	if detail.Match.Format != "TraditionalStandard" {
+		t.Fatalf("detail Format = %q, want TraditionalStandard", detail.Match.Format)
+	}
 }
 
 func TestLinkMatchToLatestDeckByEventRoomStateOverridesPreMatchOnlyOnce(t *testing.T) {

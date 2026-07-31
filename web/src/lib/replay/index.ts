@@ -87,6 +87,13 @@ export type ReplayCrewEvent = {
   crewIds: number[];
   crewLabels: string[];
 };
+/**
+ * Per-frame GRE `ZoneTransfer` categories ("Draw", "Return", "Put", …) keyed by
+ * the instance id that moved. The frame diff cannot tell a draw from a reveal on
+ * its own — the library is an untracked zone, so an arriving card looks like a
+ * bare `enter_public` — and this is the only signal that names the transfer.
+ */
+export type ReplayZoneTransferLookup = Map<number, Map<number, string>>;
 export type ReplayRelationshipIndex = {
   objectsById: Map<number, MatchReplayFrameObject>;
   playerSideBySeatId: Map<number, "self" | "opponent">;
@@ -95,6 +102,7 @@ export type ReplayRelationshipIndex = {
   targetEventsByFrameId: Map<number, ReplayTargetEvent[]>;
   damageEventsByFrameId: Map<number, ReplayDamageEvent[]>;
   triggerEventsByFrameId: Map<number, ReplayTriggerEvent[]>;
+  zoneTransferCategoryByFrameId: ReplayZoneTransferLookup;
 };
 export const REPLAY_SELF_PLAYER_CONNECTION_ID = -1;
 export const REPLAY_OPPONENT_PLAYER_CONNECTION_ID = -2;
@@ -606,6 +614,27 @@ export function replayAnnotationDetailIntValue(
   return undefined;
 }
 
+function replayAnnotationDetailStringValue(
+  annotation: ReplayAnnotation,
+  key: string,
+): string | undefined {
+  if (!Array.isArray(annotation.details)) {
+    return undefined;
+  }
+
+  for (const detail of annotation.details) {
+    if (detail?.key !== key || !Array.isArray(detail.valueString)) {
+      continue;
+    }
+    const value = detail.valueString[0];
+    if (typeof value === "string" && value !== "") {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 export function replayTargetListLabel(targets: ReplayTarget[]): string {
   const labels = targets.map((target) => target.label);
   if (labels.length === 0) return "";
@@ -800,10 +829,32 @@ export function buildReplayRelationshipIndex(
   const targetEventsByFrameId = new Map<number, ReplayTargetEvent[]>();
   const damageEventsByFrameId = new Map<number, ReplayDamageEvent[]>();
   const triggerEventsByFrameId = new Map<number, ReplayTriggerEvent[]>();
+  const zoneTransferCategoryByFrameId: ReplayZoneTransferLookup = new Map();
 
   for (const frame of frames) {
     const annotations = replayFrameAnnotations(frame);
     for (const annotation of annotations) {
+      // Recorded first: the branches below `continue` past the rest of the
+      // annotation once they claim it.
+      if (replayAnnotationHasType(annotation, "AnnotationType_ZoneTransfer")) {
+        const category = replayAnnotationDetailStringValue(
+          annotation,
+          "category",
+        );
+        if (category) {
+          let categoryByInstanceId = zoneTransferCategoryByFrameId.get(frame.id);
+          if (!categoryByInstanceId) {
+            categoryByInstanceId = new Map<number, string>();
+            zoneTransferCategoryByFrameId.set(frame.id, categoryByInstanceId);
+          }
+          for (const movedId of annotation.affectedIds ?? []) {
+            if (typeof movedId === "number") {
+              categoryByInstanceId.set(movedId, category);
+            }
+          }
+        }
+      }
+
       if (
         replayAnnotationHasType(annotation, "AnnotationType_TargetSpec") &&
         typeof annotation.affectorId === "number"
@@ -920,6 +971,7 @@ export function buildReplayRelationshipIndex(
     targetEventsByFrameId,
     damageEventsByFrameId,
     triggerEventsByFrameId,
+    zoneTransferCategoryByFrameId,
   };
 }
 
@@ -2261,15 +2313,46 @@ export function buildReplayBeat(
     return { text: `${replayChangeName(lead)} resolves` };
   }
 
-  const reveals = changes.filter(
+  const handEntries = changes.filter(
     (change) =>
       change.action === "enter_public" &&
       boardZoneKind(change.toZoneType ?? "") === "hand",
   );
-  if (reveals.length > 0) {
-    const lead = reveals[0]!;
+  if (handEntries.length > 0) {
+    const categoryByInstanceId =
+      relationships.zoneTransferCategoryByFrameId.get(frame.id);
+    // Prefer a card GRE actually explained; uncategorized arrivals in the same
+    // frame are resync backfill and make a poor headline.
+    const lead =
+      handEntries.find((change) =>
+        categoryByInstanceId?.has(change.instanceId),
+      ) ?? handEntries[0]!;
+    const category = categoryByInstanceId?.get(lead.instanceId);
+    const name = replayChangeName(lead);
+    const rest = others(handEntries.length);
+    if (category === "Draw") {
+      return {
+        text: `${replayActorVerb(lead.playerSide, "draw")} ${name}${rest}`,
+      };
+    }
+    if (category === "Return") {
+      return { text: `${name} returns to hand${rest}` };
+    }
+    if (category === "Put") {
+      return {
+        text: `${replayActorVerb(lead.playerSide, "put")} ${name} into hand${rest}`,
+      };
+    }
+    // Your own hand is fully tracked, so a card surfacing there is never a
+    // reveal — it is the opening hand or a post-resync backfill. Only the
+    // opponent's hidden hand produces genuine reveals.
+    if (lead.playerSide === "self") {
+      return {
+        text: `${name}${rest} ${handEntries.length > 1 ? "enter" : "enters"} your hand`,
+      };
+    }
     return {
-      text: `${replayActorVerb(lead.playerSide, "reveal")} ${replayChangeName(lead)}${others(reveals.length)}`,
+      text: `${replayActorVerb(lead.playerSide, "reveal")} ${name}${rest}`,
     };
   }
 

@@ -568,7 +568,114 @@ describe("play-by-play beats", () => {
     ).toEqual({ text: "Wistfulness is put into the graveyard" });
   });
 
-  test("narrates a card revealed in hand", () => {
+  test("narrates a drawn card as a draw, not a reveal", () => {
+    expect(
+      buildReplayBeat(
+        frame({
+          id: 2,
+          annotationsJson: JSON.stringify({
+            annotations: [
+              {
+                affectedIds: [7],
+                type: ["AnnotationType_ZoneTransfer"],
+                details: [
+                  {
+                    key: "category",
+                    type: "KeyValuePairValueType_string",
+                    valueString: ["Draw"],
+                  },
+                ],
+              },
+            ],
+          }),
+          changes: [
+            change({
+              action: "enter_public",
+              instanceId: 7,
+              playerSide: "self",
+              cardName: "Kaito",
+              toZoneType: "Hand",
+            }),
+          ],
+        }),
+        null,
+      ),
+    ).toEqual({ text: "You draw Kaito" });
+  });
+
+  test("conjugates an opponent draw", () => {
+    expect(
+      buildReplayBeat(
+        frame({
+          id: 2,
+          annotationsJson: JSON.stringify({
+            annotations: [
+              {
+                affectedIds: [7],
+                type: ["AnnotationType_ZoneTransfer"],
+                details: [
+                  {
+                    key: "category",
+                    type: "KeyValuePairValueType_string",
+                    valueString: ["Draw"],
+                  },
+                ],
+              },
+            ],
+          }),
+          changes: [
+            change({
+              action: "enter_public",
+              instanceId: 7,
+              playerSide: "opponent",
+              cardName: "Kaito",
+              toZoneType: "Hand",
+            }),
+          ],
+        }),
+        null,
+      ),
+    ).toEqual({ text: "Opponent draws Kaito" });
+  });
+
+  test("distinguishes a tutor and a bounce from a draw", () => {
+    const handEntry = (category: string) =>
+      frame({
+        id: 2,
+        annotationsJson: JSON.stringify({
+          annotations: [
+            {
+              affectedIds: [7],
+              type: ["AnnotationType_ZoneTransfer"],
+              details: [
+                {
+                  key: "category",
+                  type: "KeyValuePairValueType_string",
+                  valueString: [category],
+                },
+              ],
+            },
+          ],
+        }),
+        changes: [
+          change({
+            action: "enter_public",
+            instanceId: 7,
+            playerSide: "self",
+            cardName: "Kaito",
+            toZoneType: "Hand",
+          }),
+        ],
+      });
+    expect(buildReplayBeat(handEntry("Put"), null)).toEqual({
+      text: "You put Kaito into hand",
+    });
+    expect(buildReplayBeat(handEntry("Return"), null)).toEqual({
+      text: "Kaito returns to hand",
+    });
+  });
+
+  test("never calls a card surfacing in your own hand a reveal", () => {
     expect(
       buildReplayBeat(
         frame({
@@ -584,7 +691,53 @@ describe("play-by-play beats", () => {
         }),
         null,
       ),
-    ).toEqual({ text: "You reveal Kaito" });
+    ).toEqual({ text: "Kaito enters your hand" });
+  });
+
+  test("pluralizes an opening hand dealt in a single frame", () => {
+    expect(
+      buildReplayBeat(
+        frame({
+          id: 2,
+          changes: [
+            change({
+              action: "enter_public",
+              instanceId: 1,
+              playerSide: "self",
+              cardName: "Kaito",
+              toZoneType: "Hand",
+            }),
+            change({
+              action: "enter_public",
+              instanceId: 2,
+              playerSide: "self",
+              cardName: "Island",
+              toZoneType: "Hand",
+            }),
+          ],
+        }),
+        null,
+      ),
+    ).toEqual({ text: "Kaito and 1 more enter your hand" });
+  });
+
+  test("still calls an opponent hand card becoming visible a reveal", () => {
+    expect(
+      buildReplayBeat(
+        frame({
+          id: 2,
+          changes: [
+            change({
+              action: "enter_public",
+              playerSide: "opponent",
+              cardName: "Kaito",
+              toZoneType: "Hand",
+            }),
+          ],
+        }),
+        null,
+      ),
+    ).toEqual({ text: "Opponent reveals Kaito" });
   });
 
   test("only calls a real opponent-hand visibility loss no longer revealed", () => {

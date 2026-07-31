@@ -67,6 +67,11 @@ export function formatDuration(seconds?: number | null): string {
   return `${min}m ${sec}s`;
 }
 
+/**
+ * Turns an Arena backend format name into what the client shows:
+ * strips the best-of-three "Traditional" prefix, splits compound names, and
+ * applies MTGA's Explorer → Pioneer rename (the backend still says Explorer).
+ */
 export function formatGameFormat(format?: string | null): string {
   const raw = format?.trim();
   if (!raw) return "-";
@@ -76,7 +81,8 @@ export function formatGameFormat(format?: string | null): string {
     .replace(/[_-]+/g, " ")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim()
+    .replace(/\bExplorer\b/g, "Pioneer");
   return label || raw;
 }
 

@@ -37,7 +37,12 @@ describe("shortenHomePath", () => {
 describe("formatGameFormat", () => {
   test("removes the best-of-three prefix from Arena format names", () => {
     expect(formatGameFormat("TraditionalStandard")).toBe("Standard");
-    expect(formatGameFormat("Traditional_Explorer")).toBe("Explorer");
+    expect(formatGameFormat("Traditional_Explorer")).toBe("Pioneer");
+  });
+
+  test("renames Arena's legacy Explorer format to Pioneer", () => {
+    expect(formatGameFormat("Explorer")).toBe("Pioneer");
+    expect(formatGameFormat("TraditionalExplorer")).toBe("Pioneer");
   });
 
   test("adds spaces to compound format names and handles missing data", () => {

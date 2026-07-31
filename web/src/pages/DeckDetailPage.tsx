@@ -15,7 +15,7 @@ import { ResultPill } from "../components/ResultPill";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { parseEventName } from "../lib/events";
-import { formatDateTime, formatDuration } from "../lib/format";
+import { formatDateTime, formatDuration, formatGameFormat } from "../lib/format";
 import { fetchCardPreview, type CardPreview, type CardRarity } from "../lib/scryfall";
 import { useEventSets } from "../lib/useEventSets";
 
@@ -1285,7 +1285,7 @@ export function DeckDetailPage() {
           <div>
             <h3>{data.name || "Unnamed Deck"}</h3>
             <p>
-              {data.format || "Unknown format"} •{" "}
+              {data.format ? formatGameFormat(data.format) : "Unknown format"} •{" "}
               <EventLabel eventName={data.eventName} lookup={setLookup} fallback="No event" />
             </p>
             {!isCardMetadataLoading ? (

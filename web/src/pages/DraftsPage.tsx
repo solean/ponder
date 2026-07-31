@@ -9,7 +9,7 @@ import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { draftSessionType } from "../lib/draftReport";
 import { parseEventName } from "../lib/events";
-import { pct } from "../lib/format";
+import { formatGameFormat, pct } from "../lib/format";
 import type { DeckSummary, DraftSession } from "../lib/types";
 import { useEventSets, type SetLookup } from "../lib/useEventSets";
 import { useRowLink } from "../lib/useRowLink";
@@ -119,7 +119,7 @@ function DraftDeckRow({ deck, setLookup }: { deck: DeckSummary; setLookup: SetLo
           {deck.deckName || `Deck ${deck.deckId}`}
         </ContextualLink>
       </td>
-      <td>{deck.format || "-"}</td>
+      <td>{formatGameFormat(deck.format)}</td>
       <td>
         <EventLabel eventName={deck.eventName} lookup={setLookup} />
       </td>

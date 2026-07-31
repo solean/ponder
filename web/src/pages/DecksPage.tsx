@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { EventLabel } from "../components/EventLabel";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
-import { pct } from "../lib/format";
+import { formatGameFormat, pct } from "../lib/format";
 import { useEventSets, type SetLookup } from "../lib/useEventSets";
 import { useRowLink } from "../lib/useRowLink";
 import type { DeckSummary } from "../lib/types";
@@ -18,7 +18,7 @@ function DeckRow({ deck, setLookup }: { deck: DeckSummary; setLookup: SetLookup 
           {deck.deckName || `Deck ${deck.deckId}`}
         </Link>
       </td>
-      <td>{deck.format || "-"}</td>
+      <td>{formatGameFormat(deck.format)}</td>
       <td>
         <EventLabel eventName={deck.eventName} lookup={setLookup} />
       </td>

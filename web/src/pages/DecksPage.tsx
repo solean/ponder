@@ -43,7 +43,7 @@ export function DecksPage() {
   return (
     <section className="panel">
       <div className="panel-head">
-        <h3>Deck Performance</h3>
+        <h3>Decks</h3>
         <p>{data?.length ?? 0} decks</p>
       </div>
 

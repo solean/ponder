@@ -833,6 +833,24 @@ export function buildReplayRelationshipIndex(
 
   for (const frame of frames) {
     const annotations = replayFrameAnnotations(frame);
+    // Arena renames an object when it changes zone, and the ZoneTransfer
+    // annotation names only the post-rename id — while the frame diff still
+    // reports the departure under the pre-rename id. Index both so a lookup by
+    // either id finds the category.
+    const originalIdByRenamedId = new Map<number, number>();
+    for (const annotation of annotations) {
+      if (
+        !replayAnnotationHasType(annotation, "AnnotationType_ObjectIdChanged")
+      ) {
+        continue;
+      }
+      const originalId = replayAnnotationDetailIntValue(annotation, "orig_id");
+      const renamedId = replayAnnotationDetailIntValue(annotation, "new_id");
+      if (typeof originalId === "number" && typeof renamedId === "number") {
+        originalIdByRenamedId.set(renamedId, originalId);
+      }
+    }
+
     for (const annotation of annotations) {
       // Recorded first: the branches below `continue` past the rest of the
       // annotation once they claim it.
@@ -848,8 +866,11 @@ export function buildReplayRelationshipIndex(
             zoneTransferCategoryByFrameId.set(frame.id, categoryByInstanceId);
           }
           for (const movedId of annotation.affectedIds ?? []) {
-            if (typeof movedId === "number") {
-              categoryByInstanceId.set(movedId, category);
+            if (typeof movedId !== "number") continue;
+            categoryByInstanceId.set(movedId, category);
+            const originalId = originalIdByRenamedId.get(movedId);
+            if (typeof originalId === "number") {
+              categoryByInstanceId.set(originalId, category);
             }
           }
         }
@@ -1247,7 +1268,7 @@ export function replayFrameHasLifeDelta(
  * same board zone — GRE bookkeeping like "Hand to Hand" or "Limbo to Limbo" that
  * never reads as a real play. These are coalesced out of the timeline.
  */
-export function replayChangeIsNoiseMove(change: MatchReplayChange): boolean {
+function replayChangeIsNoiseMove(change: MatchReplayChange): boolean {
   if (change.action !== "move_public") {
     return false;
   }
@@ -1271,7 +1292,7 @@ function replayChangeIsGenuineVisibilityLoss(
 }
 
 function replayChangeIsNarratable(change: MatchReplayChange): boolean {
-  if (replayChangeIsNoiseMove(change)) {
+  if (replayChangeIsNoiseMove(change) || replayChangeIsLimboParking(change)) {
     return false;
   }
   if (change.action !== "leave_public") {
@@ -1284,6 +1305,22 @@ function replayChangeIsNarratable(change: MatchReplayChange): boolean {
     from === "battlefield" ||
     from === "stack"
   );
+}
+
+/**
+ * Arena parks anything it has finished with in Limbo and garbage-collects it
+ * there later under a fresh instance id. Only the battlefield exit is a real
+ * event ("X is destroyed"); every other Limbo arrival is pure bookkeeping and
+ * must never headline a frame or keep one in the timeline.
+ */
+function replayChangeIsLimboParking(change: MatchReplayChange): boolean {
+  if (change.action !== "enter_public" && change.action !== "move_public") {
+    return false;
+  }
+  if (!(change.toZoneType ?? "").trim().toLowerCase().includes("limbo")) {
+    return false;
+  }
+  return boardZoneKind(change.fromZoneType ?? "") !== "battlefield";
 }
 
 function replayChangeIsCast(change: MatchReplayChange): boolean {
@@ -1374,10 +1411,14 @@ export function summarizeReplayFrameZones(
   return counts;
 }
 
+/**
+ * The change that best represents a frame, ignoring GRE bookkeeping — a
+ * Battlefield-to-Battlefield rewrite must never be described as a move.
+ */
 export function replayFramePrimaryChange(
   frame: MatchReplayFrame | null,
 ): MatchReplayChange | null {
-  const changes = frame?.changes ?? [];
+  const changes = (frame?.changes ?? []).filter(replayChangeIsNarratable);
   if (changes.length === 0) {
     return null;
   }
@@ -1387,7 +1428,7 @@ export function replayFramePrimaryChange(
   )[0] ?? null;
 }
 
-export function replayFramePrimarySummary(
+function replayFramePrimarySummary(
   frame: MatchReplayFrame | null,
   previousFrame: MatchReplayFrame | null,
 ): string {
@@ -1398,6 +1439,10 @@ export function replayFramePrimarySummary(
   if (frame && replayFrameHasLifeDelta(previousFrame, frame)) {
     const summary = replayFrameLifeTotalsSummary(frame);
     return summary ? `Life totals changed. ${summary}.` : "Life totals changed.";
+  }
+  // A frame carrying only bookkeeping is not a snapshot of a fresh game state.
+  if ((frame?.changes ?? []).length > 0) {
+    return "Board state updated.";
   }
   return "Initial replay snapshot for this game state.";
 }
@@ -1616,6 +1661,15 @@ export function preferredReplayFrameIndex(frames: MatchReplayFrame[]): number {
   return frames.length - 1;
 }
 
+/**
+ * Card names ending in "s" ("Buzz Bots", "Donatello, Way with Machines") take a
+ * bare apostrophe; anything else takes "'s". Without this every such name reads
+ * "Machines's".
+ */
+function replayPossessive(name: string): string {
+  return name.endsWith("s") ? `${name}'` : `${name}'s`;
+}
+
 export function describeReplayChange(change: MatchReplayChange): string {
   const actor = timelinePlayerLabel(change.playerSide);
   const name = cardDisplayName({
@@ -1654,13 +1708,13 @@ export function describeReplayChange(change: MatchReplayChange): string {
     return `${name} stopped blocking.`;
   }
   if (change.action === "summoning_sickness_change") {
-    return `${name}'s summoning-sickness state changed.`;
+    return `${replayPossessive(name)} summoning-sickness state changed.`;
   }
   if (change.action === "stat_change") {
-    return `${name}'s power and toughness changed.`;
+    return `${replayPossessive(name)} power and toughness changed.`;
   }
   if (change.action === "counters_change") {
-    return `${name}'s counters changed.`;
+    return `${replayPossessive(name)} counters changed.`;
   }
   return `${actor} changed ${name}.`;
 }
@@ -1778,7 +1832,6 @@ export function summarizeReplayZones(
   return counts;
 }
 
-
 /**
  * Signed life change for one side between two frames, or null when either total
  * is missing or unchanged. Drives the HUD delta flash.
@@ -1795,6 +1848,27 @@ export function replayLifeDelta(
   }
   const delta = current - previous;
   return delta === 0 ? null : delta;
+}
+
+/**
+ * "opponent 20 → 18 · you 16 → 14" for every side whose total moved, or null
+ * when nothing changed. Headlines a life-only frame and annotates frames where
+ * something else (a shockland, a token with a life cost) caused the swing.
+ */
+function replayLifeChangeSummary(
+  previousFrame: MatchReplayFrame | null,
+  frame: MatchReplayFrame,
+): string | null {
+  const segments: string[] = [];
+  if (replayLifeDelta(previousFrame, frame, "opponent") !== null) {
+    const before = replayFrameLifeTotalForSide(previousFrame, "opponent");
+    segments.push(`opponent ${before} → ${frame.opponentLifeTotal}`);
+  }
+  if (replayLifeDelta(previousFrame, frame, "self") !== null) {
+    const before = replayFrameLifeTotalForSide(previousFrame, "self");
+    segments.push(`you ${before} → ${frame.selfLifeTotal}`);
+  }
+  return segments.length > 0 ? segments.join(" · ") : null;
 }
 
 export type ReplayLifePoint = { self: number | null; opponent: number | null };
@@ -2058,10 +2132,13 @@ function replayPowerToughnessAbilityBeat(
       ? cardDisplayName(sourceObject)
       : replayChangeName(targetChange);
     const targetName = replayChangeName(targetChange);
-    const recipient = sourceId === targetId ? "it" : targetName;
+    // Copies and tokens share a name across instance ids, so compare both:
+    // "Putrid Pals' ability gives Putrid Pals +2/+2" reads as two creatures.
+    const recipient =
+      sourceId === targetId || sourceName === targetName ? "it" : targetName;
 
     return {
-      text: `${sourceName}'s ability gives ${recipient} ${replaySignedStatModifier(power)}/${replaySignedStatModifier(toughness)}`,
+      text: `${replayPossessive(sourceName)} ability gives ${recipient} ${replaySignedStatModifier(power)}/${replaySignedStatModifier(toughness)}`,
     };
   }
 
@@ -2073,11 +2150,16 @@ function replayTargetBeat(
   relationships: ReplayRelationshipIndex,
 ): ReplayBeat | null {
   for (const event of relationships.targetEventsByFrameId.get(frame.id) ?? []) {
+    // A spell or ability aimed at its own source reads as two objects otherwise.
+    const targets =
+      event.targets.length === 1 && event.targets[0]!.targetId === event.sourceId
+        ? "itself"
+        : replayTargetListLabel(event.targets);
     return {
       text:
         event.sourceKind === "ability"
-          ? `${event.sourceLabel}'s ability targets ${replayTargetListLabel(event.targets)}`
-          : `${event.sourceLabel} targets ${replayTargetListLabel(event.targets)}`,
+          ? `${replayPossessive(event.sourceLabel)} ability targets ${targets}`
+          : `${event.sourceLabel} targets ${targets}`,
     };
   }
   return null;
@@ -2107,7 +2189,7 @@ function replayTriggerBeat(
   const lead = events[0];
   if (!lead) return null;
   return {
-    text: `${lead.sourceLabel}'s ability triggers`,
+    text: `${replayPossessive(lead.sourceLabel)} ability triggers`,
     note: `triggered by ${lead.triggeringLabel}`,
   };
 }
@@ -2159,6 +2241,37 @@ function replayActorVerb(playerSide: string | undefined, base: string): string {
 }
 
 /**
+ * Turns a GRE `ZoneTransfer` category into the reason a permanent left the
+ * battlefield. Returns null for categories that say nothing about the exit, so
+ * the caller can fall back to the destination zone.
+ */
+function replayRemovalPhrase(
+  name: string,
+  category: string | undefined,
+): string | null {
+  if (!category) return null;
+  // Every state-based action — lethal damage, zero toughness, zero loyalty, an
+  // aura with nothing to attach to — ends the same way for the viewer.
+  if (category.startsWith("SBA_")) {
+    return `${name} is put into the graveyard`;
+  }
+  switch (category) {
+    case "Destroy":
+      return `${name} is destroyed`;
+    // Warp exiles the creature at the beginning of the end step.
+    case "Exile":
+    case "Warp":
+      return `${name} is exiled`;
+    case "Return":
+      return `${name} returns to hand`;
+    case "Countered":
+      return `${name} is countered`;
+    default:
+      return null;
+  }
+}
+
+/**
  * Coalesces a frame's raw GRE changes into a single human-readable play-by-play
  * beat (with an optional short note), e.g. "Opponent attacks with Otter (2/2)" or
  * "Combat damage · opponent 20 → 18". Falls back to the primary change when no
@@ -2175,6 +2288,10 @@ export function buildReplayBeat(
     changes.filter((change) => change.action === action);
   const others = (count: number) =>
     count > 1 ? ` and ${count - 1} more` : "";
+  const categoryByInstanceId =
+    relationships.zoneTransferCategoryByFrameId.get(frame.id);
+  const transferCategory = (change: MatchReplayChange) =>
+    categoryByInstanceId?.get(change.instanceId);
 
   const attacks = withAction("attack");
   if (attacks.length > 0) {
@@ -2267,9 +2384,23 @@ export function buildReplayBeat(
     const object = (frame.objects ?? []).find(
       (candidate) => candidate.instanceId === lead.instanceId,
     );
+    const note = object?.isTapped ? "tapped" : undefined;
+    const name = replayChangeName(lead);
+    const rest = others(enters.length);
+    // Resolving off the stack is not "playing" the card — the cast was already
+    // narrated a beat earlier, so repeating it as a play reads as a second action.
+    if (boardZoneKind(lead.fromZoneType ?? "") === "stack") {
+      return { text: `${name} enters the battlefield${rest}`, note };
+    }
+    if (transferCategory(lead) === "Put") {
+      return {
+        text: `${replayActorVerb(lead.playerSide, "put")} ${name} onto the battlefield${rest}`,
+        note,
+      };
+    }
     return {
-      text: `${replayActorVerb(lead.playerSide, "play")} ${replayChangeName(lead)}${others(enters.length)}`,
-      note: object?.isTapped ? "tapped" : undefined,
+      text: `${replayActorVerb(lead.playerSide, "play")} ${name}${rest}`,
+      note,
     };
   }
 
@@ -2285,16 +2416,29 @@ export function buildReplayBeat(
   });
   if (leaves.length > 0) {
     const lead = leaves[0]!;
-    const destination = boardZoneKind(lead.toZoneType ?? "");
     const name = replayChangeName(lead);
+    const rest = others(leaves.length);
+    // Arena moves a removed permanent to Limbo under a fresh instance id and
+    // garbage-collects it there, so the diff never shows the real destination.
+    // The transfer category is the only witness to what actually happened.
+    if (transferCategory(lead) === "Sacrifice") {
+      return {
+        text: `${replayActorVerb(lead.playerSide, "sacrifice")} ${name}${rest}`,
+      };
+    }
+    const reason = replayRemovalPhrase(name, transferCategory(lead));
+    if (reason) {
+      return { text: `${reason}${rest}` };
+    }
+    const destination = boardZoneKind(lead.toZoneType ?? "");
     const text =
       destination === "graveyard"
-        ? `${name} is put into the graveyard${others(leaves.length)}`
+        ? `${name} is put into the graveyard${rest}`
         : destination === "exile"
-          ? `${name} is exiled${others(leaves.length)}`
+          ? `${name} is exiled${rest}`
           : destination === "hand"
-            ? `${name} returns to hand${others(leaves.length)}`
-            : `${name} leaves the battlefield${others(leaves.length)}`;
+            ? `${name} returns to hand${rest}`
+            : `${name} leaves the battlefield${rest}`;
     return { text };
   }
 
@@ -2319,15 +2463,16 @@ export function buildReplayBeat(
       boardZoneKind(change.toZoneType ?? "") === "hand",
   );
   if (handEntries.length > 0) {
-    const categoryByInstanceId =
-      relationships.zoneTransferCategoryByFrameId.get(frame.id);
-    // Prefer a card GRE actually explained; uncategorized arrivals in the same
-    // frame are resync backfill and make a poor headline.
+    // A draw outranks anything else that reached hand in the same frame; failing
+    // that, prefer a card GRE actually explained, since uncategorized arrivals
+    // are resync backfill and make a poor headline.
     const lead =
+      handEntries.find((change) => transferCategory(change) === "Draw") ??
       handEntries.find((change) =>
         categoryByInstanceId?.has(change.instanceId),
-      ) ?? handEntries[0]!;
-    const category = categoryByInstanceId?.get(lead.instanceId);
+      ) ??
+      handEntries[0]!;
+    const category = transferCategory(lead);
     const name = replayChangeName(lead);
     const rest = others(handEntries.length);
     if (category === "Draw") {
@@ -2356,6 +2501,102 @@ export function buildReplayBeat(
     };
   }
 
+  // A card can surface directly in a public zone with no source zone at all:
+  // a token is created, or the card came from a zone this side cannot see
+  // (a hidden hand, the library). The frame diff has nothing to compare, so the
+  // transfer category and the token flag carry the whole story.
+  const boardEntries = changes.filter((change) => {
+    if (change.action !== "enter_public") return false;
+    const destination = boardZoneKind(change.toZoneType ?? "");
+    return (
+      destination === "battlefield" ||
+      destination === "graveyard" ||
+      destination === "exile"
+    );
+  });
+  if (boardEntries.length > 0) {
+    const lead =
+      boardEntries.find(
+        (change) => change.isToken || categoryByInstanceId?.has(change.instanceId),
+      ) ?? boardEntries[0]!;
+    const name = replayChangeName(lead);
+    const rest = others(boardEntries.length);
+    // Shocklands and token makers with a life cost land here; the arrival is the
+    // cause, so the life swing rides along as the note instead of losing one of
+    // the two facts.
+    const note = replayLifeChangeSummary(previousFrame, frame) ?? undefined;
+    if (lead.isToken) {
+      return {
+        text: `${replayActorVerb(lead.playerSide, "create")} ${/^[aeiou]/i.test(name) ? "an" : "a"} ${name} token${rest}`,
+        note,
+      };
+    }
+    switch (transferCategory(lead)) {
+      case "PlayLand":
+        return {
+          text: `${replayActorVerb(lead.playerSide, "play")} ${name}${rest}`,
+          note,
+        };
+      case "Put":
+        return {
+          text: `${replayActorVerb(lead.playerSide, "put")} ${name} onto the battlefield${rest}`,
+          note,
+        };
+      case "Return":
+        return { text: `${name} returns to the battlefield${rest}`, note };
+      case "Discard":
+        return {
+          text: `${replayActorVerb(lead.playerSide, "discard")} ${name}${rest}`,
+          note,
+        };
+      case "Mill":
+        return {
+          text: `${replayActorVerb(lead.playerSide, "mill")} ${name}${rest}`,
+          note,
+        };
+      case "Surveil":
+        return {
+          text: `${replayActorVerb(lead.playerSide, "surveil")} ${name} into the graveyard${rest}`,
+          note,
+        };
+      case "Exile":
+        return { text: `${name} is exiled${rest}`, note };
+      default: {
+        const destination = boardZoneKind(lead.toZoneType ?? "");
+        return {
+          text: `${name} enters ${destination === "exile" ? "exile" : `the ${destination}`}${rest}`,
+          note,
+        };
+      }
+    }
+  }
+
+  // Cards leaving your own hand are ordinary moves, not public arrivals, so they
+  // need their own branch — otherwise a discard reads "You moved X from Hand to
+  // Graveyard".
+  const handExits = changes.filter(
+    (change) =>
+      change.action === "move_public" &&
+      boardZoneKind(change.fromZoneType ?? "") === "hand" &&
+      ["graveyard", "exile"].includes(boardZoneKind(change.toZoneType ?? "")),
+  );
+  if (handExits.length > 0) {
+    const lead = handExits[0]!;
+    const name = replayChangeName(lead);
+    const rest = others(handExits.length);
+    if (transferCategory(lead) === "Discard") {
+      return {
+        text: `${replayActorVerb(lead.playerSide, "discard")} ${name}${rest}`,
+      };
+    }
+    return {
+      text:
+        boardZoneKind(lead.toZoneType ?? "") === "exile"
+          ? `${name} is exiled${rest}`
+          : `${name} is put into the graveyard${rest}`,
+    };
+  }
+
   const hides = changes.filter(replayChangeIsGenuineVisibilityLoss);
   if (hides.length > 0) {
     const lead = hides[0]!;
@@ -2364,19 +2605,9 @@ export function buildReplayBeat(
     };
   }
 
-  const selfDelta = replayLifeDelta(previousFrame, frame, "self");
-  const opponentDelta = replayLifeDelta(previousFrame, frame, "opponent");
-  if (selfDelta !== null || opponentDelta !== null) {
-    const segments: string[] = [];
-    if (opponentDelta !== null) {
-      const before = replayFrameLifeTotalForSide(previousFrame, "opponent");
-      segments.push(`opponent ${before} → ${frame.opponentLifeTotal}`);
-    }
-    if (selfDelta !== null) {
-      const before = replayFrameLifeTotalForSide(previousFrame, "self");
-      segments.push(`you ${before} → ${frame.selfLifeTotal}`);
-    }
-    return { text: `Life change · ${segments.join(" · ")}` };
+  const lifeChange = replayLifeChangeSummary(previousFrame, frame);
+  if (lifeChange) {
+    return { text: `Life change · ${lifeChange}` };
   }
 
   const taps = withAction("tap").length;
@@ -2394,12 +2625,51 @@ export function buildReplayBeat(
     };
   }
 
-  const narratable = changes.filter(
-    (change) => !replayChangeIsNoiseMove(change),
+  // Every attacker and blocker leaves combat together at end of combat. Naming
+  // one arbitrary creature — often one that already died and sits in Limbo —
+  // says less than the transition itself.
+  const combatExits = changes.filter(
+    (change) =>
+      change.action === "stop_attack" || change.action === "stop_block",
   );
-  const primary = [...narratable].sort(
-    (a, b) => replayChangePriority(b.action) - replayChangePriority(a.action),
-  )[0];
+  if (combatExits.length > 0 && combatExits.length === changes.length) {
+    return { text: "Combat ends" };
+  }
+
+  // "X's power and toughness changed" tells the viewer nothing they can act on;
+  // the frame already carries the new values.
+  const statChanges = withAction("stat_change");
+  if (statChanges.length > 0) {
+    const lead = statChanges[0]!;
+    const object = (frame.objects ?? []).find(
+      (candidate) => candidate.instanceId === lead.instanceId,
+    );
+    if (
+      typeof object?.power === "number" &&
+      typeof object.toughness === "number"
+    ) {
+      return {
+        text: `${replayChangeName(lead)} becomes ${object.power}/${object.toughness}${others(statChanges.length)}`,
+      };
+    }
+  }
+
+  // Raw GRE phrasing ("X's summoning-sickness state changed") says nothing; the
+  // two frames together say which way it went.
+  const sicknessChanges = withAction("summoning_sickness_change");
+  if (sicknessChanges.length > 0) {
+    const lead = sicknessChanges[0]!;
+    const sick = (frame.objects ?? []).find(
+      (candidate) => candidate.instanceId === lead.instanceId,
+    )?.hasSummoningSickness;
+    if (typeof sick === "boolean") {
+      return {
+        text: `${replayChangeName(lead)} ${sick ? "gains" : "loses"} summoning sickness${others(sicknessChanges.length)}`,
+      };
+    }
+  }
+
+  const primary = replayFramePrimaryChange(frame);
   if (primary) {
     return { text: describeReplayChange(primary).replace(/\.$/, "") };
   }

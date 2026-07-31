@@ -26,6 +26,7 @@ import {
   replayFrameCrewEvents,
   replayFrameLifeTotalWinner,
   replayFrameTickKind,
+  replayFramePrimaryChange,
   replayLifeDelta,
   replayLifeSeriesDomain,
   replayObjectLoyalty,
@@ -84,6 +85,33 @@ function object(
 
 function frame(values: Partial<MatchReplayFrame> = {}): MatchReplayFrame {
   return { id: values.id ?? 1, ...values };
+}
+
+/** GRE labels each zone move with a category; the beat layer reads it. */
+function zoneTransfer(
+  affectedIds: number[],
+  category: string,
+): Record<string, unknown> {
+  return {
+    affectedIds,
+    type: ["AnnotationType_ZoneTransfer"],
+    details: [{ key: "category", valueString: [category] }],
+  };
+}
+
+/** Arena renames an object as it changes zone; the category follows the new id. */
+function objectIdChanged(
+  originalId: number,
+  renamedId: number,
+): Record<string, unknown> {
+  return {
+    affectedIds: [originalId],
+    type: ["AnnotationType_ObjectIdChanged"],
+    details: [
+      { key: "orig_id", valueInt32: [originalId] },
+      { key: "new_id", valueInt32: [renamedId] },
+    ],
+  };
 }
 
 function preview(typeLine: string): CardPreview {
@@ -1142,6 +1170,410 @@ describe("play-by-play beats", () => {
       text: "Opponent attacks with Otter (2/2)",
       note: "attacking Kaito",
     });
+  });
+
+  test("names a land drop the opponent made from a hidden hand", () => {
+    const landFrame = frame({
+      id: 2,
+      annotationsJson: JSON.stringify({
+        annotations: [zoneTransfer([9], "PlayLand")],
+      }),
+      changes: [
+        change({
+          action: "enter_public",
+          instanceId: 9,
+          playerSide: "opponent",
+          cardName: "Willowrush Verge",
+          toZoneType: "Battlefield",
+        }),
+      ],
+    });
+    expect(
+      buildReplayBeat(
+        landFrame,
+        null,
+        buildReplayRelationshipIndex([landFrame]),
+      ),
+    ).toEqual({ text: "Opponent plays Willowrush Verge" });
+  });
+
+  test("carries a shockland's life payment as the note on the land drop", () => {
+    const previous = frame({ id: 1, selfLifeTotal: 20, opponentLifeTotal: 20 });
+    const landFrame = frame({
+      id: 2,
+      selfLifeTotal: 18,
+      opponentLifeTotal: 20,
+      annotationsJson: JSON.stringify({
+        annotations: [zoneTransfer([9], "PlayLand")],
+      }),
+      changes: [
+        change({
+          action: "enter_public",
+          instanceId: 9,
+          cardName: "Watery Grave",
+          toZoneType: "Battlefield",
+        }),
+      ],
+    });
+    expect(
+      buildReplayBeat(
+        landFrame,
+        previous,
+        buildReplayRelationshipIndex([previous, landFrame]),
+      ),
+    ).toEqual({ text: "You play Watery Grave", note: "you 20 → 18" });
+  });
+
+  test("agrees the article with the token name", () => {
+    const tokenFrame = frame({
+      id: 2,
+      changes: [
+        change({
+          action: "enter_public",
+          instanceId: 9,
+          cardName: "Otter",
+          toZoneType: "Battlefield",
+          isToken: true,
+        }),
+      ],
+    });
+    expect(buildReplayBeat(tokenFrame, null)).toEqual({
+      text: "You create an Otter token",
+    });
+  });
+
+  test("distinguishes discard, mill, and surveil arrivals in the graveyard", () => {
+    const graveyardFrame = (category: string) =>
+      frame({
+        id: 2,
+        annotationsJson: JSON.stringify({
+          annotations: [zoneTransfer([9], category)],
+        }),
+        changes: [
+          change({
+            action: "enter_public",
+            instanceId: 9,
+            playerSide: "opponent",
+            cardName: "Gran-Gran",
+            toZoneType: "Graveyard",
+          }),
+        ],
+      });
+    expect(buildReplayBeat(graveyardFrame("Discard"), null)).toEqual({
+      text: "Opponent discards Gran-Gran",
+    });
+    expect(buildReplayBeat(graveyardFrame("Mill"), null)).toEqual({
+      text: "Opponent mills Gran-Gran",
+    });
+    expect(buildReplayBeat(graveyardFrame("Surveil"), null)).toEqual({
+      text: "Opponent surveils Gran-Gran into the graveyard",
+    });
+  });
+
+  test("calls a permanent resolving off the stack an entry, not a second play", () => {
+    const resolveFrame = frame({
+      id: 2,
+      changes: [
+        change({
+          action: "move_public",
+          instanceId: 9,
+          cardName: "Cecil, Dark Knight",
+          fromZoneType: "Stack",
+          toZoneType: "Battlefield",
+        }),
+      ],
+    });
+    expect(buildReplayBeat(resolveFrame, null)).toEqual({
+      text: "Cecil, Dark Knight enters the battlefield",
+      note: undefined,
+    });
+  });
+
+  test("reads the removal reason through Arena's object-id rename", () => {
+    // The diff reports the exit under id 9; the category only names id 40.
+    const deathFrame = frame({
+      id: 2,
+      annotationsJson: JSON.stringify({
+        annotations: [objectIdChanged(9, 40), zoneTransfer([40], "Destroy")],
+      }),
+      changes: [
+        change({
+          action: "move_public",
+          instanceId: 9,
+          cardName: "Badgermole Cub",
+          fromZoneType: "Battlefield",
+          toZoneType: "Limbo",
+        }),
+      ],
+    });
+    expect(
+      buildReplayBeat(
+        deathFrame,
+        null,
+        buildReplayRelationshipIndex([deathFrame]),
+      ),
+    ).toEqual({ text: "Badgermole Cub is destroyed" });
+  });
+
+  test("attributes a sacrifice to the player who made it", () => {
+    const sacrificeFrame = frame({
+      id: 2,
+      annotationsJson: JSON.stringify({
+        annotations: [zoneTransfer([9], "Sacrifice")],
+      }),
+      changes: [
+        change({
+          action: "move_public",
+          instanceId: 9,
+          playerSide: "opponent",
+          cardName: "Fabled Passage",
+          fromZoneType: "Battlefield",
+          toZoneType: "Limbo",
+        }),
+      ],
+    });
+    expect(
+      buildReplayBeat(
+        sacrificeFrame,
+        null,
+        buildReplayRelationshipIndex([sacrificeFrame]),
+      ),
+    ).toEqual({ text: "Opponent sacrifices Fabled Passage" });
+  });
+
+  test("keeps an unexplained battlefield exit vague instead of guessing", () => {
+    const exitFrame = frame({
+      id: 2,
+      changes: [
+        change({
+          action: "move_public",
+          instanceId: 9,
+          cardName: "Slithering Cryptid",
+          fromZoneType: "Battlefield",
+          toZoneType: "Limbo",
+        }),
+      ],
+    });
+    expect(buildReplayBeat(exitFrame, null)).toEqual({
+      text: "Slithering Cryptid leaves the battlefield",
+    });
+  });
+
+  test("narrates a discard out of your own tracked hand", () => {
+    const discardFrame = frame({
+      id: 2,
+      annotationsJson: JSON.stringify({
+        annotations: [zoneTransfer([9], "Discard")],
+      }),
+      changes: [
+        change({
+          action: "move_public",
+          instanceId: 9,
+          cardName: "Restless Reef",
+          fromZoneType: "Hand",
+          toZoneType: "Graveyard",
+        }),
+      ],
+    });
+    expect(
+      buildReplayBeat(
+        discardFrame,
+        null,
+        buildReplayRelationshipIndex([discardFrame]),
+      ),
+    ).toEqual({ text: "You discard Restless Reef" });
+  });
+
+  test("summarizes end-of-combat cleanup instead of naming one creature", () => {
+    expect(
+      buildReplayBeat(
+        frame({
+          id: 2,
+          changes: [
+            change({ action: "stop_attack", instanceId: 9, cardName: "Nobody" }),
+            change({ action: "stop_block", instanceId: 10, cardName: "Otter" }),
+          ],
+        }),
+        null,
+      ),
+    ).toEqual({ text: "Combat ends" });
+  });
+
+  test("reports the new stat line instead of announcing that it changed", () => {
+    expect(
+      buildReplayBeat(
+        frame({
+          id: 2,
+          changes: [
+            change({
+              action: "stat_change",
+              instanceId: 9,
+              cardName: "Kaito, Bane of Nightmares",
+            }),
+          ],
+          objects: [
+            object({ instanceId: 9, cardName: "Kaito", power: 4, toughness: 5 }),
+          ],
+        }),
+        null,
+      ),
+    ).toEqual({ text: "Kaito, Bane of Nightmares becomes 4/5" });
+  });
+
+  test("apostrophizes a card name that already ends in s", () => {
+    const triggerFrame = frame({
+      id: 2,
+      annotationsJson: JSON.stringify({
+        annotations: [
+          // Buzz Bots (9) creates ability 30, which ability 30 then reports as
+          // triggered by Otter (10).
+          {
+            affectorId: 9,
+            affectedIds: [30],
+            type: ["AnnotationType_AbilityInstanceCreated"],
+          },
+          {
+            affectorId: 30,
+            affectedIds: [10],
+            type: ["AnnotationType_TriggeringObject"],
+          },
+        ],
+      }),
+      objects: [
+        object({ instanceId: 9, cardName: "Buzz Bots" }),
+        object({ instanceId: 10, cardName: "Otter" }),
+      ],
+    });
+    expect(
+      buildReplayBeat(
+        triggerFrame,
+        null,
+        buildReplayRelationshipIndex([triggerFrame]),
+      ),
+    ).toEqual({
+      text: "Buzz Bots' ability triggers",
+      note: "triggered by Otter",
+    });
+  });
+
+  test("never lets Limbo housekeeping headline a frame or survive filtering", () => {
+    const limboOnly = frame({
+      id: 2,
+      changes: [
+        change({
+          action: "move_public",
+          instanceId: 9,
+          cardName: "Accumulate Wisdom",
+          fromZoneType: "Graveyard",
+          toZoneType: "Limbo",
+        }),
+      ],
+    });
+    const realEvent = frame({
+      id: 3,
+      annotationsJson: JSON.stringify({
+        annotations: [zoneTransfer([11], "PlayLand")],
+      }),
+      changes: [
+        change({
+          action: "enter_public",
+          instanceId: 11,
+          playerSide: "opponent",
+          cardName: "Temple Garden",
+          toZoneType: "Battlefield",
+        }),
+        change({
+          action: "move_public",
+          instanceId: 9,
+          cardName: "Accumulate Wisdom",
+          fromZoneType: "Graveyard",
+          toZoneType: "Limbo",
+        }),
+      ],
+    });
+    expect(
+      filterMeaningfulReplayFrames([frame({ id: 1 }), limboOnly, realEvent]),
+    ).toEqual([realEvent]);
+    expect(
+      buildReplayBeat(
+        realEvent,
+        null,
+        buildReplayRelationshipIndex([realEvent]),
+      ),
+    ).toEqual({ text: "Opponent plays Temple Garden" });
+  });
+
+  test("lets a draw outrank anything else that reached hand in the same frame", () => {
+    const mixedFrame = frame({
+      id: 2,
+      annotationsJson: JSON.stringify({
+        annotations: [zoneTransfer([8], "Put"), zoneTransfer([9], "Draw")],
+      }),
+      changes: [
+        change({
+          action: "enter_public",
+          instanceId: 8,
+          cardName: "Insatiable Avarice",
+          toZoneType: "Hand",
+        }),
+        change({
+          action: "enter_public",
+          instanceId: 9,
+          cardName: "Kaito",
+          toZoneType: "Hand",
+        }),
+      ],
+    });
+    expect(
+      buildReplayBeat(
+        mixedFrame,
+        null,
+        buildReplayRelationshipIndex([mixedFrame]),
+      ),
+    ).toEqual({ text: "You draw Kaito and 1 more" });
+  });
+
+  test("says which way a summoning-sickness change went", () => {
+    const sicknessFrame = (hasSummoningSickness: boolean) =>
+      frame({
+        id: 2,
+        changes: [
+          change({
+            action: "summoning_sickness_change",
+            instanceId: 9,
+            cardName: "Mutavault",
+          }),
+        ],
+        objects: [
+          object({ instanceId: 9, cardName: "Mutavault", hasSummoningSickness }),
+        ],
+      });
+    expect(buildReplayBeat(sicknessFrame(true), null)).toEqual({
+      text: "Mutavault gains summoning sickness",
+    });
+    expect(buildReplayBeat(sicknessFrame(false), null)).toEqual({
+      text: "Mutavault loses summoning sickness",
+    });
+  });
+
+  test("never describes a same-zone rewrite as a move", () => {
+    const rewriteFrame = frame({
+      id: 2,
+      changes: [
+        change({
+          action: "move_public",
+          instanceId: 9,
+          playerSide: "opponent",
+          cardName: "Omen of the Sea",
+          fromZoneType: "Battlefield",
+          toZoneType: "Battlefield",
+        }),
+      ],
+    });
+    expect(buildReplayBeat(rewriteFrame, null)).toEqual({
+      text: "Board state updated",
+    });
+    expect(replayFramePrimaryChange(rewriteFrame)).toBeNull();
   });
 });
 

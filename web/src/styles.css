@@ -5686,9 +5686,10 @@ button.match-replay-zonechip.is-button {
 .match-replay-hud-life {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  min-width: 7rem;
-  padding: 0.32rem 0.6rem;
+  justify-content: center;
+  align-self: center;
+  min-width: 5.5rem;
+  padding: 0.34rem 0.7rem;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: linear-gradient(
@@ -5698,31 +5699,11 @@ button.match-replay-zonechip.is-button {
   );
 }
 
-.match-replay-hud-life.is-self {
-  flex-direction: row-reverse;
-}
-
 .match-replay-hud-life-body {
   display: grid;
   gap: 0.12rem;
-}
-
-.match-replay-hud-life.is-self .match-replay-hud-life-body {
-  justify-items: end;
-  text-align: right;
-}
-
-.match-replay-hud-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: var(--track-sm);
+  justify-items: center;
+  text-align: center;
 }
 
 .match-replay-hud-life.is-opponent {
@@ -5731,18 +5712,6 @@ button.match-replay-zonechip.is-button {
 
 .match-replay-hud-life.is-self {
   border-color: rgba(0, 230, 118, 0.34);
-}
-
-.match-replay-hud-life.is-opponent .match-replay-hud-avatar {
-  border: 1px solid var(--pill-loss-border);
-  background: var(--pill-loss-bg);
-  color: var(--pill-loss-text);
-}
-
-.match-replay-hud-life.is-self .match-replay-hud-avatar {
-  border: 1px solid var(--pill-win-border);
-  background: var(--pill-win-bg);
-  color: var(--pill-win-text);
 }
 
 .match-replay-hud-life-label {
@@ -5773,6 +5742,7 @@ button.match-replay-zonechip.is-button {
   font-family: var(--font-mono);
   font-size: var(--text-base);
   font-weight: 600;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
   animation: match-replay-delta-flash 900ms ease-out;
 }

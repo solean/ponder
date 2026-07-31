@@ -2421,9 +2421,6 @@ function MatchReplayHudLife({
 }) {
   return (
     <div className={`match-replay-hud-life is-${side}`}>
-      <span className="match-replay-hud-avatar" aria-hidden="true">
-        {side === "opponent" ? "OP" : "YOU"}
-      </span>
       <div className="match-replay-hud-life-body">
         <p className="match-replay-hud-life-label">{timelinePlayerLabel(side)}</p>
         <div className="match-replay-hud-life-readout">

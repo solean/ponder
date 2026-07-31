@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
 import { formatOdds, pNextDraw, pWithin } from "../lib/drawOdds";
+import { usePersistedFlag } from "../lib/persistedFlag";
 import { useEventSets } from "../lib/useEventSets";
 import { CardPreviewName } from "./CardPreviewName";
 import { EventLabel } from "./EventLabel";
@@ -10,16 +11,6 @@ import { EventLabel } from "./EventLabel";
 const TOP_CARDS = 8;
 const MAX_REVEALED = 12;
 const MINIMIZED_STORAGE_KEY = "ponder.liveBannerMinimized";
-
-function readStoredMinimized(): boolean {
-  if (typeof window === "undefined") return true;
-  try {
-    const stored = window.localStorage.getItem(MINIMIZED_STORAGE_KEY);
-    return stored === null ? true : stored === "true";
-  } catch {
-    return true;
-  }
-}
 
 function cardLabel(quantity: number, name: string | undefined, cardId: number): string {
   const prefix = quantity > 1 ? `${quantity}× ` : "";
@@ -57,14 +48,7 @@ export function LiveMatchBanner() {
 
   const { lookup } = useEventSets(live ? [live.match.eventName] : []);
 
-  const [minimized, setMinimized] = useState(readStoredMinimized);
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(MINIMIZED_STORAGE_KEY, String(minimized));
-    } catch {
-      // Ignore storage failures; the in-memory state still works.
-    }
-  }, [minimized]);
+  const [minimized, setMinimized] = usePersistedFlag(MINIMIZED_STORAGE_KEY, true);
 
   if (!live) return null;
 

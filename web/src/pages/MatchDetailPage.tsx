@@ -115,6 +115,7 @@ import {
   useReplayPlayer,
 } from "../lib/replay/useReplayPlayer";
 import { useReplayKeyboard } from "../lib/replay/useReplayKeyboard";
+import { usePersistedFlag } from "../lib/persistedFlag";
 
 type OpponentDeckCard = {
   cardId: number;
@@ -148,6 +149,9 @@ const OPPONENT_CATEGORY_LABELS: Record<OpponentCardCategory, string> = {
 const OPPONENT_CATEGORY_ORDER = Object.keys(
   OPPONENT_CATEGORY_LABELS,
 ) as OpponentCardCategory[];
+
+/** One preference for every replay, so it survives game switches and reloads. */
+const REPLAY_MOVELIST_COLLAPSED_KEY = "ponder.replayMoveListCollapsed";
 
 // classifyOpponentCard buckets an observed card by its Scryfall type line.
 // Land wins over every other type (a creature-land counts toward lands for a
@@ -2493,12 +2497,16 @@ function MatchReplayMoveList({
   relationships,
   turnBoundaries,
   currentIndex,
+  collapsed,
+  onToggleCollapsed,
   onSeek,
 }: {
   frames: MatchReplayFrame[];
   relationships: ReplayRelationshipIndex;
   turnBoundaries: ReplayTurnBoundary[];
   currentIndex: number;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   onSeek: (index: number) => void;
 }) {
   const beats = useMemo(
@@ -2512,27 +2520,55 @@ function MatchReplayMoveList({
       ),
     [frames, relationships],
   );
+  const scrollId = useId();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const activeRef = useRef<HTMLButtonElement | null>(null);
 
+  // Deferred a frame: expanding the panel (and the arena reflow that follows a
+  // width change) settles after commit, so measuring immediately would align
+  // against a stale box and leave the current beat out of view.
   useEffect(() => {
-    const scrollElement = scrollRef.current;
-    const activeElement = activeRef.current;
-    if (!scrollElement || !activeElement) return;
+    if (collapsed) return;
+    const frame = requestAnimationFrame(() => {
+      const scrollElement = scrollRef.current;
+      const activeElement = activeRef.current;
+      if (!scrollElement || !activeElement) return;
 
-    const scrollRect = scrollElement.getBoundingClientRect();
-    const activeRect = activeElement.getBoundingClientRect();
-    if (activeRect.top < scrollRect.top) {
-      scrollElement.scrollTop -= scrollRect.top - activeRect.top;
-    } else if (activeRect.bottom > scrollRect.bottom) {
-      scrollElement.scrollTop += activeRect.bottom - scrollRect.bottom;
-    }
-  }, [currentIndex]);
+      const scrollRect = scrollElement.getBoundingClientRect();
+      const activeRect = activeElement.getBoundingClientRect();
+      if (activeRect.top < scrollRect.top) {
+        scrollElement.scrollTop -= scrollRect.top - activeRect.top;
+      } else if (activeRect.bottom > scrollRect.bottom) {
+        scrollElement.scrollTop += activeRect.bottom - scrollRect.bottom;
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [currentIndex, collapsed]);
 
   return (
-    <aside className="match-replay-movelist" aria-label="Play-by-play">
-      <p className="match-replay-movelist-title">Play-by-play</p>
-      <div ref={scrollRef} className="match-replay-movelist-scroll">
+    <aside
+      className={`match-replay-movelist ${collapsed ? "is-collapsed" : ""}`}
+      aria-label="Play-by-play"
+    >
+      <button
+        type="button"
+        className="match-replay-movelist-title"
+        aria-expanded={!collapsed}
+        aria-controls={scrollId}
+        title={collapsed ? "Expand play-by-play" : "Minimize play-by-play"}
+        onClick={onToggleCollapsed}
+      >
+        <span className="match-replay-movelist-title-text">Play-by-play</span>
+        <span className="match-replay-movelist-title-toggle" aria-hidden="true">
+          {collapsed ? "+" : "–"}
+        </span>
+      </button>
+      <div
+        id={scrollId}
+        ref={scrollRef}
+        className="match-replay-movelist-scroll"
+        hidden={collapsed}
+      >
         {turnBoundaries.map((boundary) => (
           <div
             className="match-replay-movelist-turn"
@@ -2677,6 +2713,10 @@ function MatchReplayFrameBoard({
   const [focusedConnectionInstanceId, setFocusedConnectionInstanceId] = useState<
     number | null
   >(null);
+  const [moveListCollapsed, setMoveListCollapsed] = usePersistedFlag(
+    REPLAY_MOVELIST_COLLAPSED_KEY,
+    false,
+  );
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const replayCardShellsRef = useRef(new Map<number, HTMLElement>());
 
@@ -3205,7 +3245,11 @@ function MatchReplayFrameBoard({
         beat={currentBeat}
       />
 
-      <div className="match-replay-canvas is-arena">
+      <div
+        className={`match-replay-canvas is-arena ${
+          moveListCollapsed ? "is-movelist-collapsed" : ""
+        }`}
+      >
         <div className="match-replay-arena" ref={canvasRef}>
           <MatchReplayConnectionOverlay
             surfaceRef={canvasRef}
@@ -3300,6 +3344,8 @@ function MatchReplayFrameBoard({
           relationships={relationships}
           turnBoundaries={turnBoundaries}
           currentIndex={safeSelectedFrameIndex}
+          collapsed={moveListCollapsed}
+          onToggleCollapsed={() => setMoveListCollapsed((value) => !value)}
           onSeek={(nextIndex) => {
             setIsPlaying(false);
             setSelectedFrameIndex(nextIndex);

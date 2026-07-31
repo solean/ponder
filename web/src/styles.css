@@ -4338,6 +4338,10 @@ small.settings-meta,
   align-items: stretch;
 }
 
+.match-replay-canvas.is-arena.is-movelist-collapsed {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .match-replay-arena-top {
   display: flex;
   align-items: flex-start;
@@ -4384,14 +4388,71 @@ small.settings-meta,
 }
 
 .match-replay-movelist-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   margin: 0;
-  padding: 0.7rem 0.8rem 0.55rem;
+  width: 100%;
+  appearance: none;
+  border: none;
   border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  padding: 0.7rem 0.8rem 0.55rem;
   color: var(--muted-strong);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   letter-spacing: var(--track-lg);
   text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.match-replay-movelist-title:hover {
+  background: var(--table-row-hover);
+  color: var(--text);
+}
+
+.match-replay-movelist-title:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-glow) inset;
+}
+
+.match-replay-movelist-title-toggle {
+  flex: 0 0 auto;
+  font-size: var(--text-sm);
+  line-height: 1;
+}
+
+/* Collapsed: the panel shrinks to a rail whose label reads top-to-bottom, so
+   the arena claims the freed width without the play-by-play losing its
+   affordance. */
+.match-replay-movelist.is-collapsed {
+  width: 2.3rem;
+  min-width: 2.3rem;
+}
+
+.match-replay-movelist.is-collapsed .match-replay-movelist-title {
+  flex: 1 1 auto;
+  flex-direction: column-reverse;
+  /* column-reverse puts the toggle above the label; flex-end packs both at the
+     visual top of the rail. */
+  justify-content: flex-end;
+  gap: 0.55rem;
+  border-bottom: none;
+  padding: 0.55rem 0.2rem;
+}
+
+.match-replay-movelist.is-collapsed .match-replay-movelist-title-text {
+  writing-mode: vertical-rl;
+}
+
+.match-replay-movelist-scroll[hidden] {
+  display: none;
 }
 
 .match-replay-movelist-scroll {
@@ -7541,7 +7602,8 @@ select option {
     grid-template-columns: 1fr;
   }
 
-  .match-replay-canvas.is-arena {
+  .match-replay-canvas.is-arena,
+  .match-replay-canvas.is-arena.is-movelist-collapsed {
     grid-template-columns: 1fr;
   }
 
@@ -7550,6 +7612,23 @@ select option {
     height: auto;
     min-height: 0;
     max-height: 22rem;
+  }
+
+  /* Single column: collapsing leaves a full-width header strip, not a rail. */
+  .match-replay-movelist.is-collapsed {
+    width: auto;
+    min-width: 0;
+  }
+
+  .match-replay-movelist.is-collapsed .match-replay-movelist-title {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.7rem 0.8rem 0.55rem;
+  }
+
+  .match-replay-movelist.is-collapsed .match-replay-movelist-title-text {
+    writing-mode: horizontal-tb;
   }
 
   .match-replay-sidebar {

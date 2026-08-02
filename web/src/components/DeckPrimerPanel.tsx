@@ -123,7 +123,7 @@ export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: read
     <section className="panel ai-primer-panel">
       <div className="panel-head">
         <div>
-          <h3>AI Primer</h3>
+          <h3>Guide</h3>
           <p>
             {primer
               ? `Generated ${formatGeneratedAt(primer.createdAt)}${primer.stale ? " • deck has changed since" : ""}`

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
@@ -17,6 +17,7 @@ import { api } from "../lib/api";
 import { parseEventName } from "../lib/events";
 import { formatDateTime, formatDuration, formatGameFormat } from "../lib/format";
 import { fetchCardPreview, type CardPreview, type CardRarity } from "../lib/scryfall";
+import type { DeckVersion } from "../lib/types";
 import { useEventSets } from "../lib/useEventSets";
 
 type DeckListCard = {
@@ -36,6 +37,14 @@ type FloatingPopoverPosition = {
 };
 type ManaCostPart = { kind: "symbol"; token: string } | { kind: "separator"; value: string };
 type DeckDisplayMode = "list" | "curve" | "visual";
+type DeckSection = "decklist" | "performance" | "guide" | "matches";
+
+const DECK_SECTIONS: Array<{ id: DeckSection; label: string }> = [
+  { id: "decklist", label: "Decklist" },
+  { id: "performance", label: "Performance" },
+  { id: "guide", label: "Guide" },
+  { id: "matches", label: "Matches" },
+];
 type CurveBucketKey = number | "other" | "lands";
 type VisualCategory =
   | "creatures"
@@ -275,6 +284,7 @@ function formatSectionLabel(section: string): string {
 function parseDeckDisplayMode(value: string | null): DeckDisplayMode {
   return value === "curve" || value === "visual" ? value : "list";
 }
+
 
 function sectionTotal(cards: DeckListCard[]): number {
   return cards.reduce((sum, card) => sum + card.quantity, 0);
@@ -984,18 +994,102 @@ function DeckSectionSkeleton({ rowCount = 7, showMana = true }: { rowCount?: num
   );
 }
 
+function DeckVersionHistory({ versions }: { versions: DeckVersion[] }) {
+  const currentVersion = versions[0];
+
+  return (
+    <details className="deck-version-disclosure">
+      <summary className="tab deck-version-trigger">
+        {currentVersion ? `Current: v${currentVersion.versionNumber.toLocaleString()}` : "No version"}
+      </summary>
+      <div className="deck-version-popover">
+        <div className="panel-head">
+          <div>
+            <h3>Deck Versions</h3>
+            <p>Immutable card snapshots used by match analytics</p>
+          </div>
+          <span className="deck-version-count">
+            {versions.length.toLocaleString()} version{versions.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        {versions.length === 0 ? (
+          <StatusMessage>A version will be created the next time Arena reports this deck list.</StatusMessage>
+        ) : (
+          <ol className="deck-version-list" aria-label="Deck version history">
+            {versions.map((version, index) => {
+              const totalCards = version.cards.reduce((sum, card) => sum + card.quantity, 0);
+              const mainCards = version.cards
+                .filter((card) => card.section === "main")
+                .reduce((sum, card) => sum + card.quantity, 0);
+              const sideboardCards = totalCards - mainCards;
+              return (
+                <li className="deck-version-row" key={version.id}>
+                  <div className="deck-version-identity">
+                    <strong>Version {version.versionNumber.toLocaleString()}</strong>
+                    {index === 0 ? <span className="deck-version-current">Current</span> : null}
+                  </div>
+                  <dl>
+                    <div>
+                      <dt>Observed</dt>
+                      <dd>{version.effectiveAt ? formatDateTime(version.effectiveAt) : "Unknown"}</dd>
+                    </div>
+                    <div>
+                      <dt>Cards</dt>
+                      <dd>
+                        {mainCards.toLocaleString()} main
+                        {sideboardCards > 0 ? ` · ${sideboardCards.toLocaleString()} side` : ""}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Source</dt>
+                      <dd>{version.source?.split("_").join(" ") || "Arena deck list"}</dd>
+                    </div>
+                    <div>
+                      <dt>Fingerprint</dt>
+                      <dd title={version.cardsHash}>{version.cardsHash.slice(0, 10)}</dd>
+                    </div>
+                  </dl>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+    </details>
+  );
+}
+
 function DeckDetailSkeleton() {
   return (
     <div className="stack-lg deck-detail-stack" aria-busy="true" aria-live="polite">
-      <section className="panel decklist-panel">
-        <div className="panel-head">
-          <div className="deck-skeleton-head">
+      <section className="panel deck-detail-summary-panel">
+        <div className="deck-detail-summary-row">
+          <div className="deck-detail-identity deck-skeleton-head">
             <span className="skeleton-line skeleton-heading" />
             <span className="skeleton-line skeleton-subheading" />
           </div>
+          <div className="deck-detail-record" aria-hidden="true">
+            {Array.from({ length: 2 }).map((_, index) => (
+              <span className="skeleton-line skeleton-count" key={`deck-summary-skeleton-${index}`} />
+            ))}
+          </div>
           <span className="skeleton-line skeleton-link" aria-hidden="true" />
         </div>
+      </section>
 
+      <div className="tabs deck-section-tabs" aria-hidden="true">
+        {DECK_SECTIONS.map((section, index) => (
+          <span className={`tab deck-section-tab ${index === 0 ? "is-active" : ""}`} key={section.id}>
+            {section.label}
+          </span>
+        ))}
+      </div>
+
+      <section className="panel decklist-panel">
+        <div className="panel-head">
+          <span className="skeleton-line skeleton-heading-sm" aria-hidden="true" />
+          <span className="skeleton-line skeleton-link" aria-hidden="true" />
+        </div>
         <div className="stack-md">
           <div className="grid-cards deck-mainboard-skeleton-grid">
             {MAINBOARD_SKELETON_CATEGORY_ORDER.map((category) => (
@@ -1003,56 +1097,6 @@ function DeckDetailSkeleton() {
             ))}
           </div>
           <DeckSectionSkeleton rowCount={5} />
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
-          <span className="skeleton-line skeleton-heading-sm" aria-hidden="true" />
-          <span className="skeleton-line skeleton-count" aria-hidden="true" />
-        </div>
-        <div className="table-wrap">
-          <table className="data-table deck-matches-skeleton-table">
-            <thead>
-              <tr>
-                <th>Started</th>
-                <th>Event</th>
-                <th>Opponent</th>
-                <th>Result</th>
-                <th>Turns</th>
-                <th>Duration</th>
-                <th>Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: 5 }).map((_, rowIndex) => (
-                <tr key={`deck-match-skeleton-${rowIndex}`}>
-                  <td>
-                    <span className="skeleton-line skeleton-table-line" />
-                  </td>
-                  <td>
-                    <span className="skeleton-line skeleton-table-line is-wide" />
-                  </td>
-                  <td>
-                    <span className="skeleton-line skeleton-table-line is-wide" />
-                    <span className="skeleton-line skeleton-table-line is-short" />
-                  </td>
-                  <td>
-                    <span className="skeleton-line skeleton-table-line is-short" />
-                  </td>
-                  <td>
-                    <span className="skeleton-line skeleton-table-line is-short" />
-                  </td>
-                  <td>
-                    <span className="skeleton-line skeleton-table-line" />
-                  </td>
-                  <td>
-                    <span className="skeleton-line skeleton-table-line is-short" />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </section>
     </div>
@@ -1064,13 +1108,79 @@ export function DeckDetailPage() {
   const params = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const deckId = Number(params.deckId);
+  const requestedSection = searchParams.get("tab");
+  const isRequestedSectionValid = DECK_SECTIONS.some((section) => section.id === requestedSection);
+  const activeSection: DeckSection = isRequestedSectionValid ? (requestedSection as DeckSection) : "decklist";
   const deckDisplayMode = parseDeckDisplayMode(searchParams.get("view"));
+  const sectionTabBaseId = useId();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["deck", deckId],
     queryFn: () => api.deckDetail(deckId),
     enabled: Number.isFinite(deckId),
   });
+  const guideStatusQuery = useQuery({
+    queryKey: ["ai-status"],
+    queryFn: api.aiStatus,
+    staleTime: 1000 * 60 * 10,
+  });
+  const guidePrimerQuery = useQuery({
+    queryKey: ["deck-primer", deckId],
+    queryFn: () => api.deckPrimer(deckId),
+    enabled: Number.isFinite(deckId),
+  });
+  const isGuideVisible = Boolean(guideStatusQuery.data?.available || guidePrimerQuery.data);
+  const isGuideVisibilityLoading = guideStatusQuery.isLoading || guidePrimerQuery.isLoading;
+  const visibleSections = DECK_SECTIONS.filter(
+    (section) => section.id !== "guide" || isGuideVisible || (activeSection === "guide" && isGuideVisibilityLoading),
+  );
+
+  const setActiveSection = (section: DeckSection, replace = false) => {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (section === "decklist") {
+          next.delete("tab");
+        } else {
+          next.set("tab", section);
+        }
+        return next;
+      },
+      { replace, state: location.state, preventScrollReset: true },
+    );
+  };
+
+  useEffect(() => {
+    if (requestedSection !== null && !isRequestedSectionValid) {
+      setActiveSection("decklist", true);
+      return;
+    }
+    if (activeSection === "guide" && !isGuideVisibilityLoading && !isGuideVisible) {
+      setActiveSection("decklist", true);
+    }
+  }, [activeSection, isGuideVisibilityLoading, isGuideVisible, isRequestedSectionValid, requestedSection]);
+
+  function handleSectionTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, section: DeckSection) {
+    const currentIndex = visibleSections.findIndex((candidate) => candidate.id === section);
+    if (currentIndex === -1) return;
+
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (currentIndex + visibleSections.length - 1) % visibleSections.length;
+    } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % visibleSections.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = visibleSections.length - 1;
+    }
+
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextSection = visibleSections[nextIndex];
+    setActiveSection(nextSection.id);
+    document.getElementById(`${sectionTabBaseId}-tab-${nextSection.id}`)?.focus();
+  }
   const { lookup: setLookup } = useEventSets([
     data?.eventName,
     ...(data?.matches ?? []).map((match) => match.eventName),
@@ -1093,7 +1203,7 @@ export function DeckDetailPage() {
     queries: mainboardCards.map((card) => ({
       queryKey: cardPreviewQueryKey(card),
       queryFn: () => fetchCardPreview(card.cardId, card.cardName),
-      enabled: card.cardId > 0,
+      enabled: activeSection === "decklist" && card.cardId > 0,
       staleTime: 1000 * 60 * 60 * 24,
       gcTime: 1000 * 60 * 60 * 24,
       retry: 1,
@@ -1183,7 +1293,7 @@ export function DeckDetailPage() {
     queries: sideboardCards.map((card) => ({
       queryKey: cardPreviewQueryKey(card),
       queryFn: () => fetchCardPreview(card.cardId, card.cardName),
-      enabled: card.cardId > 0,
+      enabled: activeSection === "decklist" && card.cardId > 0,
       staleTime: 1000 * 60 * 60 * 24,
       gcTime: 1000 * 60 * 60 * 24,
       retry: 1,
@@ -1233,7 +1343,8 @@ export function DeckDetailPage() {
       return;
     }
 
-    const shouldUseWideCurveShell = deckDisplayMode === "curve" && curveShellWidth > DEFAULT_APP_SHELL_WIDTH;
+    const shouldUseWideCurveShell =
+      activeSection === "decklist" && deckDisplayMode === "curve" && curveShellWidth > DEFAULT_APP_SHELL_WIDTH;
     document.body.classList.toggle("has-wide-deck-curve", shouldUseWideCurveShell);
 
     if (shouldUseWideCurveShell) {
@@ -1246,7 +1357,7 @@ export function DeckDetailPage() {
       document.body.classList.remove("has-wide-deck-curve");
       document.body.style.removeProperty("--deck-curve-shell-width");
     };
-  }, [curveShellWidth, deckDisplayMode]);
+  }, [activeSection, curveShellWidth, deckDisplayMode]);
 
   const isMainboardMetadataLoading = mainCardPreviewQueries.some((query) => query.isPending);
   const isSideboardMetadataLoading = sideboardPreviewQueries.some((query) => query.isPending);
@@ -1263,6 +1374,10 @@ export function DeckDetailPage() {
 
   const matches = data.matches ?? [];
   const versions = data.versions ?? [];
+  const matchWins = matches.filter((match) => match.result === "win").length;
+  const matchLosses = matches.filter((match) => match.result === "loss").length;
+  const decidedMatches = matchWins + matchLosses;
+  const matchWinRate = decidedMatches > 0 ? (matchWins / decidedMatches) * 100 : null;
   const setDeckDisplayMode = (mode: DeckDisplayMode) => {
     setSearchParams(
       (current) => {
@@ -1279,51 +1394,99 @@ export function DeckDetailPage() {
   };
 
   return (
-    <div className={`stack-lg deck-detail-stack ${deckDisplayMode === "list" ? "" : "is-curve-layout"}`}>
-      <section className="panel decklist-panel">
-        <div className="panel-head">
-          <div>
+    <div
+      className={`stack-lg deck-detail-stack ${
+        activeSection === "decklist" && deckDisplayMode !== "list" ? "is-curve-layout" : ""
+      }`}
+    >
+      <section className="panel deck-detail-summary-panel">
+        <div className="deck-detail-summary-row">
+          <div className="deck-detail-identity">
             <h3>{data.name || "Unnamed Deck"}</h3>
             <p>
               {data.format ? formatGameFormat(data.format) : "Unknown format"} •{" "}
               <EventLabel eventName={data.eventName} lookup={setLookup} fallback="No event" />
             </p>
-            {!isCardMetadataLoading ? (
-              <div className="deck-rarity-summary">
-                <RaritySummaryGroup label="Main" cards={enrichedMainboardCards} />
-                <RaritySummaryGroup label="Side" cards={enrichedSideboardCards} />
-              </div>
-            ) : null}
           </div>
-          <div className="deck-detail-actions">
-            <div className="tabs deck-view-toggle" role="group" aria-label="Deck display mode">
-              <button
-                type="button"
-                className={`tab ${deckDisplayMode === "list" ? "is-active" : ""}`}
-                aria-pressed={deckDisplayMode === "list"}
-                onClick={() => setDeckDisplayMode("list")}
-              >
-                List
-              </button>
-              <button
-                type="button"
-                className={`tab ${deckDisplayMode === "curve" ? "is-active" : ""}`}
-                aria-pressed={deckDisplayMode === "curve"}
-                onClick={() => setDeckDisplayMode("curve")}
-              >
-                Curve
-              </button>
-              <button
-                type="button"
-                className={`tab ${deckDisplayMode === "visual" ? "is-active" : ""}`}
-                aria-pressed={deckDisplayMode === "visual"}
-                onClick={() => setDeckDisplayMode("visual")}
-              >
-                Visual
-              </button>
+          <dl className="deck-detail-record" aria-label="Deck match record">
+            <div>
+              <dt>Record</dt>
+              <dd>{decidedMatches > 0 ? `${matchWins}–${matchLosses}` : "—"}</dd>
+            </div>
+            <div>
+              <dt>Win rate</dt>
+              <dd>{matchWinRate == null ? "—" : `${matchWinRate.toFixed(1)}%`}</dd>
+            </div>
+          </dl>
+          <DeckVersionHistory versions={versions} />
+        </div>
+      </section>
+
+      <div className="tabs deck-section-tabs" role="tablist" aria-label="Deck detail sections">
+        {visibleSections.map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            id={`${sectionTabBaseId}-tab-${section.id}`}
+            role="tab"
+            aria-selected={activeSection === section.id}
+            aria-controls={`${sectionTabBaseId}-panel-${section.id}`}
+            tabIndex={activeSection === section.id ? 0 : -1}
+            className={`tab deck-section-tab ${activeSection === section.id ? "is-active" : ""}`}
+            onClick={() => setActiveSection(section.id)}
+            onKeyDown={(event) => handleSectionTabKeyDown(event, section.id)}
+          >
+            {section.label}
+          </button>
+        ))}
+      </div>
+
+      {activeSection === "decklist" ? (
+        <section
+          id={`${sectionTabBaseId}-panel-decklist`}
+          className="panel decklist-panel"
+          role="tabpanel"
+          aria-labelledby={`${sectionTabBaseId}-tab-decklist`}
+        >
+          <div className="panel-head">
+            <div>
+              <h3>Decklist</h3>
+              {!isCardMetadataLoading ? (
+                <div className="deck-rarity-summary">
+                  <RaritySummaryGroup label="Main" cards={enrichedMainboardCards} />
+                  <RaritySummaryGroup label="Side" cards={enrichedSideboardCards} />
+                </div>
+              ) : null}
+            </div>
+            <div className="deck-detail-actions">
+              <div className="tabs deck-view-toggle" role="group" aria-label="Deck display mode">
+                <button
+                  type="button"
+                  className={`tab ${deckDisplayMode === "list" ? "is-active" : ""}`}
+                  aria-pressed={deckDisplayMode === "list"}
+                  onClick={() => setDeckDisplayMode("list")}
+                >
+                  List
+                </button>
+                <button
+                  type="button"
+                  className={`tab ${deckDisplayMode === "curve" ? "is-active" : ""}`}
+                  aria-pressed={deckDisplayMode === "curve"}
+                  onClick={() => setDeckDisplayMode("curve")}
+                >
+                  Curve
+                </button>
+                <button
+                  type="button"
+                  className={`tab ${deckDisplayMode === "visual" ? "is-active" : ""}`}
+                  aria-pressed={deckDisplayMode === "visual"}
+                  onClick={() => setDeckDisplayMode("visual")}
+                >
+                  Visual
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
         <div className="stack-md">
           {deckDisplayMode === "curve" ? (
@@ -1433,75 +1596,48 @@ export function DeckDetailPage() {
           ) : null}
         </div>
         {isCardMetadataLoading ? <StatusMessage>Loading deck card details…</StatusMessage> : null}
-      </section>
+        </section>
+      ) : null}
 
-      <section className="panel deck-versions-panel">
-        <div className="panel-head">
-          <div>
-            <h3>Deck Versions</h3>
-            <p>Immutable card snapshots used by match analytics</p>
-          </div>
-          <span className="deck-version-count">
-            {versions.length.toLocaleString()} version{versions.length === 1 ? "" : "s"}
-          </span>
+      {activeSection === "performance" ? (
+        <div
+          id={`${sectionTabBaseId}-panel-performance`}
+          className="stack-lg"
+          role="tabpanel"
+          aria-labelledby={`${sectionTabBaseId}-tab-performance`}
+        >
+          <DeckAnalyticsPanel deckId={deckId} versions={versions} />
+          {/draft|sealed|limited/.test(`${data.format} ${data.eventName}`.toLowerCase()) ? (
+            <LimitedMatchupsPanel setCode={parseEventName(data.eventName).setCode ?? ""} />
+          ) : (
+            <DeckMatchupsPanel deckId={deckId} />
+          )}
         </div>
-        {versions.length === 0 ? (
-          <StatusMessage>
-            A version will be created the next time Arena reports this deck list.
-          </StatusMessage>
-        ) : (
-          <ol className="deck-version-list" aria-label="Deck version history">
-            {versions.map((version, index) => {
-              const totalCards = version.cards.reduce((sum, card) => sum + card.quantity, 0);
-              const mainCards = version.cards
-                .filter((card) => card.section === "main")
-                .reduce((sum, card) => sum + card.quantity, 0);
-              const sideboardCards = totalCards - mainCards;
-              return (
-                <li className="deck-version-row" key={version.id}>
-                  <div className="deck-version-identity">
-                    <strong>Version {version.versionNumber.toLocaleString()}</strong>
-                    {index === 0 ? <span className="deck-version-current">Current</span> : null}
-                  </div>
-                  <dl>
-                    <div>
-                      <dt>Observed</dt>
-                      <dd>{version.effectiveAt ? formatDateTime(version.effectiveAt) : "Unknown"}</dd>
-                    </div>
-                    <div>
-                      <dt>Cards</dt>
-                      <dd>
-                        {mainCards.toLocaleString()} main
-                        {sideboardCards > 0 ? ` · ${sideboardCards.toLocaleString()} side` : ""}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Source</dt>
-                      <dd>{version.source?.split("_").join(" ") || "Arena deck list"}</dd>
-                    </div>
-                    <div>
-                      <dt>Fingerprint</dt>
-                      <dd title={version.cardsHash}>{version.cardsHash.slice(0, 10)}</dd>
-                    </div>
-                  </dl>
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </section>
+      ) : null}
 
-      <DeckAnalyticsPanel deckId={deckId} versions={versions} />
+      {activeSection === "guide" ? (
+        <div
+          id={`${sectionTabBaseId}-panel-guide`}
+          role="tabpanel"
+          aria-labelledby={`${sectionTabBaseId}-tab-guide`}
+        >
+          {isGuideVisible ? (
+            <DeckPrimerPanel deckId={deckId} cards={cards} />
+          ) : (
+            <section className="panel">
+              <StatusMessage>Loading guide…</StatusMessage>
+            </section>
+          )}
+        </div>
+      ) : null}
 
-      {/draft|sealed|limited/.test(`${data.format} ${data.eventName}`.toLowerCase()) ? (
-        <LimitedMatchupsPanel setCode={parseEventName(data.eventName).setCode ?? ""} />
-      ) : (
-        <DeckMatchupsPanel deckId={deckId} />
-      )}
-
-      <DeckPrimerPanel deckId={deckId} cards={cards} />
-
-      <section className="panel">
+      {activeSection === "matches" ? (
+        <section
+          id={`${sectionTabBaseId}-panel-matches`}
+          className="panel"
+          role="tabpanel"
+          aria-labelledby={`${sectionTabBaseId}-tab-matches`}
+        >
         <div className="panel-head">
           <h3>Matches with this deck</h3>
           <p>{matches.length} matches</p>
@@ -1554,7 +1690,8 @@ export function DeckDetailPage() {
             </tbody>
           </table>
         </div>
-      </section>
+        </section>
+      ) : null}
     </div>
   );
 }

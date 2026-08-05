@@ -8897,6 +8897,14 @@ select option {
   letter-spacing: var(--track-sm);
 }
 
+.split-row-hint {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-sm);
+  margin-left: 0.45rem;
+}
+
 .split-row-stat {
   color: var(--muted-strong);
   font-family: var(--font-mono);

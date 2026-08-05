@@ -9,6 +9,8 @@ import {
   recordOf,
   recordWinRate,
   splitRecords,
+  timeOfDayPerformance,
+  weekdayPerformance,
 } from "../src/lib/overviewStats";
 import type { Match } from "../src/lib/types";
 
@@ -171,5 +173,41 @@ describe("matchAverages", () => {
       seconds: null,
       turns: null,
     });
+  });
+});
+
+describe("weekdayPerformance", () => {
+  test("buckets by local weekday, Sunday first", () => {
+    const buckets = weekdayPerformance([
+      makeMatch({ startedAt: new Date(2026, 6, 5, 9, 0, 0).toISOString(), result: "win" }), // Sunday
+      makeMatch({ startedAt: new Date(2026, 6, 5, 23, 0, 0).toISOString(), result: "loss" }), // Sunday
+      makeMatch({ startedAt: new Date(2026, 6, 8, 9, 0, 0).toISOString(), result: "win" }), // Wednesday
+      makeMatch({ startedAt: new Date(2026, 6, 8, 9, 0, 0).toISOString(), result: "unknown" }),
+      makeMatch({ startedAt: "not-a-date" }),
+    ]);
+
+    expect(buckets).toHaveLength(7);
+    expect(buckets.map((bucket) => bucket.key)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(buckets[0]).toMatchObject({ matches: 2, record: { wins: 1, losses: 1 } });
+    expect(buckets[3]).toMatchObject({ matches: 2, record: { wins: 1, losses: 0 } });
+    expect(buckets[1]).toMatchObject({ matches: 0, record: { wins: 0, losses: 0 } });
+    expect(buckets.every((bucket) => bucket.label.length > 0)).toBe(true);
+  });
+});
+
+describe("timeOfDayPerformance", () => {
+  test("buckets into four-hour local blocks", () => {
+    const buckets = timeOfDayPerformance([
+      makeMatch({ startedAt: new Date(2026, 6, 5, 0, 30, 0).toISOString(), result: "win" }),
+      makeMatch({ startedAt: new Date(2026, 6, 5, 3, 59, 0).toISOString(), result: "loss" }),
+      makeMatch({ startedAt: new Date(2026, 6, 5, 4, 0, 0).toISOString(), result: "win" }),
+      makeMatch({ startedAt: new Date(2026, 6, 5, 23, 15, 0).toISOString(), result: "loss" }),
+    ]);
+
+    expect(buckets.map((bucket) => bucket.key)).toEqual([0, 4, 8, 12, 16, 20]);
+    expect(buckets[0]).toMatchObject({ matches: 2, record: { wins: 1, losses: 1 } });
+    expect(buckets[1]).toMatchObject({ matches: 1, record: { wins: 1, losses: 0 } });
+    expect(buckets[5]).toMatchObject({ matches: 1, record: { wins: 0, losses: 1 } });
+    expect(buckets.every((bucket) => bucket.range.length > 0)).toBe(true);
   });
 });

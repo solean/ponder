@@ -26,7 +26,10 @@ import {
   recordWinRate,
   sortMatchesDesc,
   splitRecords,
+  timeOfDayPerformance,
+  weekdayPerformance,
   type DailyActivity,
+  type ScheduleBucket,
   type WinLossRecord,
 } from "../lib/overviewStats";
 import type { DraftSession, RuntimeStatus } from "../lib/types";
@@ -45,12 +48,23 @@ function toneFor(rate: number | null): Tone {
   return displayed > 50 ? "positive" : displayed < 50 ? "negative" : "neutral";
 }
 
-function SplitRow({ label, record }: { label: string; record: WinLossRecord }) {
+function SplitRow({
+  label,
+  record,
+  hint,
+}: {
+  label: string;
+  record: WinLossRecord;
+  hint?: string;
+}) {
   const rate = recordWinRate(record);
   return (
     <div className="split-row">
       <div className="split-row-top">
-        <span className="split-row-label">{label}</span>
+        <span className="split-row-label">
+          {label}
+          {hint ? <small className="split-row-hint">{hint}</small> : null}
+        </span>
         <span className="split-row-stat">
           {rate == null ? (
             <span className="split-row-empty">no matches</span>
@@ -69,6 +83,13 @@ function SplitRow({ label, record }: { label: string; record: WinLossRecord }) {
       </div>
     </div>
   );
+}
+
+/** Range plus volume for a schedule row; undefined when the bucket is empty. */
+function scheduleHint(bucket: ScheduleBucket): string | undefined {
+  if (bucket.matches === 0) return bucket.range || undefined;
+  const volume = `${bucket.matches} match${bucket.matches === 1 ? "" : "es"}`;
+  return bucket.range ? `${bucket.range} · ${volume}` : volume;
 }
 
 const ACTIVITY_HOVER_DELAY_MS = 120;
@@ -492,6 +513,8 @@ export function OverviewPage() {
 
   const splits = useMemo(() => splitRecords(allMatches), [allMatches]);
   const activity = useMemo(() => dailyActivity(allMatches, ACTIVITY_DAYS), [allMatches]);
+  const weekdays = useMemo(() => weekdayPerformance(allMatches), [allMatches]);
+  const timeSlots = useMemo(() => timeOfDayPerformance(allMatches), [allMatches]);
 
   if (isLoading) return <StatusMessage>Loading overview…</StatusMessage>;
   if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
@@ -650,6 +673,39 @@ export function OverviewPage() {
             <span className="split-group-title">Match Type</span>
             <SplitRow label="Best of one" record={splits.bo1} />
             <SplitRow label="Best of three" record={splits.bo3} />
+          </div>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h3>Schedule</h3>
+          <p>
+            last {allMatches.length} match{allMatches.length === 1 ? "" : "es"} · local time
+          </p>
+        </div>
+        <div className="splits-grid">
+          <div className="split-group">
+            <span className="split-group-title">Day of Week</span>
+            {weekdays.map((bucket) => (
+              <SplitRow
+                key={bucket.key}
+                label={bucket.label}
+                record={bucket.record}
+                hint={scheduleHint(bucket)}
+              />
+            ))}
+          </div>
+          <div className="split-group">
+            <span className="split-group-title">Time of Day</span>
+            {timeSlots.map((bucket) => (
+              <SplitRow
+                key={bucket.key}
+                label={bucket.label}
+                record={bucket.record}
+                hint={scheduleHint(bucket)}
+              />
+            ))}
           </div>
         </div>
       </section>

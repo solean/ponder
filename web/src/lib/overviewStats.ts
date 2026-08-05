@@ -187,3 +187,89 @@ export function matchAverages(matches: Match[]): MatchAverages {
     turns: turnsCount > 0 ? Math.round(turnsTotal / turnsCount) : null,
   };
 }
+
+export type ScheduleBucket = {
+  /** Weekday index (0 = Sunday) for weekdays, bucket start hour for time slots. */
+  key: number;
+  label: string;
+  /** Local clock range, e.g. "4 PM – 8 PM"; empty for weekday buckets. */
+  range: string;
+  record: WinLossRecord;
+  /** Every match in the bucket, including undecided ones. */
+  matches: number;
+};
+
+/** Sunday-first so the ordering matches the activity graph rows. */
+const WEEKDAY_REFERENCE = new Date(2024, 0, 7);
+
+const TIME_SLOT_HOURS = 4;
+const TIME_SLOT_LABELS = [
+  "Late night",
+  "Early morning",
+  "Morning",
+  "Afternoon",
+  "Evening",
+  "Night",
+];
+
+function emptyBuckets(count: number, label: (index: number) => Omit<ScheduleBucket, "record" | "matches">): ScheduleBucket[] {
+  return Array.from({ length: count }, (_unused, index) => ({
+    ...label(index),
+    record: { wins: 0, losses: 0 },
+    matches: 0,
+  }));
+}
+
+function tallyByBucket(
+  matches: Match[],
+  buckets: ScheduleBucket[],
+  bucketOf: (started: Date) => number,
+): ScheduleBucket[] {
+  for (const match of matches) {
+    const started = new Date(match.startedAt);
+    if (Number.isNaN(started.getTime())) continue;
+
+    const bucket = buckets[bucketOf(started)];
+    if (!bucket) continue;
+
+    bucket.matches += 1;
+    if (match.result === "win") bucket.record.wins += 1;
+    else if (match.result === "loss") bucket.record.losses += 1;
+  }
+  return buckets;
+}
+
+/** Record per local weekday, Sunday first. */
+export function weekdayPerformance(matches: Match[]): ScheduleBucket[] {
+  const weekdayFormatter = new Intl.DateTimeFormat(undefined, { weekday: "long" });
+  const buckets = emptyBuckets(7, (index) => ({
+    key: index,
+    label: weekdayFormatter.format(
+      new Date(
+        WEEKDAY_REFERENCE.getFullYear(),
+        WEEKDAY_REFERENCE.getMonth(),
+        WEEKDAY_REFERENCE.getDate() + index,
+      ),
+    ),
+    range: "",
+  }));
+  return tallyByBucket(matches, buckets, (started) => started.getDay());
+}
+
+/** Record per four-hour block of the local day, starting at midnight. */
+export function timeOfDayPerformance(matches: Match[]): ScheduleBucket[] {
+  const hourFormatter = new Intl.DateTimeFormat(undefined, { hour: "numeric" });
+  const hourLabel = (hour: number) =>
+    hourFormatter.format(new Date(2024, 0, 7, hour % 24));
+  const buckets = emptyBuckets(TIME_SLOT_LABELS.length, (index) => {
+    const start = index * TIME_SLOT_HOURS;
+    return {
+      key: start,
+      label: TIME_SLOT_LABELS[index],
+      range: `${hourLabel(start)} – ${hourLabel(start + TIME_SLOT_HOURS)}`,
+    };
+  });
+  return tallyByBucket(matches, buckets, (started) =>
+    Math.floor(started.getHours() / TIME_SLOT_HOURS),
+  );
+}

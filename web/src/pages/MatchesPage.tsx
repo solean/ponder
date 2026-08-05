@@ -13,6 +13,12 @@ import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { eventCategory, parseEventName } from "../lib/events";
 import { formatCompactDateTime, formatDuration, formatGameFormat } from "../lib/format";
+import {
+  formatRecord,
+  matchListSummary,
+  tallyRecord,
+  type MatchRecord,
+} from "../lib/matchListSummary";
 import type { Match } from "../lib/types";
 import { useEventSets, type SetLookup } from "../lib/useEventSets";
 
@@ -116,32 +122,6 @@ function applyFilters(matches: Match[], filters: MatchFilters): Match[] {
   });
 }
 
-type MatchRecord = {
-  wins: number;
-  losses: number;
-  unknown: number;
-};
-
-function tallyRecord(matches: Match[]): MatchRecord {
-  const record: MatchRecord = { wins: 0, losses: 0, unknown: 0 };
-  for (const match of matches) {
-    if (match.result === "win") record.wins += 1;
-    else if (match.result === "loss") record.losses += 1;
-    else record.unknown += 1;
-  }
-  return record;
-}
-
-function formatRecord(record: MatchRecord): string {
-  return `${record.wins}-${record.losses}`;
-}
-
-function formatWinRate(record: MatchRecord): string {
-  const decided = record.wins + record.losses;
-  if (decided === 0) return "-";
-  return `${Math.round((record.wins / decided) * 100)}%`;
-}
-
 /**
  * Groups rows by consecutive event name (the list is sorted newest-first, so
  * a run of the same event reads as one session, e.g. a draft run).
@@ -193,17 +173,22 @@ function buildVirtualRows(rows: Row<Match>[], groupByEvent: boolean): VirtualRow
 // are measured per-row once rendered, so wrapping rows stay correct.
 const ESTIMATED_MATCH_ROW_HEIGHT = 42;
 
+// Mirrors the server's matchListMaxLimit: the page filters, groups, and tallies
+// the whole corpus client-side, so it asks for all of it. The server clamps.
+const MATCH_FETCH_LIMIT = 20000;
+
 export function MatchesPage() {
   const navigate = useNavigate();
   const { data, isLoading, error } = useQuery({
     queryKey: ["matches"],
-    queryFn: () => api.matches(1000),
+    queryFn: () => api.matches(MATCH_FETCH_LIMIT),
   });
 
   const [filters, setFilters] = useState<MatchFilters>(EMPTY_FILTERS);
   const [groupByEvent, setGroupByEvent] = useState(true);
 
-  const matches = useMemo(() => data ?? [], [data]);
+  const matches = useMemo(() => data?.matches ?? [], [data]);
+  const totalMatches = data?.total ?? matches.length;
   const { lookup: setLookup } = useEventSets(matches.map((match) => match.eventName));
 
   const eventOptions = useMemo(
@@ -365,9 +350,13 @@ export function MatchesPage() {
   if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
 
   const filtersActive = hasActiveFilters(filters);
-  const summary = filtersActive
-    ? `${filtered.length} of ${matches.length} matches • ${formatRecord(filteredRecord)} (${formatWinRate(filteredRecord)})`
-    : `${matches.length} matches • ${formatRecord(filteredRecord)} (${formatWinRate(filteredRecord)})`;
+  const summary = matchListSummary({
+    shown: filtered.length,
+    fetched: matches.length,
+    total: totalMatches,
+    filtersActive,
+    record: filteredRecord,
+  });
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 

@@ -40,6 +40,11 @@ export type Match = {
   opponentDeckColorsKnown?: boolean;
 };
 
+export type MatchList = {
+  matches: Match[];
+  total: number;
+};
+
 export type OpponentObservedCard = {
   cardId: number;
   quantity: number;
@@ -546,7 +551,7 @@ export type MatchupRow = {
   confidence: "high" | "medium" | "low";
   topObservedCards: MatchupObservedCard[];
   lossSkewedCards: MatchupObservedCard[];
-  matchRefs: MatchupMatchRef[];
+  matchCount: number;
 };
 
 export type MatchupDeck = {

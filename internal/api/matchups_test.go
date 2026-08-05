@@ -247,3 +247,143 @@ func TestBuildMatchupsResponseGroupsAndOverrides(t *testing.T) {
 		t.Fatalf("top observed cards = %+v, want cards seen in both aggro matches", aggroRow.TopObservedCards)
 	}
 }
+
+// limitedRefsFixture builds two TMT drafts played in different own-deck colors
+// plus two FIN drafts with no resolvable decklist, one of which was abandoned
+// without a result. Every opponent reads as mono red.
+func limitedRefsFixture() model.LimitedMatchupsResponse {
+	observed := map[int64]int64{}
+	for cardID := int64(1); cardID <= 12; cardID++ {
+		observed[cardID] = 1
+	}
+	matchRows := []db.MatchupMatchRow{
+		{MatchID: 1, DeckID: 7, DeckName: "TMT Draft A", EventName: "QuickDraft_TMT_20260313", Result: "win"},
+		{MatchID: 2, DeckID: 8, DeckName: "TMT Draft B", EventName: "PremierDraft_TMT_20260303", Result: "loss"},
+		{MatchID: 3, DeckID: 10, DeckName: "FIN Draft", EventName: "QuickDraft_FIN_20250619", Result: "win"},
+		{MatchID: 4, DeckID: 10, DeckName: "FIN Draft", EventName: "QuickDraft_FIN_20250619", Result: ""},
+	}
+	observedByMatch := map[int64]map[int64]int64{1: observed, 2: observed, 3: observed, 4: observed}
+	ownColors := map[int64]ownDeckColors{
+		1: {Colors: []string{"B", "G"}, Known: true},
+		2: {Colors: []string{"U", "R"}, Known: true},
+	}
+	return buildLimitedMatchupsResponse(matchRows, observedByMatch, aggroFacts(),
+		map[int64]string{}, map[int64]model.MatchGameSummary{}, map[int64]string{}, ownColors)
+}
+
+func TestMatchupRowMatchCountIncludesUnknownResults(t *testing.T) {
+	t.Parallel()
+
+	out := limitedRefsFixture()
+	if len(out.Sets) != 2 || out.Sets[1].SetCode != "FIN" {
+		t.Fatalf("sets = %+v, want TMT then FIN", out.Sets)
+	}
+	rows := out.Sets[1].Rows
+	if len(rows) != 1 {
+		t.Fatalf("FIN rows = %+v, want one mono-red row", rows)
+	}
+	if rows[0].Matches.Games != 1 {
+		t.Fatalf("FIN row record = %+v, want only the decided match counted", rows[0].Matches)
+	}
+	if rows[0].MatchCount != 2 {
+		t.Fatalf("FIN row match count = %d, want the abandoned match pooled too", rows[0].MatchCount)
+	}
+}
+
+func TestClearMatchRefsKeepsMatchCount(t *testing.T) {
+	t.Parallel()
+
+	out := limitedRefsFixture()
+	for setIndex := range out.Sets {
+		set := &out.Sets[setIndex]
+		clearMatchRefs(set.Rows)
+		for groupIndex := range set.ColorGroups {
+			clearMatchRefs(set.ColorGroups[groupIndex].Rows)
+		}
+	}
+	for _, set := range out.Sets {
+		rows := append([]model.MatchupRow{}, set.Rows...)
+		for _, group := range set.ColorGroups {
+			rows = append(rows, group.Rows...)
+		}
+		for _, row := range rows {
+			if row.MatchRefs != nil {
+				t.Fatalf("set %q row %q kept refs in the summary", set.SetCode, row.ColorsKey)
+			}
+			if row.MatchCount == 0 {
+				t.Fatalf("set %q row %q lost its match count", set.SetCode, row.ColorsKey)
+			}
+		}
+	}
+}
+
+func TestLimitedMatchupRefsSelection(t *testing.T) {
+	t.Parallel()
+
+	out := limitedRefsFixture()
+
+	setLevel := limitedMatchupRefs(out, "TMT", "", false, "R")
+	if len(setLevel) != 2 {
+		t.Fatalf("TMT set-level refs = %+v, want both drafts pooled", setLevel)
+	}
+
+	scoped := limitedMatchupRefs(out, "TMT", "BG", true, "R")
+	if len(scoped) != 1 || scoped[0].MatchID != 1 {
+		t.Fatalf("TMT/BG refs = %+v, want only the BG draft's match", scoped)
+	}
+
+	// An absent group means "all own colors"; a present but empty one means
+	// "own colors unknown", which is a real group for the FIN drafts.
+	unknownOwn := limitedMatchupRefs(out, "FIN", "", true, "R")
+	if len(unknownOwn) != 2 {
+		t.Fatalf("FIN unknown-colors refs = %+v, want both FIN matches", unknownOwn)
+	}
+	if refs := limitedMatchupRefs(out, "TMT", "", true, "R"); len(refs) != 0 {
+		t.Fatalf("TMT unknown-colors refs = %+v, want none: both drafts had known colors", refs)
+	}
+
+	// A drill-down that no longer resolves is empty, not an error, and never
+	// serializes as null.
+	for _, miss := range [][]model.MatchupMatchRef{
+		limitedMatchupRefs(out, "TMT", "", false, "WU"),
+		limitedMatchupRefs(out, "XLN", "", false, "R"),
+		limitedMatchupRefs(out, "TMT", "WU", true, "R"),
+	} {
+		if miss == nil || len(miss) != 0 {
+			t.Fatalf("missing cell refs = %+v, want an empty non-nil slice", miss)
+		}
+	}
+}
+
+func TestDeckMatchupRefsSelection(t *testing.T) {
+	t.Parallel()
+
+	observed := map[int64]int64{}
+	for cardID := int64(1); cardID <= 12; cardID++ {
+		observed[cardID] = 2
+	}
+	matchRows := []db.MatchupMatchRow{
+		{MatchID: 1, DeckID: 7, DeckName: "Dimir", Result: "win", Opponent: "A"},
+		{MatchID: 2, DeckID: 7, DeckName: "Dimir", Result: "loss", Opponent: "B"},
+	}
+	out := buildMatchupsResponse(matchRows,
+		map[int64]map[int64]int64{1: observed, 2: observed}, aggroFacts(),
+		map[int64]string{}, map[int64]model.MatchGameSummary{},
+		map[int64]string{2: "combo"})
+
+	deck := findMatchupDeck(out.Decks, 7)
+	if deck == nil {
+		t.Fatalf("decks = %+v, want deck 7", out.Decks)
+	}
+	refs := deckMatchupRefs(deck, "R", "combo")
+	if len(refs) != 1 || refs[0].MatchID != 2 {
+		t.Fatalf("combo refs = %+v, want only the overridden match", refs)
+	}
+	// Both keys must match: same colors, different archetype is a different row.
+	if miss := deckMatchupRefs(deck, "R", "ramp"); miss == nil || len(miss) != 0 {
+		t.Fatalf("ramp refs = %+v, want an empty non-nil slice", miss)
+	}
+	if miss := deckMatchupRefs(findMatchupDeck(out.Decks, 99), "R", "aggro"); miss == nil || len(miss) != 0 {
+		t.Fatalf("unknown deck refs = %+v, want an empty non-nil slice", miss)
+	}
+}

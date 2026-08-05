@@ -110,23 +110,50 @@ function ObservedCardChips({
   );
 }
 
+type MatchupRefsQuery =
+  | { kind: "deck"; deckId: number; colorsKey: string; archetype: string }
+  | { kind: "limited"; setCode: string; colorsKey: string; group: string | null };
+
+const MATCHUP_REFS_KEY = "matchup-refs";
+
+function matchupRefsQueryKey(refs: MatchupRefsQuery) {
+  return refs.kind === "deck"
+    ? [MATCHUP_REFS_KEY, "deck", refs.deckId, refs.colorsKey, refs.archetype]
+    : [MATCHUP_REFS_KEY, "limited", refs.setCode, refs.colorsKey, refs.group];
+}
+
 function MatchupRowDetail({
   contextLabel,
   preserveBreadcrumbContext = false,
+  refs,
   row,
 }: {
   contextLabel: string;
   preserveBreadcrumbContext?: boolean;
+  refs: MatchupRefsQuery;
   row: MatchupRow;
 }) {
   const queryClient = useQueryClient();
-  const { lookup: setLookup } = useEventSets(row.matchRefs.map((ref) => ref.eventName));
+  // The per-match list is only fetched once a drill-down is open; the summary
+  // rows carry counts so tiles never pay for it.
+  const refsQuery = useQuery({
+    queryKey: matchupRefsQueryKey(refs),
+    queryFn: () =>
+      refs.kind === "deck"
+        ? api.deckMatchupRefs(refs.deckId, refs.colorsKey, refs.archetype)
+        : api.limitedMatchupRefs(refs.setCode, refs.colorsKey, refs.group),
+  });
+  const matchRefs = refsQuery.data ?? [];
+  const { lookup: setLookup } = useEventSets(matchRefs.map((ref) => ref.eventName));
   const overrideMutation = useMutation({
     mutationFn: ({ matchId, archetype }: { matchId: number; archetype: string }) =>
       api.setOpponentArchetype(matchId, archetype),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["deck-matchups"] });
       void queryClient.invalidateQueries({ queryKey: ["limited-matchups"] });
+      // An override can move a match to a different row, so every cached ref
+      // list is suspect, not just this one.
+      void queryClient.invalidateQueries({ queryKey: [MATCHUP_REFS_KEY] });
     },
   });
 
@@ -141,7 +168,7 @@ function MatchupRowDetail({
           </span>
         </div>
         <p>
-          {row.matchRefs.length} match{row.matchRefs.length === 1 ? "" : "es"} · avg{" "}
+          {row.matchCount} match{row.matchCount === 1 ? "" : "es"} · avg{" "}
           {pct(row.avgPctObserved)} of opponent deck observed
         </p>
       </header>
@@ -176,69 +203,77 @@ function MatchupRowDetail({
         </div>
       </div>
 
-      <div className="table-wrap">
-        <table className="data-table matchup-matches-table">
-          <thead>
-            <tr>
-              <th>Started</th>
-              <th>Event</th>
-              <th>Opponent</th>
-              <th>Result</th>
-              <th>Observed</th>
-              <th>Archetype</th>
-              <th>Details</th>
-            </tr>
-          </thead>
-          <tbody>
-            {row.matchRefs.map((ref) => (
-              <tr key={ref.matchId}>
-                <td>{ref.startedAt ? formatDateTime(ref.startedAt) : "—"}</td>
-                <td>
-                  <EventLabel eventName={ref.eventName ?? ""} lookup={setLookup} />
-                </td>
-                <td>{ref.opponent || "—"}</td>
-                <td>
-                  <ResultPill result={ref.result} />
-                </td>
-                <td>{pct(ref.pctObserved)}</td>
-                <td>
-                  <select
-                    className="matchup-archetype-select"
-                    value={ref.archetypeSource === "manual" ? ref.archetype : "auto"}
-                    disabled={overrideMutation.isPending}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      overrideMutation.mutate({
-                        matchId: ref.matchId,
-                        archetype: value === "auto" ? "" : value,
-                      });
-                    }}
-                    aria-label={`Opponent archetype for match against ${ref.opponent || "unknown opponent"}`}
-                  >
-                    <option value="auto">Auto: {archetypeLabel(ref.archetype)}</option>
-                    {Object.entries(ARCHETYPE_LABELS).map(([key, label]) => (
-                      <option key={key} value={key}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td>
-                  {preserveBreadcrumbContext ? (
-                    <ContextualLink className="text-link" to={`/matches/${ref.matchId}`}>
-                      View
-                    </ContextualLink>
-                  ) : (
-                    <Link className="text-link" to={`/matches/${ref.matchId}`}>
-                      View
-                    </Link>
-                  )}
-                </td>
+      {refsQuery.isLoading ? (
+        <StatusMessage>Loading matches…</StatusMessage>
+      ) : refsQuery.error ? (
+        <StatusMessage tone="error">{(refsQuery.error as Error).message}</StatusMessage>
+      ) : matchRefs.length === 0 ? (
+        <StatusMessage>No matches recorded for this matchup.</StatusMessage>
+      ) : (
+        <div className="table-wrap">
+          <table className="data-table matchup-matches-table">
+            <thead>
+              <tr>
+                <th>Started</th>
+                <th>Event</th>
+                <th>Opponent</th>
+                <th>Result</th>
+                <th>Observed</th>
+                <th>Archetype</th>
+                <th>Details</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {matchRefs.map((ref) => (
+                <tr key={ref.matchId}>
+                  <td>{ref.startedAt ? formatDateTime(ref.startedAt) : "—"}</td>
+                  <td>
+                    <EventLabel eventName={ref.eventName ?? ""} lookup={setLookup} />
+                  </td>
+                  <td>{ref.opponent || "—"}</td>
+                  <td>
+                    <ResultPill result={ref.result} />
+                  </td>
+                  <td>{pct(ref.pctObserved)}</td>
+                  <td>
+                    <select
+                      className="matchup-archetype-select"
+                      value={ref.archetypeSource === "manual" ? ref.archetype : "auto"}
+                      disabled={overrideMutation.isPending}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        overrideMutation.mutate({
+                          matchId: ref.matchId,
+                          archetype: value === "auto" ? "" : value,
+                        });
+                      }}
+                      aria-label={`Opponent archetype for match against ${ref.opponent || "unknown opponent"}`}
+                    >
+                      <option value="auto">Auto: {archetypeLabel(ref.archetype)}</option>
+                      {Object.entries(ARCHETYPE_LABELS).map(([key, label]) => (
+                        <option key={key} value={key}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    {preserveBreadcrumbContext ? (
+                      <ContextualLink className="text-link" to={`/matches/${ref.matchId}`}>
+                        View
+                      </ContextualLink>
+                    ) : (
+                      <Link className="text-link" to={`/matches/${ref.matchId}`}>
+                        View
+                      </Link>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </article>
   );
 }
@@ -304,7 +339,7 @@ export function DeckMatchupsPanel({ deckId }: { deckId: number }) {
         {archetypes.map((key) => {
           const rows = deck.rows.filter((row) => row.archetype === key);
           const record = sumRecords(rows.map((row) => row.matches));
-          const matchCount = rows.reduce((sum, row) => sum + row.matchRefs.length, 0);
+          const matchCount = rows.reduce((sum, row) => sum + row.matchCount, 0);
           const isSelected = selectedArchetype === key;
           return (
             <button
@@ -330,6 +365,7 @@ export function DeckMatchupsPanel({ deckId }: { deckId: number }) {
             <MatchupRowDetail
               contextLabel={deck.deckName}
               preserveBreadcrumbContext
+              refs={{ kind: "deck", deckId, colorsKey: row.colorsKey, archetype: row.archetype }}
               row={row}
               key={`${row.colorsKey}-${row.archetype}`}
             />
@@ -506,7 +542,7 @@ export function LimitedMatchupsPanel({
                       onClick={() =>
                         setSelection(isSelected ? null : { setCode: set.setCode, colorsKey: row.colorsKey })
                       }
-                      title={`vs ${matchupRowTitle(row)}: ${row.matchRefs.length} matches`}
+                      title={`vs ${matchupRowTitle(row)}: ${row.matchCount} matches`}
                     >
                       <span className="matchup-tile-label">
                         <DeckColorIdentity colors={row.colors} known={row.colors.length > 0} />
@@ -514,7 +550,7 @@ export function LimitedMatchupsPanel({
                       <span className={`deck-analytics-stat ${recordCellTone(row.matches)}`}>
                         <strong>{recordLabel(row.matches)}</strong>
                         <span>
-                          {winRate(row.matches) == null ? `${row.matchRefs.length} matches` : pct(winRate(row.matches)!)}
+                          {winRate(row.matches) == null ? `${row.matchCount} matches` : pct(winRate(row.matches)!)}
                         </span>
                       </span>
                     </button>
@@ -526,6 +562,12 @@ export function LimitedMatchupsPanel({
                 <div className="matchup-detail-list">
                   <MatchupRowDetail
                     contextLabel={setInfo?.name ?? set.setCode ?? "Limited"}
+                    refs={{
+                      kind: "limited",
+                      setCode: set.setCode,
+                      colorsKey: selectedRow.colorsKey,
+                      group: activeGroupKey ?? null,
+                    }}
                     row={selectedRow}
                   />
                 </div>

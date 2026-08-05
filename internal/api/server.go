@@ -65,6 +65,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/matches", s.handleMatches)
 	mux.HandleFunc("/api/matches/", s.handleMatchDetail)
 	mux.HandleFunc("/api/limited/matchups", s.handleLimitedMatchups)
+	mux.HandleFunc("/api/limited/matchups/refs", s.handleLimitedMatchupRefs)
 	mux.HandleFunc("/api/decks", s.handleDecks)
 	mux.HandleFunc("/api/decks/", s.handleDeckDetail)
 	mux.HandleFunc("/api/drafts", s.handleDrafts)
@@ -585,13 +586,25 @@ func (s *Server) handleEconomy(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) handleMatches(w http.ResponseWriter, r *http.Request) {
-	limit := int64(200)
-	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
-		if v, err := strconv.ParseInt(raw, 10, 64); err == nil {
-			limit = v
-		}
+const (
+	matchListDefaultLimit = 200
+	// matchListMaxLimit caps the page at roughly a 10 MB JSON payload, which is
+	// also the point where the browser table stops being usable.
+	matchListMaxLimit = 20000
+)
+
+// parseMatchListLimit keeps a caller-supplied page size inside a range the
+// store can preallocate for and the browser can still render.
+func parseMatchListLimit(raw string) int64 {
+	v, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	if err != nil || v < 1 {
+		return matchListDefaultLimit
 	}
+	return min(v, matchListMaxLimit)
+}
+
+func (s *Server) handleMatches(w http.ResponseWriter, r *http.Request) {
+	limit := parseMatchListLimit(r.URL.Query().Get("limit"))
 	event := strings.TrimSpace(r.URL.Query().Get("event"))
 	result := strings.TrimSpace(r.URL.Query().Get("result"))
 
@@ -600,8 +613,13 @@ func (s *Server) handleMatches(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	total, err := s.store.CountMatches(r.Context(), event, result)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	s.enrichMatchDeckColors(r.Context(), rows)
-	writeJSON(w, http.StatusOK, rows)
+	writeJSON(w, http.StatusOK, model.MatchListResponse{Matches: rows, Total: total})
 }
 
 func (s *Server) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
@@ -733,6 +751,10 @@ func (s *Server) handleDeckDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) == 2 && parts[1] == "matchups" {
 		s.handleDeckMatchups(w, r, id)
+		return
+	}
+	if len(parts) == 3 && parts[1] == "matchups" && parts[2] == "refs" {
+		s.handleDeckMatchupRefs(w, r, id)
 		return
 	}
 	if len(parts) == 3 && parts[1] == "analytics" && parts[2] == "games" {

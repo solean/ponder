@@ -40,6 +40,13 @@ type MatchRow struct {
 	OpponentDeckColorsKnown bool     `json:"opponentDeckColorsKnown"`
 }
 
+// MatchListResponse carries the total alongside the page so the UI can say
+// "showing N of M" instead of presenting the limit as the user's total.
+type MatchListResponse struct {
+	Matches []MatchRow `json:"matches"`
+	Total   int64      `json:"total"`
+}
+
 type OpponentObservedCardRow struct {
 	CardID   int64  `json:"cardId"`
 	Quantity int64  `json:"quantity"`
@@ -400,7 +407,10 @@ type MatchupRow struct {
 	Confidence         string                `json:"confidence"`
 	TopObservedCards   []MatchupObservedCard `json:"topObservedCards"`
 	LossSkewedCards    []MatchupObservedCard `json:"lossSkewedCards"`
-	MatchRefs          []MatchupMatchRef     `json:"matchRefs"`
+	// MatchCount counts every match pooled into this row, including ones with
+	// an unknown result that Matches.Games skips.
+	MatchCount int64             `json:"matchCount"`
+	MatchRefs  []MatchupMatchRef `json:"matchRefs,omitempty"`
 }
 
 type MatchupDeck struct {

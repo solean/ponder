@@ -34,6 +34,7 @@ import { useEventSets } from "../lib/useEventSets";
 
 const RECENT_MATCH_COUNT = 8;
 const FORM_WINDOW = 10;
+const MATCH_WINDOW = 500;
 const ACTIVITY_DAYS = 365;
 
 type Tone = "positive" | "negative" | "neutral";
@@ -456,8 +457,8 @@ export function OverviewPage() {
     queryFn: api.overview,
   });
   const matchesQuery = useQuery({
-    queryKey: ["matches", 500],
-    queryFn: () => api.matches(500),
+    queryKey: ["matches", MATCH_WINDOW],
+    queryFn: () => api.matches(MATCH_WINDOW),
   });
   const decksQuery = useQuery({
     queryKey: ["decks", "all"],
@@ -474,7 +475,7 @@ export function OverviewPage() {
   });
 
   const allMatches = useMemo(
-    () => sortMatchesDesc(matchesQuery.data ?? data?.recent ?? []),
+    () => sortMatchesDesc(matchesQuery.data?.matches ?? data?.recent ?? []),
     [matchesQuery.data, data?.recent],
   );
   const drafts = useMemo(
@@ -563,12 +564,14 @@ export function OverviewPage() {
   const recentDrafts = drafts.slice(0, 3);
 
   const shownMatches = data.recent.slice(0, RECENT_MATCH_COUNT);
-  const averagesLabel = [
+  const averageParts = [
     averages.seconds != null ? formatDuration(averages.seconds) : null,
     averages.turns != null ? `${averages.turns} turns` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  ].filter(Boolean);
+  // The averages only ever see the fetched window, so the label says so rather
+  // than reading as a lifetime figure.
+  const averagesLabel =
+    averageParts.length > 0 ? `${averageParts.join(" · ")} · last ${allMatches.length}` : "";
 
   return (
     <div className="stack-lg">

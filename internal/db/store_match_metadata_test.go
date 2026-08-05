@@ -443,3 +443,70 @@ func TestLinkMatchToDeckByArenaDeckIDOverridesEventNameGuess(t *testing.T) {
 		t.Fatalf("match_decks rows = %d, want 1", links)
 	}
 }
+
+func TestCountMatchesAppliesEventAndResultFilters(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database := openTempSQLiteDB(t)
+	if err := Init(ctx, database); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	store := NewStore(database)
+	tx, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+
+	seed := []struct {
+		arenaID       string
+		eventName     string
+		winningTeamID int64
+	}{
+		{"ladder-win-1", "Ladder", 1},
+		{"ladder-win-2", "Ladder", 1},
+		{"ladder-loss", "Ladder", 2},
+		{"draft-win", "PremierDraft_ABC", 1},
+	}
+	for _, match := range seed {
+		if _, err := store.UpsertMatchStart(ctx, tx, match.arenaID, match.eventName, 1, "2026-03-12T19:06:52Z"); err != nil {
+			t.Fatalf("UpsertMatchStart(%s): %v", match.arenaID, err)
+		}
+		if _, _, _, err := store.UpdateMatchEnd(ctx, tx, match.arenaID, 1, match.winningTeamID, 9, 420, "Game", "2026-03-12T19:13:52Z"); err != nil {
+			t.Fatalf("UpdateMatchEnd(%s): %v", match.arenaID, err)
+		}
+	}
+	// Never ended, so it keeps result "unknown" and only shows up unfiltered.
+	if _, err := store.UpsertMatchStart(ctx, tx, "ladder-open", "Ladder", 1, "2026-03-12T21:06:52Z"); err != nil {
+		t.Fatalf("UpsertMatchStart(ladder-open): %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	cases := []struct {
+		name      string
+		eventName string
+		result    string
+		want      int64
+	}{
+		{"no filter counts every match", "", "", 5},
+		{"event filter", "Ladder", "", 4},
+		{"result filter", "", "win", 3},
+		{"event and result filter", "Ladder", "win", 2},
+		{"unmatched event", "Nonexistent", "", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			total, err := store.CountMatches(ctx, tc.eventName, tc.result)
+			if err != nil {
+				t.Fatalf("CountMatches(%q, %q): %v", tc.eventName, tc.result, err)
+			}
+			if total != tc.want {
+				t.Fatalf("CountMatches(%q, %q) = %d, want %d", tc.eventName, tc.result, total, tc.want)
+			}
+		})
+	}
+}

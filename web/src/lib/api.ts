@@ -11,10 +11,11 @@ import type {
   DraftSession,
   EconomyHistory,
   GameReview,
-  Match,
   MatchCardPlay,
   MatchDetail,
+  MatchList,
   MatchReplayFrame,
+  MatchupMatchRef,
   DeckMatchupsResponse,
   LimitedMatchupsResponse,
   Overview,
@@ -57,7 +58,7 @@ export const api = {
   overview: () => getJSON<Overview>("/api/overview"),
   rankHistory: () => getJSON<RankHistoryPoint[]>("/api/rank-history"),
   economy: () => getJSON<EconomyHistory>("/api/economy"),
-  matches: (limit = 500) => getJSON<Match[]>(`/api/matches?limit=${limit}`),
+  matches: (limit = 500) => getJSON<MatchList>(`/api/matches?limit=${limit}`),
   matchDetail: (matchId: number) => getJSON<MatchDetail>(`/api/matches/${matchId}`),
   matchTimeline: (matchId: number) => getJSON<MatchCardPlay[]>(`/api/matches/${matchId}/timeline`),
   matchReplay: (matchId: number) => getJSON<MatchReplayFrame[]>(`/api/matches/${matchId}/replay`),
@@ -96,7 +97,17 @@ export const api = {
     );
   },
   deckMatchups: (deckId: number) => getJSON<DeckMatchupsResponse>(`/api/decks/${deckId}/matchups`),
+  deckMatchupRefs: (deckId: number, colorsKey: string, archetype: string) =>
+    getJSON<MatchupMatchRef[]>(
+      `/api/decks/${deckId}/matchups/refs?colors=${encodeURIComponent(colorsKey)}&archetype=${encodeURIComponent(archetype)}`,
+    ),
   limitedMatchups: () => getJSON<LimitedMatchupsResponse>("/api/limited/matchups"),
+  limitedMatchupRefs: (setCode: string, colorsKey: string, group: string | null) => {
+    const search = new URLSearchParams({ set: setCode, colors: colorsKey });
+    // Absent group = the set-level rows; an empty group is the unknown-own-colors bucket.
+    if (group != null) search.set("group", group);
+    return getJSON<MatchupMatchRef[]>(`/api/limited/matchups/refs?${search.toString()}`);
+  },
   setOpponentArchetype: (matchId: number, archetype: string) =>
     postJSON<{ status: string; archetype: string }>(`/api/matches/${matchId}/opponent-archetype`, { archetype }),
   drafts: () => getJSON<DraftSession[]>("/api/drafts"),

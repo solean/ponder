@@ -486,13 +486,64 @@ func (s *Server) handleDeckMatchups(w http.ResponseWriter, r *http.Request, deck
 	full := buildMatchupsResponse(inputs.matchRows, inputs.observedByMatch, inputs.facts,
 		inputs.names, inputs.gameSummaries, inputs.overrides)
 	out := model.DeckMatchupsResponse{Archetypes: matchupArchetypes}
-	for index := range full.Decks {
-		if full.Decks[index].DeckID == deckID {
-			out.Deck = &full.Decks[index]
-			break
-		}
+	out.Deck = findMatchupDeck(full.Decks, deckID)
+	if out.Deck != nil {
+		clearMatchRefs(out.Deck.Rows)
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// handleDeckMatchupRefs serves the individual matches behind one matchup row,
+// for the expanded drill-down table.
+func (s *Server) handleDeckMatchupRefs(w http.ResponseWriter, r *http.Request, deckID int64) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	inputs, err := s.loadMatchupInputs(r.Context(), deckID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// Rebuilding through the same builder is what guarantees the rows here
+	// group identically to the summary the client is drilling into.
+	full := buildMatchupsResponse(inputs.matchRows, inputs.observedByMatch, inputs.facts,
+		inputs.names, inputs.gameSummaries, inputs.overrides)
+	query := r.URL.Query()
+	writeJSON(w, http.StatusOK, deckMatchupRefs(findMatchupDeck(full.Decks, deckID),
+		query.Get("colors"), query.Get("archetype")))
+}
+
+func findMatchupDeck(decks []model.MatchupDeck, deckID int64) *model.MatchupDeck {
+	for index := range decks {
+		if decks[index].DeckID == deckID {
+			return &decks[index]
+		}
+	}
+	return nil
+}
+
+// clearMatchRefs drops the per-match refs from a set of summary rows. The refs
+// grow with the match count and dominate the response size, while only the
+// expanded drill-down ever reads them.
+func clearMatchRefs(rows []model.MatchupRow) {
+	for index := range rows {
+		rows[index].MatchRefs = nil
+	}
+}
+
+// deckMatchupRefs selects one (colors × archetype) row's refs; a stale
+// drill-down request after a manual override reclassified the match is an
+// empty result, not an error.
+func deckMatchupRefs(deck *model.MatchupDeck, colorsKey, archetype string) []model.MatchupMatchRef {
+	if deck != nil {
+		for _, row := range deck.Rows {
+			if row.ColorsKey == colorsKey && row.Archetype == archetype {
+				return row.MatchRefs
+			}
+		}
+	}
+	return []model.MatchupMatchRef{}
 }
 
 // ownDeckColors is the player's own deck color identity in one match.
@@ -537,15 +588,84 @@ func (s *Server) handleLimitedMatchups(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	inputs, err := s.loadMatchupInputs(r.Context(), 0)
+	out, err := s.buildLimitedMatchups(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	ownColorsByMatch := s.resolveOwnDeckColors(r.Context(), inputs.matchRows)
-	writeJSON(w, http.StatusOK, buildLimitedMatchupsResponse(inputs.matchRows,
-		inputs.observedByMatch, inputs.facts, inputs.names, inputs.gameSummaries,
-		inputs.overrides, ownColorsByMatch))
+	for setIndex := range out.Sets {
+		set := &out.Sets[setIndex]
+		clearMatchRefs(set.Rows)
+		for groupIndex := range set.ColorGroups {
+			clearMatchRefs(set.ColorGroups[groupIndex].Rows)
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// handleLimitedMatchupRefs serves the individual matches behind one limited
+// matchup cell, for the expanded drill-down table.
+func (s *Server) handleLimitedMatchupRefs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	// Rebuilding through the same builder is what guarantees these rows group
+	// identically to the summary the client is drilling into.
+	out, err := s.buildLimitedMatchups(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	query := r.URL.Query()
+	writeJSON(w, http.StatusOK, limitedMatchupRefs(out, query.Get("set"),
+		query.Get("group"), query.Has("group"), query.Get("colors")))
+}
+
+func (s *Server) buildLimitedMatchups(ctx context.Context) (model.LimitedMatchupsResponse, error) {
+	inputs, err := s.loadMatchupInputs(ctx, 0)
+	if err != nil {
+		return model.LimitedMatchupsResponse{}, err
+	}
+	ownColorsByMatch := s.resolveOwnDeckColors(ctx, inputs.matchRows)
+	return buildLimitedMatchupsResponse(inputs.matchRows, inputs.observedByMatch,
+		inputs.facts, inputs.names, inputs.gameSummaries, inputs.overrides,
+		ownColorsByMatch), nil
+}
+
+// limitedMatchupRefs selects one cell's refs. Every key can legitimately be
+// the empty string — the unknown set, unknown own deck colors, an opponent
+// whose colors were never observed — so the own-colors axis is selected by
+// hasGroup rather than by a blank value.
+func limitedMatchupRefs(
+	resp model.LimitedMatchupsResponse,
+	setCode string,
+	groupKey string,
+	hasGroup bool,
+	colorsKey string,
+) []model.MatchupMatchRef {
+	for _, set := range resp.Sets {
+		if set.SetCode != setCode {
+			continue
+		}
+		rows := set.Rows
+		if hasGroup {
+			rows = nil
+			for _, group := range set.ColorGroups {
+				if group.ColorsKey == groupKey {
+					rows = group.Rows
+					break
+				}
+			}
+		}
+		for _, row := range rows {
+			if row.ColorsKey == colorsKey {
+				return row.MatchRefs
+			}
+		}
+		break
+	}
+	return []model.MatchupMatchRef{}
 }
 
 type matchupCellKey struct {
@@ -654,6 +774,7 @@ func (cell *matchupCellState) addMatch(
 // loss-skewed cards) and returns the completed row.
 func (cell *matchupCellState) finalize() model.MatchupRow {
 	matchTotal := len(cell.row.MatchRefs)
+	cell.row.MatchCount = int64(matchTotal)
 	if matchTotal > 0 {
 		cell.row.AvgPctObserved = cell.pctSum / float64(matchTotal)
 	}
@@ -739,7 +860,7 @@ func sortMatchupRows(rows []model.MatchupRow) {
 		if rows[i].Games.Games != rows[j].Games.Games {
 			return rows[i].Games.Games > rows[j].Games.Games
 		}
-		return len(rows[i].MatchRefs) > len(rows[j].MatchRefs)
+		return rows[i].MatchCount > rows[j].MatchCount
 	})
 }
 

@@ -24,6 +24,10 @@ func isBasicLandName(name string) bool {
 	return ok
 }
 
+// matchListPreallocMax caps the row-slice prealloc hint so a caller-supplied
+// limit cannot size a huge allocation up front; append grows past it as needed.
+const matchListPreallocMax = 512
+
 const matchBestOfSQL = `
 	CASE
 		WHEN LOWER(COALESCE(m.format, '')) IN ('bo3', 'bestofthree', 'best-of-three') THEN 'bo3'
@@ -407,7 +411,7 @@ func (s *Store) ListMatches(ctx context.Context, limit int64, eventName, result 
 	}
 	defer rows.Close()
 
-	resultRows := make([]model.MatchRow, 0, limit)
+	resultRows := make([]model.MatchRow, 0, min(limit, matchListPreallocMax))
 	for rows.Next() {
 		var r model.MatchRow
 		if err := rows.Scan(
@@ -440,6 +444,20 @@ func (s *Store) ListMatches(ctx context.Context, limit int64, eventName, result 
 	return resultRows, nil
 }
 
+func (s *Store) CountMatches(ctx context.Context, eventName, result string) (int64, error) {
+	var total int64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM matches m
+		WHERE (? = '' OR m.event_name = ?)
+		  AND (? = '' OR m.result = ?)
+	`, eventName, eventName, result, result).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("count matches: %w", err)
+	}
+	return total, nil
+}
+
 func (s *Store) ListMatchDeckCardQuantities(ctx context.Context, matchIDs []int64) (map[int64]map[int64]int64, error) {
 	out := make(map[int64]map[int64]int64)
 	for _, batch := range int64Batches(matchIDs, sqliteInClauseBatchSize) {
@@ -454,7 +472,8 @@ func (s *Store) ListMatchDeckCardQuantities(ctx context.Context, matchIDs []int6
 			WITH selected_decks AS (
 				SELECT md.match_id, md.deck_id, md.deck_version_id
 				FROM match_decks md
-				WHERE md.id = (
+				WHERE md.match_id IN (%s)
+				  AND md.id = (
 					SELECT first_md.id
 					FROM match_decks first_md
 					WHERE first_md.match_id = md.match_id
@@ -472,11 +491,9 @@ func (s *Store) ListMatchDeckCardQuantities(ctx context.Context, matchIDs []int6
 				JOIN deck_cards dc ON dc.deck_id = sd.deck_id
 				WHERE sd.deck_version_id IS NULL AND dc.section = 'main'
 			)
-			SELECT m.id, sc.card_id, MAX(sc.quantity) AS quantity
-			FROM matches m
-			JOIN selected_cards sc ON sc.match_id = m.id
-			WHERE m.id IN (%s)
-			GROUP BY m.id, sc.card_id
+			SELECT sc.match_id, sc.card_id, MAX(sc.quantity) AS quantity
+			FROM selected_cards sc
+			GROUP BY sc.match_id, sc.card_id
 		`, strings.Join(placeholders, ","))
 
 		rows, err := s.db.QueryContext(ctx, query, args...)

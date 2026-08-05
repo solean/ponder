@@ -93,7 +93,7 @@ API endpoints:
 - `GET /api/health`
 - `GET /api/overview`
 - `GET /api/economy`
-- `GET /api/matches?limit=500`
+- `GET /api/matches?limit=500` → `{ "matches": [...], "total": N }`; `limit` defaults to 200 and is clamped to 20000, `total` ignores it so the UI can say "showing N of M"
 - `GET /api/matches/:id`
 - `GET /api/matches/:id/timeline`
 - `GET /api/decks` (constructed decks only)
@@ -102,6 +102,15 @@ API endpoints:
 - `GET /api/decks/:id`
 - `GET /api/drafts`
 - `GET /api/drafts/:id/picks`
+- `GET /api/decks/:id/matchups`
+- `GET /api/decks/:id/matchups/refs?colors=UR&archetype=control`
+- `GET /api/limited/matchups`
+- `GET /api/limited/matchups/refs?set=TMT&colors=BG[&group=UBG]`
+
+Matchup summaries carry a `matchCount` per row but omit the per-match
+`matchRefs` list, which grows with the match count; the `/refs` endpoints serve
+one row's matches for the expanded drill-down. Omitting `group` selects the
+set-level rows, while an empty `group=` selects the unknown-own-colors bucket.
 
 ## Replay Storage Compaction
 

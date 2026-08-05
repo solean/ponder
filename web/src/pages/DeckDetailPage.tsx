@@ -57,7 +57,7 @@ type VisualCategory =
   | "lands"
   | "other";
 
-type MainboardCategory = "creatures" | "spells" | "artifacts_enchantments" | "lands";
+type MainboardCategory = "creatures" | "spells" | "artifacts" | "enchantments" | "lands";
 
 type MainboardDeckListCard = DeckListCard & {
   manaCost: string;
@@ -99,8 +99,8 @@ type DeckVisualGroup = {
   cards: MainboardDeckListCard[];
 };
 
-const MAINBOARD_CATEGORY_ORDER: MainboardCategory[] = ["creatures", "spells", "artifacts_enchantments", "lands"];
-const MAINBOARD_SKELETON_CATEGORY_ORDER: MainboardCategory[] = ["creatures", "spells", "lands"];
+const MAINBOARD_CATEGORY_ORDER: MainboardCategory[] = ["creatures", "spells", "artifacts", "enchantments", "lands"];
+const MAINBOARD_SKELETON_CATEGORY_ORDER: MainboardCategory[] = ["creatures", "spells", "artifacts", "enchantments", "lands"];
 const VISUAL_CATEGORY_LABELS: Record<VisualCategory, string> = {
   creatures: "Creatures",
   planeswalkers: "Planeswalkers",
@@ -177,8 +177,11 @@ function classifyMainboardCard(typeLine?: string): MainboardCategory {
   if (lower.includes("creature")) {
     return "creatures";
   }
-  if (lower.includes("artifact") || lower.includes("enchantment")) {
-    return "artifacts_enchantments";
+  if (lower.includes("artifact")) {
+    return "artifacts";
+  }
+  if (lower.includes("enchantment")) {
+    return "enchantments";
   }
   return "spells";
 }
@@ -271,9 +274,6 @@ function buildVisualGroups(cards: MainboardDeckListCard[]): DeckVisualGroup[] {
 }
 
 function formatSectionLabel(section: string): string {
-  if (section === "artifacts_enchantments") {
-    return "Artifacts + Enchantments";
-  }
   const trimmed = section.trim();
   if (!trimmed) {
     return "Other";
@@ -1244,7 +1244,8 @@ export function DeckDetailPage() {
     const byCategory: Record<MainboardCategory, MainboardDeckListCard[]> = {
       creatures: [],
       spells: [],
-      artifacts_enchantments: [],
+      artifacts: [],
+      enchantments: [],
       lands: [],
     };
 
@@ -1363,6 +1364,94 @@ export function DeckDetailPage() {
   const isCardMetadataLoading = isMainboardMetadataLoading || isSideboardMetadataLoading;
   const mainboardSkeletonRows = clampSkeletonRows(Math.ceil(mainboardCards.length / MAINBOARD_CATEGORY_ORDER.length), 6);
   const sideboardSkeletonRows = clampSkeletonRows(sideboardCards.length, 5);
+  const renderMainboardCategory = (category: MainboardCategory): ReactNode => {
+    const categoryCards = groupedMainboardCards[category];
+    if (categoryCards.length === 0) {
+      return null;
+    }
+    return (
+      <article className="deck-card" key={`main-${category}`}>
+        <h4>
+          {formatSectionLabel(category)} ({sectionTotal(categoryCards)})
+        </h4>
+        <ul>
+          {categoryCards.map((card) => (
+            <li key={`main-${category}-${card.cardId}`}>
+              <span className="deck-card-qty">{card.quantity}x</span>
+              <DeckCardPreviewName card={card} />
+              <span className="deck-card-mana">
+                <ManaCostDisplay manaCost={card.manaCost} />
+                <RarityDot rarity={card.rarity} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      </article>
+    );
+  };
+  const renderSideboardContent = (mode: DeckDisplayMode): ReactNode => {
+    if (sideboardCards.length === 0) {
+      return null;
+    }
+    if (mode === "curve") {
+      return isSideboardMetadataLoading ? (
+        <DeckCurveSkeleton title="Sideboard" columnCount={4} />
+      ) : (
+        <DeckCurveSection title="Sideboard" cards={enrichedSideboardCards} />
+      );
+    }
+    if (mode === "visual") {
+      return isSideboardMetadataLoading ? (
+        <DeckVisualSkeleton title="Sideboard" groupCount={1} />
+      ) : (
+        <DeckVisualSection title="Sideboard" cards={enrichedSideboardCards} />
+      );
+    }
+    return isSideboardMetadataLoading ? (
+      <DeckSectionSkeleton rowCount={sideboardSkeletonRows} />
+    ) : (
+      <article className="deck-card deck-card-sideboard">
+        <h4>
+          {formatSectionLabel("sideboard")} ({sectionTotal(enrichedSideboardCards)})
+        </h4>
+        <ul>
+          {enrichedSideboardCards.map((card) => (
+            <li key={`sideboard-${card.cardId}`}>
+              <span className="deck-card-qty">{card.quantity}x</span>
+              <DeckCardPreviewName card={card} placementMode="force-right" />
+              <span className="deck-card-mana">
+                <ManaCostDisplay manaCost={card.manaCost} />
+                <RarityDot rarity={card.rarity} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      </article>
+    );
+  };
+
+  const renderAuxiliaryContent = (): ReactNode =>
+    auxiliarySections.length > 0 ? (
+      <div className="grid-cards">
+        {auxiliarySections.map(([section, sectionCards]) => (
+          <article className="deck-card" key={section}>
+            <h4>
+              {formatSectionLabel(section)} ({sectionTotal(sectionCards)})
+            </h4>
+            <ul>
+              {sectionCards.map((card) => (
+                <li key={`${section}-${card.cardId}`}>
+                  <span className="deck-card-qty">{card.quantity}x</span>
+                  <DeckCardPreviewName card={card} />
+                </li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </div>
+    ) : null;
+
+
 
   useBreadcrumbLabel(data ? (data.name || `Deck #${deckId}`) : null);
 
@@ -1501,97 +1590,41 @@ export function DeckDetailPage() {
               <DeckVisualSection title="Mainboard" cards={enrichedMainboardCards} groupByType />
             )
           ) : (
-            isMainboardMetadataLoading ? (
-              <div className="grid-cards deck-mainboard-skeleton-grid">
-                {MAINBOARD_SKELETON_CATEGORY_ORDER.map((category) => (
-                  <DeckSectionSkeleton key={`main-loading-${category}`} rowCount={mainboardSkeletonRows} />
-                ))}
+            <div className="decklist-columns">
+              <div className="decklist-column">
+                {isMainboardMetadataLoading ? (
+                  <div className="grid-cards deck-mainboard-skeleton-grid">
+                    {MAINBOARD_SKELETON_CATEGORY_ORDER.filter((category) => category !== "lands").map((category) => (
+                      <DeckSectionSkeleton key={`main-loading-${category}`} rowCount={mainboardSkeletonRows} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid-cards">
+                    {MAINBOARD_CATEGORY_ORDER.filter((category) => category !== "lands").map(
+                      renderMainboardCategory,
+                    )}
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="grid-cards">
-                {MAINBOARD_CATEGORY_ORDER.map((category) => {
-                  const categoryCards = groupedMainboardCards[category];
-                  if (categoryCards.length === 0) {
-                    return null;
-                  }
-                  return (
-                    <article className="deck-card" key={`main-${category}`}>
-                      <h4>
-                        {formatSectionLabel(category)} ({sectionTotal(categoryCards)})
-                      </h4>
-                      <ul>
-                        {categoryCards.map((card) => (
-                          <li key={`main-${category}-${card.cardId}`}>
-                            <span className="deck-card-qty">{card.quantity}x</span>
-                            <DeckCardPreviewName card={card} />
-                            <span className="deck-card-mana">
-                              <ManaCostDisplay manaCost={card.manaCost} />
-                              <RarityDot rarity={card.rarity} />
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </article>
-                  );
-                })}
+              <div className="decklist-column">
+                {isMainboardMetadataLoading ? (
+                  <DeckSectionSkeleton rowCount={mainboardSkeletonRows} />
+                ) : (
+                  <div className="grid-cards">
+                    {MAINBOARD_CATEGORY_ORDER.filter((category) => category === "lands").map(renderMainboardCategory)}
+                  </div>
+                )}
+                {renderSideboardContent("list")}
+                {renderAuxiliaryContent()}
               </div>
-            )
+            </div>
           )}
 
-          {sideboardCards.length > 0 ? (
-            deckDisplayMode === "curve" ? (
-              isSideboardMetadataLoading ? (
-                <DeckCurveSkeleton title="Sideboard" columnCount={4} />
-              ) : (
-                <DeckCurveSection title="Sideboard" cards={enrichedSideboardCards} />
-              )
-            ) : deckDisplayMode === "visual" ? (
-              isSideboardMetadataLoading ? (
-                <DeckVisualSkeleton title="Sideboard" groupCount={1} />
-              ) : (
-                <DeckVisualSection title="Sideboard" cards={enrichedSideboardCards} />
-              )
-            ) : isSideboardMetadataLoading ? (
-              <DeckSectionSkeleton rowCount={sideboardSkeletonRows} />
-            ) : (
-              <article className="deck-card deck-card-sideboard">
-                <h4>
-                  {formatSectionLabel("sideboard")} ({sectionTotal(enrichedSideboardCards)})
-                </h4>
-                <ul>
-                  {enrichedSideboardCards.map((card) => (
-                    <li key={`sideboard-${card.cardId}`}>
-                      <span className="deck-card-qty">{card.quantity}x</span>
-                      <DeckCardPreviewName card={card} placementMode="force-right" />
-                      <span className="deck-card-mana">
-                        <ManaCostDisplay manaCost={card.manaCost} />
-                        <RarityDot rarity={card.rarity} />
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            )
-          ) : null}
-
-          {auxiliarySections.length > 0 ? (
-            <div className="grid-cards">
-              {auxiliarySections.map(([section, sectionCards]) => (
-                <article className="deck-card" key={section}>
-                  <h4>
-                    {formatSectionLabel(section)} ({sectionTotal(sectionCards)})
-                  </h4>
-                  <ul>
-                    {sectionCards.map((card) => (
-                      <li key={`${section}-${card.cardId}`}>
-                        <span className="deck-card-qty">{card.quantity}x</span>
-                        <DeckCardPreviewName card={card} />
-                      </li>
-                    ))}
-                  </ul>
-                </article>
-              ))}
-            </div>
+          {deckDisplayMode !== "list" ? (
+            <>
+              {renderSideboardContent(deckDisplayMode)}
+              {renderAuxiliaryContent()}
+            </>
           ) : null}
         </div>
         {isCardMetadataLoading ? <StatusMessage>Loading deck card details…</StatusMessage> : null}

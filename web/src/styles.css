@@ -6499,6 +6499,23 @@ button.match-replay-zonechip.is-button {
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 0.8rem;
 }
+.decklist-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: start;
+}
+
+.decklist-column {
+  display: grid;
+  gap: 0.8rem;
+  min-width: 0;
+}
+.decklist-column:first-child > .grid-cards {
+  grid-template-columns: 1fr;
+}
+
+
 
 .deck-mainboard-skeleton-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -7987,6 +8004,10 @@ select option {
   .match-replay-button {
     flex: 1 1 12rem;
     min-height: 2.85rem;
+  }
+
+  .decklist-columns {
+    grid-template-columns: 1fr;
   }
 
   .deck-mainboard-skeleton-grid {

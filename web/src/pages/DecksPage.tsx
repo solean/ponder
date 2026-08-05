@@ -9,6 +9,13 @@ import { useEventSets, type SetLookup } from "../lib/useEventSets";
 import { useRowLink } from "../lib/useRowLink";
 import type { DeckSummary } from "../lib/types";
 
+type WinRateTone = "positive" | "negative" | "neutral";
+
+function toneForWinRate(rate: number): WinRateTone {
+  const displayed = Number((rate * 100).toFixed(1));
+  return displayed > 50 ? "positive" : displayed < 50 ? "negative" : "neutral";
+}
+
 function DeckRow({ deck, setLookup }: { deck: DeckSummary; setLookup: SetLookup }) {
   const rowLink = useRowLink(`/decks/${deck.deckId}`);
   return (
@@ -25,7 +32,11 @@ function DeckRow({ deck, setLookup }: { deck: DeckSummary; setLookup: SetLookup 
       <td>{deck.matches}</td>
       <td>{deck.wins}</td>
       <td>{deck.losses}</td>
-      <td>{pct(deck.winRate)}</td>
+      <td>
+        <strong className={`win-rate win-rate--${toneForWinRate(deck.winRate)}`}>
+          {pct(deck.winRate)}
+        </strong>
+      </td>
     </tr>
   );
 }

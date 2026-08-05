@@ -8979,6 +8979,11 @@ select option {
   line-height: 1;
 }
 
+.win-rate {
+  color: var(--win-rate-color, inherit);
+}
+
+
 .win-rate--positive {
   --win-rate-color: var(--metric-positive-text);
 }

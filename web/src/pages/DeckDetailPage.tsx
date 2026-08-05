@@ -57,7 +57,7 @@ type VisualCategory =
   | "lands"
   | "other";
 
-type MainboardCategory = "creatures" | "spells" | "artifacts" | "enchantments" | "lands";
+type MainboardCategory = "creatures" | "spells" | "artifacts_enchantments" | "lands";
 
 type MainboardDeckListCard = DeckListCard & {
   manaCost: string;
@@ -99,7 +99,7 @@ type DeckVisualGroup = {
   cards: MainboardDeckListCard[];
 };
 
-const MAINBOARD_CATEGORY_ORDER: MainboardCategory[] = ["creatures", "spells", "artifacts", "enchantments", "lands"];
+const MAINBOARD_CATEGORY_ORDER: MainboardCategory[] = ["creatures", "spells", "artifacts_enchantments", "lands"];
 const MAINBOARD_SKELETON_CATEGORY_ORDER: MainboardCategory[] = ["creatures", "spells", "lands"];
 const VISUAL_CATEGORY_LABELS: Record<VisualCategory, string> = {
   creatures: "Creatures",
@@ -177,11 +177,8 @@ function classifyMainboardCard(typeLine?: string): MainboardCategory {
   if (lower.includes("creature")) {
     return "creatures";
   }
-  if (lower.includes("artifact")) {
-    return "artifacts";
-  }
-  if (lower.includes("enchantment")) {
-    return "enchantments";
+  if (lower.includes("artifact") || lower.includes("enchantment")) {
+    return "artifacts_enchantments";
   }
   return "spells";
 }
@@ -274,6 +271,9 @@ function buildVisualGroups(cards: MainboardDeckListCard[]): DeckVisualGroup[] {
 }
 
 function formatSectionLabel(section: string): string {
+  if (section === "artifacts_enchantments") {
+    return "Artifacts + Enchantments";
+  }
   const trimmed = section.trim();
   if (!trimmed) {
     return "Other";
@@ -1244,8 +1244,7 @@ export function DeckDetailPage() {
     const byCategory: Record<MainboardCategory, MainboardDeckListCard[]> = {
       creatures: [],
       spells: [],
-      artifacts: [],
-      enchantments: [],
+      artifacts_enchantments: [],
       lands: [],
     };
 

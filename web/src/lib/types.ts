@@ -658,6 +658,16 @@ export type DeckPrimer = {
   createdAt: string;
   stale: boolean;
 };
+export type GameReview = {
+  matchId: number;
+  gameNumber: number;
+  sourceHash: string;
+  model: string;
+  content: string;
+  createdAt: string;
+  stale: boolean;
+};
+
 
 export type DraftSession = {
   id: number;

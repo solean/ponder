@@ -639,6 +639,9 @@ func (s *Server) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
 			s.enrichMatchCardPlayNames(r.Context(), rows)
 			writeJSON(w, http.StatusOK, rows)
 			return
+		case "review":
+			s.handleGameReview(w, r, id)
+			return
 		case "replay":
 			frames, err := s.store.ListMatchReplayFrames(r.Context(), id)
 			if err != nil {

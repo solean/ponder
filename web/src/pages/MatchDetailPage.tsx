@@ -17,6 +17,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 
 import { EventLabel } from "../components/EventLabel";
+import { GameReviewPanel } from "../components/GameReviewPanel";
 import { ContextualLink, useBreadcrumbLabel } from "../components/Breadcrumbs";
 import { MatchDeckColors } from "../components/MatchDeckColors";
 import { ManaSymbol } from "../components/ManaSymbol";
@@ -4330,9 +4331,47 @@ const MATCH_SECTIONS = [
   { id: "replay", label: "Replay" },
   { id: "analytics", label: "Game Analytics" },
   { id: "opponent", label: "Opponent Cards" },
+  { id: "review", label: "AI Game Review" },
 ] as const;
 
 type MatchSection = (typeof MATCH_SECTIONS)[number]["id"];
+function MatchGameTabs({
+  gameNumbers,
+  activeGameNumber,
+  baseId,
+  ariaLabel,
+  onSelect,
+  onKeyDown,
+}: {
+  gameNumbers: readonly number[];
+  activeGameNumber: number;
+  baseId: string;
+  ariaLabel: string;
+  onSelect: (gameNumber: number) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>, gameNumber: number) => void;
+}) {
+  return (
+    <div className="tabs match-timeline-game-tabs" role="tablist" aria-label={ariaLabel}>
+      {gameNumbers.map((gameNumber) => (
+        <button
+          key={gameNumber}
+          type="button"
+          id={`${baseId}-tab-${gameNumber}`}
+          role="tab"
+          aria-selected={activeGameNumber === gameNumber}
+          aria-controls={`${baseId}-panel-${gameNumber}`}
+          tabIndex={activeGameNumber === gameNumber ? 0 : -1}
+          className={`tab match-timeline-button ${activeGameNumber === gameNumber ? "is-active" : ""}`}
+          onClick={() => onSelect(gameNumber)}
+          onKeyDown={(event) => onKeyDown(event, gameNumber)}
+        >
+          Game {gameNumber}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 
 export function MatchDetailPage() {
   const params = useParams();
@@ -4357,7 +4396,7 @@ export function MatchDetailPage() {
   const replayQuery = useQuery({
     queryKey: ["match-replay", matchId],
     queryFn: () => api.matchReplay(matchId),
-    enabled: isValidMatchID && activeSection === "replay",
+    enabled: isValidMatchID && (activeSection === "replay" || activeSection === "review"),
   });
   const { lookup: setLookup } = useEventSets([query.data?.match.eventName]);
   useBreadcrumbLabel(
@@ -4755,6 +4794,47 @@ export function MatchDetailPage() {
         ))}
       </div>
 
+      {activeSection === "review" ? (
+        <div
+          id={`${sectionTabBaseId}-panel-review`}
+          role="tabpanel"
+          aria-labelledby={`${sectionTabBaseId}-tab-review`}
+          className="stack-lg"
+        >
+          {replayQuery.isPending ? (
+            <StatusMessage>Loading replay frames for review…</StatusMessage>
+          ) : activeTimelineGameNumber !== null ? (
+            <>
+              {showTimelineGameTabs ? (
+                <MatchGameTabs
+                  gameNumbers={timelineGameNumbers}
+                  activeGameNumber={activeTimelineGameNumber}
+                  baseId={timelineGameTabBaseId}
+                  ariaLabel="Review game selector"
+                  onSelect={setSelectedTimelineGameNumber}
+                  onKeyDown={handleTimelineGameTabKeyDown}
+                />
+              ) : null}
+              <div
+                id={showTimelineGameTabs ? activeTimelineGamePanelID : undefined}
+                role={showTimelineGameTabs ? "tabpanel" : undefined}
+                aria-labelledby={showTimelineGameTabs ? activeTimelineGameTabID : undefined}
+              >
+                <GameReviewPanel
+                  key={activeTimelineGameNumber}
+                  matchId={matchId}
+                  gameNumber={activeTimelineGameNumber}
+                  cards={boardPreviewCards}
+                  hasReplayFrames={(activeReplayGroup?.frames.length ?? 0) > 0}
+                />
+              </div>
+            </>
+          ) : (
+            <StatusMessage>No games are available to review for this match.</StatusMessage>
+          )}
+        </div>
+      ) : null}
+
       {activeSection === "analytics" ? (
         <div
           id={`${sectionTabBaseId}-panel-analytics`}
@@ -4776,31 +4856,15 @@ export function MatchDetailPage() {
           <div className="match-timeline-heading">
             <h3>Card Play Timeline</h3>
           </div>
-          {showTimelineGameTabs ? (
-            <div
-              className="tabs match-timeline-game-tabs"
-              role="tablist"
-              aria-label="Timeline game selector"
-            >
-              {timelineGameNumbers.map((gameNumber) => (
-                <button
-                  key={gameNumber}
-                  type="button"
-                  id={`${timelineGameTabBaseId}-tab-${gameNumber}`}
-                  role="tab"
-                  aria-selected={activeTimelineGameNumber === gameNumber}
-                  aria-controls={`${timelineGameTabBaseId}-panel-${gameNumber}`}
-                  tabIndex={activeTimelineGameNumber === gameNumber ? 0 : -1}
-                  className={`tab match-timeline-button ${activeTimelineGameNumber === gameNumber ? "is-active" : ""}`}
-                  onClick={() => setSelectedTimelineGameNumber(gameNumber)}
-                  onKeyDown={(event) =>
-                    handleTimelineGameTabKeyDown(event, gameNumber)
-                  }
-                >
-                  Game {gameNumber}
-                </button>
-              ))}
-            </div>
+          {showTimelineGameTabs && activeTimelineGameNumber !== null ? (
+            <MatchGameTabs
+              gameNumbers={timelineGameNumbers}
+              activeGameNumber={activeTimelineGameNumber}
+              baseId={timelineGameTabBaseId}
+              ariaLabel="Timeline game selector"
+              onSelect={setSelectedTimelineGameNumber}
+              onKeyDown={handleTimelineGameTabKeyDown}
+            />
           ) : null}
         </div>
         {match.bestOf === "bo3" &&

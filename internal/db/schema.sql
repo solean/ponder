@@ -573,6 +573,17 @@ CREATE TABLE IF NOT EXISTS deck_ai_primers (
   created_at TEXT NOT NULL,
   FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS match_ai_game_reviews (
+  match_id INTEGER NOT NULL,
+  game_number INTEGER NOT NULL CHECK(game_number > 0),
+  source_hash TEXT NOT NULL,
+  model TEXT NOT NULL DEFAULT '',
+  content TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY(match_id, game_number),
+  FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
+);
+
 
 CREATE TABLE IF NOT EXISTS ai_usage_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

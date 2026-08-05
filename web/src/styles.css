@@ -3645,12 +3645,15 @@ small.settings-meta,
 }
 
 .match-timeline-game-tabs {
-  grid-column: 2;
   align-self: center;
   justify-self: start;
   width: fit-content;
   max-width: 100%;
   margin: 0;
+}
+
+.match-timeline-toolbar > .match-timeline-game-tabs {
+  grid-column: 2;
 }
 
 .match-sideboard-changes {
@@ -9538,20 +9541,20 @@ select option {
 }
 
 /* ============================================================
-   AI primer panel
+   AI-generated content panels
    ============================================================ */
 
-.ai-primer-panel {
+.ai-content-panel {
   padding: 1.02rem 1.12rem;
 }
 
-.ai-primer-actions {
+.ai-content-actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.ai-primer-stale-badge {
+.ai-content-stale-badge {
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   text-transform: uppercase;
@@ -9563,7 +9566,7 @@ select option {
   padding: 0.15rem 0.4rem;
 }
 
-.ai-primer-error {
+.ai-content-error {
   margin-top: 0.75rem;
   padding: 0.6rem 0.75rem;
   font-family: var(--font-sans);
@@ -9573,13 +9576,13 @@ select option {
   border-radius: 2px;
 }
 
-.ai-primer-stream {
+.ai-content-stream {
   margin-top: 0.75rem;
   max-height: 22rem;
   overflow-y: auto;
 }
 
-.ai-primer-stream pre {
+.ai-content-stream pre {
   margin: 0.5rem 0 0;
   white-space: pre-wrap;
   word-break: break-word;
@@ -9589,14 +9592,14 @@ select option {
   color: var(--text-soft);
 }
 
-.ai-primer-stream-note {
+.ai-content-stream-note {
   margin-top: 0.75rem;
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   color: var(--muted);
 }
 
-.ai-primer-content {
+.ai-content-body {
   margin-top: 0.75rem;
   font-family: var(--font-sans);
   font-size: var(--text-base);
@@ -9605,7 +9608,7 @@ select option {
   max-width: 72ch;
 }
 
-.ai-primer-content h2 {
+.ai-content-body h2 {
   font-family: var(--font-display);
   font-size: var(--text-md);
   text-transform: uppercase;
@@ -9613,45 +9616,45 @@ select option {
   margin: 1.4rem 0 0.5rem;
 }
 
-.ai-primer-content h2:first-child {
+.ai-content-body h2:first-child {
   margin-top: 0;
 }
 
-.ai-primer-content h3 {
+.ai-content-body h3 {
   font-family: var(--font-display);
   font-size: var(--text-base);
   margin: 1rem 0 0.35rem;
 }
 
-.ai-primer-content p {
+.ai-content-body p {
   margin: 0 0 0.7rem;
 }
 
-.ai-primer-content ul,
-.ai-primer-content ol {
+.ai-content-body ul,
+.ai-content-body ol {
   margin: 0 0 0.7rem;
   padding-left: 1.3rem;
 }
 
-.ai-primer-content li {
+.ai-content-body li {
   margin-bottom: 0.25rem;
 }
 
-.ai-primer-content strong {
+.ai-content-body strong {
   color: var(--text-soft);
   font-weight: 600;
 }
 
-.ai-primer-content code {
+.ai-content-body code {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
 }
 
-.ai-primer-content .card-preview-anchor {
+.ai-content-body .card-preview-anchor {
   display: inline;
 }
 
-.ai-primer-content .card-preview-trigger {
+.ai-content-body .card-preview-trigger {
   color: var(--accent);
   font-weight: 600;
   white-space: normal;
@@ -9662,8 +9665,8 @@ select option {
   text-underline-offset: 0.16em;
 }
 
-.ai-primer-content .card-preview-trigger:hover,
-.ai-primer-content .card-preview-trigger:focus-visible {
+.ai-content-body .card-preview-trigger:hover,
+.ai-content-body .card-preview-trigger:focus-visible {
   color: var(--card-trigger-hover);
   text-decoration: underline;
   text-decoration-color: currentColor;

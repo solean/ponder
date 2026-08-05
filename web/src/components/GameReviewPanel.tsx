@@ -3,9 +3,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown, { type Components } from "react-markdown";
 
 import { CardPreviewName } from "./CardPreviewName";
-import { api, generateDeckPrimer } from "../lib/api";
+import { api, generateGameReview } from "../lib/api";
 import { primerCardIdFromHref, remarkPrimerCardNames, type PrimerCard } from "../lib/primerCards";
-import type { DeckPrimer } from "../lib/types";
+import type { GameReview } from "../lib/types";
 
 type GenerationState = "idle" | "generating" | "error";
 
@@ -17,7 +17,17 @@ function formatGeneratedAt(iso: string): string {
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
-export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: readonly PrimerCard[] }) {
+export function GameReviewPanel({
+  matchId,
+  gameNumber,
+  cards,
+  hasReplayFrames,
+}: {
+  matchId: number;
+  gameNumber: number;
+  cards: readonly PrimerCard[];
+  hasReplayFrames: boolean;
+}) {
   const queryClient = useQueryClient();
   const [generation, setGeneration] = useState<GenerationState>("idle");
   const [streamText, setStreamText] = useState("");
@@ -30,15 +40,13 @@ export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: read
     queryFn: api.aiStatus,
     staleTime: 1000 * 60 * 10,
   });
-  const primerQuery = useQuery({
-    queryKey: ["deck-primer", deckId],
-    queryFn: () => api.deckPrimer(deckId),
-    enabled: Number.isFinite(deckId),
+  const reviewQuery = useQuery({
+    queryKey: ["game-review", matchId, gameNumber],
+    queryFn: () => api.gameReview(matchId, gameNumber),
+    enabled: Number.isFinite(matchId) && gameNumber > 0,
   });
 
-  useEffect(() => {
-    return () => abortRef.current?.abort();
-  }, []);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
     if (generation === "generating") {
@@ -52,7 +60,7 @@ export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: read
   );
   const modelName =
     providerStatus?.models.find((model) => model.id === statusQuery.data?.model)?.name ?? statusQuery.data?.model;
-  const primer = primerQuery.data ?? null;
+  const review = reviewQuery.data ?? null;
   const cardsById = useMemo(() => {
     const result = new Map<number, PrimerCard>();
     for (const card of cards) {
@@ -79,11 +87,6 @@ export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: read
     [cardsById],
   );
 
-  // Feature stays invisible unless a configured subscription CLI is ready or
-  // a primer was generated in the past — keeps the app fully local by default.
-  if (!available && !primer) {
-    return null;
-  }
 
   const startGeneration = () => {
     const controller = new AbortController();
@@ -92,12 +95,13 @@ export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: read
     setStreamText("");
     setErrorMessage("");
 
-    void generateDeckPrimer(
-      deckId,
+    void generateGameReview(
+      matchId,
+      gameNumber,
       {
         onDelta: (text) => setStreamText((current) => current + text),
-        onDone: (saved: DeckPrimer) => {
-          queryClient.setQueryData(["deck-primer", deckId], saved);
+        onDone: (saved: GameReview) => {
+          queryClient.setQueryData(["game-review", matchId, gameNumber], saved);
           setGeneration("idle");
           setStreamText("");
         },
@@ -123,22 +127,22 @@ export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: read
     <section className="panel ai-content-panel">
       <div className="panel-head">
         <div>
-          <h3>Guide</h3>
+          <h3>AI Game Review</h3>
           <p>
-            {primer
-              ? `Generated ${formatGeneratedAt(primer.createdAt)}${primer.stale ? " • deck has changed since" : ""}`
-              : "Strategy guide generated from this deck and your match history"}
+            {review
+              ? `Game ${gameNumber} • generated ${formatGeneratedAt(review.createdAt)}${review.stale ? " • replay data has changed" : ""}`
+              : `Mistakes, better lines, and practice priorities for game ${gameNumber}`}
           </p>
         </div>
         <div className="ai-content-actions">
-          {primer?.stale && !isGenerating ? <span className="ai-content-stale-badge">Outdated</span> : null}
+          {review?.stale && !isGenerating ? <span className="ai-content-stale-badge">Outdated</span> : null}
           {isGenerating ? (
             <button type="button" className="tab" onClick={cancelGeneration}>
               Cancel
             </button>
           ) : (
-            <button type="button" className="tab" onClick={startGeneration} disabled={!available}>
-              {primer ? "Regenerate" : "Generate primer"}
+            <button type="button" className="tab" onClick={startGeneration} disabled={!available || !hasReplayFrames}>
+              {review ? "Regenerate" : "Review game"}
             </button>
           )}
         </div>
@@ -147,26 +151,28 @@ export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: read
       {generation === "error" ? <div className="ai-content-error">{errorMessage}</div> : null}
 
       {isGenerating ? (
-        <div className="ai-content-stream">
+        <div className="ai-content-stream" aria-live="polite">
           <div className="ai-content-stream-note">
-            Generating with {statusQuery.data?.providerName ?? "AI"}
+            Reviewing game {gameNumber} with {statusQuery.data?.providerName ?? "AI"}
             {modelName ? ` (${modelName})` : ""}…
           </div>
           {streamText ? <pre>{streamText}</pre> : <div className="ai-content-stream-note">Waiting for response…</div>}
           <div ref={streamEndRef} />
         </div>
-      ) : primer ? (
+      ) : review ? (
         <div className="ai-content-body">
           <ReactMarkdown remarkPlugins={[[remarkPrimerCardNames, { cards }]]} components={markdownComponents}>
-            {primer.content}
+            {review.content}
           </ReactMarkdown>
         </div>
+      ) : !hasReplayFrames ? (
+        <div className="ai-content-stream-note">A game review needs recorded replay frames for this game.</div>
       ) : !available ? (
         <div className="ai-content-stream-note">{statusQuery.data?.detail}</div>
       ) : (
         <div className="ai-content-stream-note">
-          No primer yet. Generation uses your local {statusQuery.data?.providerName ?? "AI"} subscription login and
-          usually takes a minute or two.
+          No review yet. Generation uses your local {statusQuery.data?.providerName ?? "AI"} subscription login and
+          evaluates only the game information Arena recorded.
         </div>
       )}
     </section>

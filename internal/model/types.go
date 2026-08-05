@@ -510,6 +510,18 @@ type DeckPrimer struct {
 	Stale     bool   `json:"stale"`
 }
 
+// GameReview is a cached AI coaching review for one game in a match. Stale is
+// computed at read time from the review prompt's replay and analytics input.
+type GameReview struct {
+	MatchID    int64  `json:"matchId"`
+	GameNumber int64  `json:"gameNumber"`
+	SourceHash string `json:"sourceHash"`
+	Model      string `json:"model"`
+	Content    string `json:"content"`
+	CreatedAt  string `json:"createdAt"`
+	Stale      bool   `json:"stale"`
+}
+
 type DraftSessionRow struct {
 	ID          int64   `json:"id"`
 	EventName   string  `json:"eventName"`

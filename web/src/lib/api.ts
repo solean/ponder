@@ -10,6 +10,7 @@ import type {
   DraftPick,
   DraftSession,
   EconomyHistory,
+  GameReview,
   Match,
   MatchCardPlay,
   MatchDetail,
@@ -60,6 +61,17 @@ export const api = {
   matchDetail: (matchId: number) => getJSON<MatchDetail>(`/api/matches/${matchId}`),
   matchTimeline: (matchId: number) => getJSON<MatchCardPlay[]>(`/api/matches/${matchId}/timeline`),
   matchReplay: (matchId: number) => getJSON<MatchReplayFrame[]>(`/api/matches/${matchId}/replay`),
+  gameReview: async (matchId: number, gameNumber: number): Promise<GameReview | null> => {
+    const res = await fetch(`${API_BASE}/api/matches/${matchId}/review?game=${gameNumber}`);
+    if (res.status === 404) {
+      return null;
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Request failed (${res.status}): ${text}`);
+    }
+    return (await res.json()) as GameReview;
+  },
   decks: (scope: "constructed" | "draft" | "all" = "constructed") =>
     getJSON<DeckSummary[]>(scope === "constructed" ? "/api/decks" : `/api/decks?scope=${scope}`),
   deckDetail: (deckId: number) => getJSON<DeckDetail>(`/api/decks/${deckId}`),
@@ -116,25 +128,27 @@ export const api = {
   },
 };
 
-export type PrimerStreamHandlers = {
+export type AIStreamHandlers<T> = {
   onDelta: (text: string) => void;
-  onDone: (primer: DeckPrimer) => void;
+  onDone: (result: T) => void;
   onError: (message: string) => void;
 };
 
+export type PrimerStreamHandlers = AIStreamHandlers<DeckPrimer>;
+export type GameReviewStreamHandlers = AIStreamHandlers<GameReview>;
+
 /**
- * Generates a deck primer, streaming progress via Server-Sent Events over a
- * POST fetch (EventSource only supports GET). The Accept header also tells
- * the backend to skip gzip so events arrive incrementally.
+ * Generates AI content, streaming progress via Server-Sent Events over a POST
+ * fetch (EventSource only supports GET).
  */
-export async function generateDeckPrimer(
-  deckId: number,
-  handlers: PrimerStreamHandlers,
+async function generateAIContent<T>(
+  path: string,
+  handlers: AIStreamHandlers<T>,
   signal?: AbortSignal,
 ): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}/api/decks/${deckId}/primer`, {
+    res = await fetch(`${API_BASE}${path}`, {
       method: "POST",
       headers: { Accept: "text/event-stream" },
       signal,
@@ -177,10 +191,15 @@ export async function generateDeckPrimer(
       handlers.onDelta(JSON.parse(data) as string);
     } else if (eventName === "done") {
       finished = true;
-      handlers.onDone(JSON.parse(data) as DeckPrimer);
+      handlers.onDone(JSON.parse(data) as T);
     } else if (eventName === "error") {
       finished = true;
-      handlers.onError((JSON.parse(data) as { error: string }).error);
+      const parsed: unknown = JSON.parse(data);
+      if (parsed && typeof parsed === "object" && "error" in parsed && typeof parsed.error === "string") {
+        handlers.onError(parsed.error);
+      } else {
+        handlers.onError("AI generation failed.");
+      }
     }
   };
 
@@ -205,4 +224,21 @@ export async function generateDeckPrimer(
       handlers.onError(err instanceof Error ? err.message : String(err));
     }
   }
+}
+
+export function generateDeckPrimer(
+  deckId: number,
+  handlers: PrimerStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  return generateAIContent(`/api/decks/${deckId}/primer`, handlers, signal);
+}
+
+export function generateGameReview(
+  matchId: number,
+  gameNumber: number,
+  handlers: GameReviewStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  return generateAIContent(`/api/matches/${matchId}/review?game=${gameNumber}`, handlers, signal);
 }

@@ -793,14 +793,14 @@ export function SettingsPage() {
           <h3>AI</h3>
           <p>
             {hasLocalEdits ? <span className="settings-unsaved-chip">Unsaved changes</span> : null}
-            Generate deck primers through a local CLI and your existing subscription. Credentials remain managed by
-            Claude Code or Codex and are never stored by {APP_NAME}.
+            Generate deck primers and replay game reviews through a local CLI and your existing subscription.
+            Credentials remain managed by Claude Code or Codex and are never stored by {APP_NAME}.
           </p>
         </div>
 
         <div className="settings-groups">
           <div className="settings-group">
-            <h4 className="settings-group-title">Primer Generation</h4>
+            <h4 className="settings-group-title">AI Generation</h4>
 
             <label className="settings-field">
               <span>Provider</span>
@@ -996,7 +996,7 @@ export function SettingsPage() {
         ) : null}
         {!selectedAIProvider.available ? (
           <p className="settings-note">
-            The selected provider must be installed and signed in before primer generation is enabled.
+            The selected provider must be installed and signed in before AI generation is enabled.
           </p>
         ) : null}
       </section>

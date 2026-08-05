@@ -82,6 +82,58 @@ func (s *Store) UpsertDeckPrimer(ctx context.Context, deckID int64, cardsHash, m
 	}, nil
 }
 
+// GetGameReview returns the cached AI review for one game, or (nil, nil) when
+// none has been generated yet.
+func (s *Store) GetGameReview(ctx context.Context, matchID, gameNumber int64) (*model.GameReview, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT match_id, game_number, source_hash, model, content, created_at
+		FROM match_ai_game_reviews
+		WHERE match_id = ? AND game_number = ?
+	`, matchID, gameNumber)
+
+	var out model.GameReview
+	err := row.Scan(&out.MatchID, &out.GameNumber, &out.SourceHash, &out.Model, &out.Content, &out.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get game review: %w", err)
+	}
+	return &out, nil
+}
+
+// UpsertGameReview stores (or replaces) the AI review for one game and returns
+// the stored row.
+func (s *Store) UpsertGameReview(
+	ctx context.Context,
+	matchID, gameNumber int64,
+	sourceHash, modelName, content string,
+) (*model.GameReview, error) {
+	createdAt := time.Now().UTC().Format(time.RFC3339)
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO match_ai_game_reviews (
+			match_id, game_number, source_hash, model, content, created_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(match_id, game_number) DO UPDATE SET
+			source_hash = excluded.source_hash,
+			model = excluded.model,
+			content = excluded.content,
+			created_at = excluded.created_at
+	`, matchID, gameNumber, sourceHash, modelName, content, createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("upsert game review: %w", err)
+	}
+	return &model.GameReview{
+		MatchID:    matchID,
+		GameNumber: gameNumber,
+		SourceHash: sourceHash,
+		Model:      modelName,
+		Content:    content,
+		CreatedAt:  createdAt,
+	}, nil
+}
+
 // RecordAIUsage stores provider-reported accounting for one metered run.
 func (s *Store) RecordAIUsage(
 	ctx context.Context,

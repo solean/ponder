@@ -17,6 +17,7 @@ import {
   formatDuration,
   formatRelativeTime,
   pct,
+  winRateTone,
 } from "../lib/format";
 import {
   currentStreak,
@@ -39,14 +40,6 @@ const RECENT_MATCH_COUNT = 8;
 const FORM_WINDOW = 10;
 const MATCH_WINDOW = 500;
 const ACTIVITY_DAYS = 365;
-
-type Tone = "positive" | "negative" | "neutral";
-
-function toneFor(rate: number | null): Tone {
-  if (rate == null) return "neutral";
-  const displayed = Number((rate * 100).toFixed(1));
-  return displayed > 50 ? "positive" : displayed < 50 ? "negative" : "neutral";
-}
 
 function SplitRow({
   label,
@@ -71,7 +64,7 @@ function SplitRow({
           ) : (
             <>
               {record.wins}W–{record.losses}L
-              <strong className={`win-rate win-rate--${toneFor(rate)}`}> {pct(rate)}</strong>
+              <strong className={`win-rate win-rate--${winRateTone(rate)}`}> {pct(rate)}</strong>
             </>
           )}
         </span>
@@ -610,12 +603,12 @@ export function OverviewPage() {
             {data.totalMatches} matches{unknownCount > 0 ? ` · ${unknownCount} unresolved` : ""}
           </small>
         </article>
-        <article className={`metric-card metric-card--toned metric-card--${toneFor(overallRate)}`}>
+        <article className={`metric-card metric-card--toned metric-card--${winRateTone(overallRate)}`}>
           <p>Win Rate</p>
           <div className="metric-value">{overallRate == null ? "—" : pct(overallRate)}</div>
           <small className="metric-sub">all decided matches</small>
         </article>
-        <article className={`metric-card metric-card--toned metric-card--${toneFor(formRate)}`}>
+        <article className={`metric-card metric-card--toned metric-card--${winRateTone(formRate)}`}>
           <p>Recent Form</p>
           <div className="metric-value">{formRate == null ? "—" : pct(formRate)}</div>
           <small className="metric-sub">
@@ -737,7 +730,7 @@ export function OverviewPage() {
                       </p>
                     </div>
                     <div className="list-stat">
-                      <strong className={`win-rate win-rate--${toneFor(rate)}`}>
+                      <strong className={`win-rate win-rate--${winRateTone(rate)}`}>
                         {rate == null ? "—" : pct(rate)}
                       </strong>
                       <span className="split-bar" aria-hidden="true">

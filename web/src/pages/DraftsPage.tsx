@@ -9,7 +9,7 @@ import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { draftSessionType } from "../lib/draftReport";
 import { parseEventName } from "../lib/events";
-import { formatGameFormat, pct } from "../lib/format";
+import { formatGameFormat, pct, winRateTone } from "../lib/format";
 import type { DeckSummary, DraftSession } from "../lib/types";
 import { useEventSets, type SetLookup } from "../lib/useEventSets";
 import { useRowLink } from "../lib/useRowLink";
@@ -126,7 +126,11 @@ function DraftDeckRow({ deck, setLookup }: { deck: DeckSummary; setLookup: SetLo
       <td>{deck.matches}</td>
       <td>{deck.wins}</td>
       <td>{deck.losses}</td>
-      <td>{pct(deck.winRate)}</td>
+      <td>
+        <strong className={`win-rate win-rate--${winRateTone(deck.matches > 0 ? deck.winRate : null)}`}>
+          {pct(deck.winRate)}
+        </strong>
+      </td>
     </tr>
   );
 }

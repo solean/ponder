@@ -90,6 +90,18 @@ export function pct(v: number): string {
   return `${(v * 100).toFixed(1)}%`;
 }
 
+export type WinRateTone = "positive" | "negative" | "neutral";
+
+/**
+ * Tone for a win rate, compared against 50% at the same precision `pct` renders,
+ * so a value that displays as "50.0%" is never colored.
+ */
+export function winRateTone(rate: number | null | undefined): WinRateTone {
+  if (rate == null) return "neutral";
+  const displayed = Number((rate * 100).toFixed(1));
+  return displayed > 50 ? "positive" : displayed < 50 ? "negative" : "neutral";
+}
+
 /** Abbreviate a macOS home-directory prefix: /Users/name/… → ~/… */
 export function shortenHomePath(path: string): string {
   return path.replace(/^\/Users\/[^/]+(?=\/)/, "~");

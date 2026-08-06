@@ -9004,6 +9004,31 @@ select option {
   --win-rate-color: var(--metric-neutral-text);
 }
 
+:root {
+  --trophy: #f2c14e;
+  --trophy-glow: rgba(242, 193, 78, 0.4);
+}
+
+:root[data-theme="light"] {
+  --trophy: #9c6b12;
+  --trophy-glow: rgba(156, 107, 18, 0.3);
+}
+
+.draft-wins {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.draft-trophy {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  color: var(--trophy);
+  fill: currentColor;
+  filter: drop-shadow(0 0 3px var(--trophy-glow));
+}
+
 .list-stat small {
   color: var(--muted-strong);
   font-family: var(--font-mono);

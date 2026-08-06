@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { ContextualLink, useBreadcrumbNavigationState } from "../components/Breadcrumbs";
+import { DraftWins } from "../components/DraftWins";
 import { EventLabel } from "../components/EventLabel";
 import { LimitedMatchupsPanel } from "../components/MatchupPanels";
 import { SetSymbol } from "../components/SetSymbol";
@@ -101,7 +102,9 @@ function DraftSessionRow({ draft, setLookup }: { draft: DraftSession; setLookup:
       <td>
         <DraftSessionSet draft={draft} lookup={setLookup} />
       </td>
-      <td>{draft.wins ?? "-"}</td>
+      <td>
+        <DraftWins wins={draft.wins} />
+      </td>
       <td>{draft.losses ?? "-"}</td>
     </tr>
   );
@@ -124,7 +127,9 @@ function DraftDeckRow({ deck, setLookup }: { deck: DeckSummary; setLookup: SetLo
         <EventLabel eventName={deck.eventName} lookup={setLookup} />
       </td>
       <td>{deck.matches}</td>
-      <td>{deck.wins}</td>
+      <td>
+        <DraftWins wins={deck.wins} />
+      </td>
       <td>{deck.losses}</td>
       <td>
         <strong className={`win-rate win-rate--${winRateTone(deck.matches > 0 ? deck.winRate : null)}`}>

@@ -5,7 +5,7 @@ import { ContextualLink } from "../components/Breadcrumbs";
 import { RankProgressPanel } from "../components/RankProgressPanel";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
-import { formatDuration, pct } from "../lib/format";
+import { formatDuration, pct, winRateTone } from "../lib/format";
 import {
   formatRankLabel,
   fillMissingRankClasses,
@@ -92,10 +92,23 @@ function recordLabel(summary: RecordSummary): string {
   return `${summary.wins}W–${summary.losses}L`;
 }
 
-function winRateLabel(summary: RecordSummary): string {
+function winRateValue(summary: RecordSummary): number | null {
   const decided = summary.wins + summary.losses;
-  if (decided === 0) return "—";
-  return pct(summary.wins / decided);
+  return decided === 0 ? null : summary.wins / decided;
+}
+
+function winRateLabel(summary: RecordSummary): string {
+  const rate = winRateValue(summary);
+  return rate == null ? "—" : pct(rate);
+}
+
+function WinRateCell({ summary }: { summary: RecordSummary }) {
+  const rate = winRateValue(summary);
+  return (
+    <td>
+      <strong className={`win-rate win-rate--${winRateTone(rate)}`}>{winRateLabel(summary)}</strong>
+    </td>
+  );
 }
 
 // Unlike the trend chart's label, this never guesses a tier: when Arena's
@@ -353,7 +366,7 @@ export function RankedPage() {
                 {summary.unknown > 0 ? ` · ${summary.unknown} unknown` : ""} · {seasonScopeLabel}
               </small>
             </article>
-            <article className="metric-card">
+            <article className={`metric-card metric-card--toned metric-card--${winRateTone(winRateValue(summary))}`}>
               <p>Win rate</p>
               <div className="metric-value">{winRateLabel(summary)}</div>
               <small className="metric-sub">
@@ -363,7 +376,7 @@ export function RankedPage() {
             </article>
             <article className="metric-card">
               <p>Net movement</p>
-              <div className={`metric-value ${summary.netSteps > 0 ? "" : ""}`.trim()}>
+              <div className="metric-value">
                 {formatSteps(summary.netSteps)} steps
               </div>
               <small className="metric-sub">
@@ -415,7 +428,7 @@ export function RankedPage() {
                         {recordLabel(row)}
                         {row.unknown > 0 ? ` (+${row.unknown} unknown)` : ""}
                       </td>
-                      <td>{winRateLabel(row)}</td>
+                      <WinRateCell summary={row} />
                       <td className={stepsTone(row.netSteps)}>{formatSteps(row.netSteps)}</td>
                     </tr>
                   ))}
@@ -459,7 +472,7 @@ export function RankedPage() {
                         {recordLabel(row)}
                         {row.unknown > 0 ? ` (+${row.unknown} unknown)` : ""}
                       </td>
-                      <td>{winRateLabel(row)}</td>
+                      <WinRateCell summary={row} />
                       <td className={stepsTone(row.netSteps)}>{formatSteps(row.netSteps)}</td>
                     </tr>
                   ))}
@@ -501,7 +514,7 @@ export function RankedPage() {
                           {recordLabel(row)}
                           {row.unknown > 0 ? ` (+${row.unknown} unknown)` : ""}
                         </td>
-                        <td>{winRateLabel(row)}</td>
+                        <WinRateCell summary={row} />
                         <td>{row.endRank}</td>
                         <td className={stepsTone(row.netSteps)}>{formatSteps(row.netSteps)}</td>
                       </tr>

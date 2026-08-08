@@ -8799,13 +8799,6 @@ select option {
   letter-spacing: var(--track-sm);
 }
 
-.activity-popover-empty {
-  margin-top: 0.58rem !important;
-  color: var(--muted-strong);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .activity-popover {
     animation: none;

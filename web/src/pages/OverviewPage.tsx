@@ -228,14 +228,29 @@ function ActivityGraph({
     setPosition({ top, left, arrowLeft, placement });
   }, []);
 
+  const hideDay = useCallback(() => {
+    clearHoverTimer();
+    anchorRef.current = null;
+    setVisibleIndex(null);
+    setPosition(null);
+  }, [clearHoverTimer]);
+
   const showDay = useCallback((index: number, anchor: HTMLButtonElement) => {
     clearHoverTimer();
+    if (!activity[index]?.count) {
+      hideDay();
+      return;
+    }
     anchorRef.current = anchor;
     setVisibleIndex(index);
-  }, [clearHoverTimer]);
+  }, [activity, clearHoverTimer, hideDay]);
 
   const showHoveredDay = useCallback((index: number, anchor: HTMLButtonElement) => {
     clearHoverTimer();
+    if (!activity[index]?.count) {
+      hideDay();
+      return;
+    }
     anchorRef.current = anchor;
     if (visibleIndex != null) {
       setVisibleIndex(index);
@@ -245,7 +260,7 @@ function ActivityGraph({
       hoverTimerRef.current = null;
       setVisibleIndex(index);
     }, ACTIVITY_HOVER_DELAY_MS);
-  }, [clearHoverTimer, visibleIndex]);
+  }, [activity, clearHoverTimer, hideDay, visibleIndex]);
 
   const hideHoveredDay = useCallback(() => {
     clearHoverTimer();
@@ -260,10 +275,8 @@ function ActivityGraph({
         return;
       }
     }
-    anchorRef.current = null;
-    setVisibleIndex(null);
-    setPosition(null);
-  }, [clearHoverTimer, showDay]);
+    hideDay();
+  }, [clearHoverTimer, hideDay, showDay]);
 
   const focusDay = useCallback((index: number) => {
     const target = gridRef.current?.querySelector<HTMLButtonElement>(
@@ -315,11 +328,7 @@ function ActivityGraph({
             style={{ gridTemplateColumns: gridColumns, aspectRatio: `${weekCount} / 7` }}
             onMouseLeave={hideHoveredDay}
             onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget)) {
-                anchorRef.current = null;
-                setVisibleIndex(null);
-                setPosition(null);
-              }
+              if (!event.currentTarget.contains(event.relatedTarget)) hideDay();
             }}
           >
             {activity.map((day, index) => {
@@ -390,38 +399,32 @@ function ActivityGraph({
               } as CSSProperties}
             >
               <p className="activity-popover-date">{activityFullDate(visibleDay.date)}</p>
-              {visibleDay.count === 0 ? (
-                <p className="activity-popover-empty">No matches played</p>
-              ) : (
-                <>
-                  <div className="activity-popover-count">
-                    <strong>{activityNumberFormatter.format(visibleDay.count)}</strong>
-                    <span>match{visibleDay.count === 1 ? "" : "es"}</span>
-                  </div>
-                  <div className="activity-popover-record">
-                    <strong>
-                      {activityNumberFormatter.format(visibleDay.wins)}W –{" "}
-                      {activityNumberFormatter.format(visibleDay.losses)}L
-                    </strong>
-                    {visibleDay.wins + visibleDay.losses > 0 ? (
-                      <span>
-                        {activityRateFormatter.format(
-                          visibleDay.wins / (visibleDay.wins + visibleDay.losses),
-                        )}
-                      </span>
-                    ) : null}
-                  </div>
-                  {visibleDay.unknown > 0 ? (
-                    <p className="activity-popover-unresolved">
-                      {activityNumberFormatter.format(visibleDay.unknown)} unresolved
-                    </p>
-                  ) : null}
-                  <div className="activity-popover-details">
-                    {visibleDuration ? <span>{visibleDuration}</span> : null}
-                    <span>{activityFormatMix(visibleDay)}</span>
-                  </div>
-                </>
-              )}
+              <div className="activity-popover-count">
+                <strong>{activityNumberFormatter.format(visibleDay.count)}</strong>
+                <span>match{visibleDay.count === 1 ? "" : "es"}</span>
+              </div>
+              <div className="activity-popover-record">
+                <strong>
+                  {activityNumberFormatter.format(visibleDay.wins)}W –{" "}
+                  {activityNumberFormatter.format(visibleDay.losses)}L
+                </strong>
+                {visibleDay.wins + visibleDay.losses > 0 ? (
+                  <span>
+                    {activityRateFormatter.format(
+                      visibleDay.wins / (visibleDay.wins + visibleDay.losses),
+                    )}
+                  </span>
+                ) : null}
+              </div>
+              {visibleDay.unknown > 0 ? (
+                <p className="activity-popover-unresolved">
+                  {activityNumberFormatter.format(visibleDay.unknown)} unresolved
+                </p>
+              ) : null}
+              <div className="activity-popover-details">
+                {visibleDuration ? <span>{visibleDuration}</span> : null}
+                <span>{activityFormatMix(visibleDay)}</span>
+              </div>
             </div>,
             document.body,
           )

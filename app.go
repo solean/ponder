@@ -20,11 +20,17 @@ import (
 	"github.com/solean/ponder/internal/db"
 )
 
-// devAPIEnvVar optionally exposes the API on a localhost port for browser
-// development (`bun run dev:desktop`). Set to an address ("127.0.0.1:39123")
-// or "1" for that default. The desktop webview itself never needs it: the API
-// is mounted on the Wails asset server, same-origin.
-const devAPIEnvVar = "PONDER_DEV_API"
+const (
+	// devAPIEnvVar optionally exposes the API on a localhost port for browser
+	// development (`bun run dev:desktop`). Set to an address ("127.0.0.1:39123")
+	// or "1" for that default. The desktop webview itself never needs it: the API
+	// is mounted on the Wails asset server, same-origin.
+	devAPIEnvVar = "PONDER_DEV_API"
+
+	// desktopDBEnvVar lets local Wails development reuse an existing database.
+	// Installed apps use the application-support database when it is unset.
+	desktopDBEnvVar = "PONDER_DB_PATH"
+)
 
 type App struct {
 	cancel       context.CancelFunc
@@ -167,7 +173,12 @@ func (a *App) startup() {
 		return
 	}
 
-	dbPath := filepath.Join(supportDir, "ponder.db")
+	dbPath := desktopDatabasePath(supportDir)
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		a.failStartup("create database dir", err)
+		return
+	}
+	log.Printf("using desktop database: %s", dbPath)
 	database, err := db.Open(dbPath)
 	if err != nil {
 		a.failStartup("open database", err)
@@ -247,6 +258,12 @@ func (a *App) startup() {
 				result.ReplaysArchived, result.ArchivesRecompressed, result.RawEventsPruned, result.AnalyticsRefreshed)
 		}
 	}()
+}
+func desktopDatabasePath(supportDir string) string {
+	if explicit := strings.TrimSpace(os.Getenv(desktopDBEnvVar)); explicit != "" {
+		return filepath.Clean(explicit)
+	}
+	return filepath.Join(supportDir, "ponder.db")
 }
 
 func (a *App) shutdown() {

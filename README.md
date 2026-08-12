@@ -20,12 +20,13 @@ This MVP includes:
 ```bash
 ./scripts/start-backend.sh      # go run ./cmd/ponder serve
 ./scripts/start-backend-dev.sh  # serve with hot reload via air (go install github.com/air-verse/air@latest)
+./scripts/start-desktop.sh      # wails3 dev using data/ponder.db
 ./scripts/start-parse.sh        # go run ./cmd/ponder parse -resume=true
 ./scripts/start-tail.sh         # go run ./cmd/ponder tail -interval=2s
 ./scripts/start-web.sh          # bun run dev (in web/)
 ```
 
-Each script also forwards any additional CLI flags you pass through to the underlying command.
+Each script forwards additional arguments to its underlying command.
 
 ## Backend Setup
 
@@ -158,8 +159,14 @@ development loop:
 
 ```bash
 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
-wails3 dev
+./scripts/start-desktop.sh
 ```
+
+`start-desktop.sh` runs `wails3 dev` with `PONDER_DB_PATH` set to the same
+`data/ponder.db` used by `start-backend-dev.sh`. Stop that backend process
+before starting the desktop app so two ingestion processes do not write to the
+same database. Running `wails3 dev` directly without the variable uses the
+normal application-support database.
 
 `wails3 build` produces the native binary and `wails3 package` creates the
 platform bundle. Both commands use the checked-in `Taskfile.yml` and
@@ -182,7 +189,7 @@ Desktop behaviors:
   from `internal/version` (override with
   `-ldflags "-X github.com/solean/ponder/internal/version.Version=x.y.z"`).
 
-The desktop app stores its SQLite database and runtime config under `~/Library/Application Support/ponder/`.
+By default, the desktop app stores its SQLite database and runtime config under `~/Library/Application Support/ponder/`.
 
 ## Notes
 

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=Ponder
+Comment=Private, local-first MTG Arena match tracking and analytics
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/Ponder %u
+Terminal=false
+Type=Application
+Icon=Ponder
+Categories=Utility;
+StartupWMClass=Ponder
+
+ 

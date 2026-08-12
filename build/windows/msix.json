@@ -1,0 +1,12 @@
+{
+  "info": {
+    "companyName": "Ixian Labs LLC",
+    "productName": "Ponder",
+    "version": "0.1.0",
+    "productIdentifier": "dev.ixianlabs.ponder",
+    "description": "Private, local-first MTG Arena match tracking and analytics",
+    "copyright": "© 2026, Ixian Labs LLC",
+    "comments": "Ponder desktop application"
+  },
+  "fileAssociations": []
+}

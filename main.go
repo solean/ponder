@@ -1,14 +1,12 @@
 package main
 
 import (
-	"context"
 	"embed"
 	"io/fs"
 	"log"
 
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 //go:embed all:web/dist
@@ -23,34 +21,52 @@ func main() {
 		log.Fatalf("prepare embedded web assets: %v", err)
 	}
 
-	app := NewApp(assets)
-	if err := wails.Run(&options.App{
+	desktop := NewApp(assets)
+	wailsApp := application.New(application.Options{
+		Name:        appDisplayName,
+		Description: "Private, local-first MTG Arena match tracking and analytics.",
+		Assets: application.AssetOptions{
+			Handler:    application.AssetFileServerFS(assets),
+			Middleware: desktop.APIMiddleware,
+		},
+		Mac: application.MacOptions{
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
+		},
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID:               "dev.ixianlabs.ponder",
+			OnSecondInstanceLaunch: desktop.onSecondInstanceLaunch,
+		},
+		OnShutdown: desktop.shutdown,
+	})
+
+	mainWindow := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:             "main",
 		Title:            appDisplayName,
 		Width:            1480,
 		Height:           960,
 		MinWidth:         1200,
 		MinHeight:        760,
-		BackgroundColour: &options.RGBA{R: 8, G: 12, B: 21, A: 1},
-		AssetServer: &assetserver.Options{
-			Assets:     assets,
-			Middleware: app.APIMiddleware,
-		},
-		// Closing the window keeps the app (and the live log tailer) running;
-		// reopen it from the Dock. Quit fully with Cmd+Q. This is the Wails v2
-		// stand-in for a tray icon, which needs Wails v3.
-		HideWindowOnClose: true,
-		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId:               "dev.ixianlabs.ponder",
-			OnSecondInstanceLaunch: app.onSecondInstanceLaunch,
-		},
-		OnStartup: app.startup,
-		OnShutdown: func(_ context.Context) {
-			app.shutdown()
-		},
-		Bind: []any{
-			app,
-		},
-	}); err != nil {
+		BackgroundColour: application.NewRGBA(8, 12, 21, 255),
+		URL:              "/",
+	})
+	desktop.setDesktopRuntime(wailsApp, mainWindow)
+
+	// Closing the main window keeps the log tailer running. The Dock icon or a
+	// second launch restores the existing window; Cmd+Q still quits the app.
+	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		mainWindow.Hide()
+		event.Cancel()
+	})
+	wailsApp.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
+		mainWindow.Show()
+		mainWindow.Focus()
+	})
+	wailsApp.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		desktop.startup()
+		desktop.showStartupError()
+	})
+
+	if err := wailsApp.Run(); err != nil {
 		log.Fatalf("run wails app: %v", err)
 	}
 }

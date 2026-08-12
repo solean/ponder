@@ -151,22 +151,25 @@ bun run build
 
 When `web/dist` exists, backend `serve` will also host built assets from `/`.
 
-## macOS App Scaffold
+## Desktop App
 
-This repo now includes an initial Wails desktop scaffold at the repo root:
+The desktop shell uses Wails v3. Install the matching CLI, then run the native
+development loop:
 
 ```bash
-go run github.com/wailsapp/wails/v2/cmd/wails@latest dev
+go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
+wails3 dev
 ```
 
-In the desktop app the API is mounted on the Wails asset server, so the
-frontend reaches it same-origin — no listening port and no CORS exposure.
-`bun run build:desktop` therefore produces the same relative-URL build as
-`bun run build`.
+`wails3 build` produces the native binary and `wails3 package` creates the
+platform bundle. Both commands use the checked-in `Taskfile.yml` and
+`build/config.yml`; Bun remains the frontend package runner.
 
-For browser-based frontend development against the desktop backend, launch the
-app with `PONDER_DEV_API=1` (or set it to a specific address) to also expose
-the API on `http://127.0.0.1:39123`, then run `bun run dev:desktop`.
+In production, the API is mounted on the Wails asset server, so the frontend
+reaches it same-origin without a listening port or CORS exposure. Development
+mode starts the development-only localhost API on
+`http://127.0.0.1:39123` for the Vite proxy. For plain browser development
+against `ponder serve` on port 8080, continue to use `bun run dev` from `web/`.
 
 Desktop behaviors:
 - Closing the window hides it and keeps the app (and live log tailing)

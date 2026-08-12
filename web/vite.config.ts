@@ -1,15 +1,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   server: {
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8080",
+        target: mode === "desktop" ? "http://127.0.0.1:39123" : "http://127.0.0.1:8080",
         changeOrigin: true,
       },
     },
   },
-});
+}));

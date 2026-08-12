@@ -9,13 +9,11 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	"github.com/wailsapp/wails/v2/pkg/options"
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/solean/ponder/internal/api"
 	"github.com/solean/ponder/internal/appstate"
@@ -29,10 +27,11 @@ import (
 const devAPIEnvVar = "PONDER_DEV_API"
 
 type App struct {
-	ctx          context.Context
 	cancel       context.CancelFunc
 	database     *sql.DB
 	staticAssets fs.FS
+	wailsApp     *application.App
+	mainWindow   application.Window
 
 	mu         sync.RWMutex
 	apiHandler http.Handler
@@ -41,6 +40,11 @@ type App struct {
 
 func NewApp(staticAssets fs.FS) *App {
 	return &App{staticAssets: staticAssets}
+}
+
+func (a *App) setDesktopRuntime(wailsApp *application.App, mainWindow application.Window) {
+	a.wailsApp = wailsApp
+	a.mainWindow = mainWindow
 }
 
 // APIMiddleware mounts the backend API on the Wails asset server so the
@@ -73,16 +77,17 @@ func (a *App) APIMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func (a *App) onSecondInstanceLaunch(_ options.SecondInstanceData) {
-	if a.ctx == nil {
+func (a *App) onSecondInstanceLaunch(_ application.SecondInstanceData) {
+	if a.mainWindow == nil {
 		return
 	}
-	wailsruntime.WindowUnminimise(a.ctx)
-	wailsruntime.WindowShow(a.ctx)
+	a.mainWindow.UnMinimise()
+	a.mainWindow.Show()
+	a.mainWindow.Focus()
 }
 
-// failStartup records a startup error for the API middleware and surfaces it
-// in a native dialog instead of leaving the UI loading forever.
+// failStartup records a startup error for the API middleware. The
+// ApplicationStarted handler shows it after Wails has finished initialising.
 func (a *App) failStartup(stage string, err error) {
 	message := fmt.Sprintf("%s: %v", stage, err)
 	log.Printf("desktop startup failed: %s", message)
@@ -90,56 +95,68 @@ func (a *App) failStartup(stage string, err error) {
 	a.mu.Lock()
 	a.startupErr = message
 	a.mu.Unlock()
+}
 
-	if a.ctx != nil {
-		_, _ = wailsruntime.MessageDialog(a.ctx, wailsruntime.MessageDialogOptions{
-			Type:    wailsruntime.ErrorDialog,
-			Title:   appDisplayName + " failed to start",
-			Message: message + "\n\nThe app will stay open but cannot load data. Fix the issue and restart.",
-		})
+func (a *App) showStartupError() {
+	a.mu.RLock()
+	message := a.startupErr
+	a.mu.RUnlock()
+	if message == "" || a.wailsApp == nil {
+		return
 	}
+
+	dialog := a.wailsApp.Dialog.Error().
+		SetTitle(appDisplayName + " failed to start").
+		SetMessage(message + "\n\nThe app will stay open but cannot load data. Fix the issue and restart.")
+	if a.mainWindow != nil {
+		dialog.AttachToWindow(a.mainWindow)
+	}
+	dialog.Show()
 }
 
 // PickLogFile satisfies api.Desktop with a native open dialog. Returns "" if
 // the user cancels.
 func (a *App) PickLogFile() (string, error) {
-	if a.ctx == nil {
-		return "", fmt.Errorf("desktop context not ready")
+	if a.wailsApp == nil {
+		return "", fmt.Errorf("desktop runtime not ready")
 	}
 	defaultDir := ""
 	if currentLogPath, _, err := appstate.DefaultMTGALogPaths(); err == nil {
 		defaultDir = filepath.Dir(currentLogPath)
 	}
-	return wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
-		Title:            "Choose MTGA log file",
-		DefaultDirectory: defaultDir,
-		Filters: []wailsruntime.FileFilter{
+	return a.wailsApp.Dialog.OpenFileWithOptions(&application.OpenFileDialogOptions{
+		CanChooseFiles:       true,
+		CanChooseDirectories: false,
+		Title:                "Choose MTGA log file",
+		Directory:            defaultDir,
+		Filters: []application.FileFilter{
 			{DisplayName: "Log files (*.log)", Pattern: "*.log"},
 			{DisplayName: "All files", Pattern: "*"},
 		},
-	})
+	}).PromptForSingleSelection()
 }
 
-// RevealPath satisfies api.Desktop: selects the file in Finder, or opens the
-// directory. A missing file falls back to its parent directory so the button
-// still lands somewhere useful.
+// RevealPath satisfies api.Desktop: selects an existing file in the platform
+// file manager, opens a directory, or falls back to the parent of a missing
+// path.
 func (a *App) RevealPath(path string) error {
+	if a.wailsApp == nil {
+		return fmt.Errorf("desktop runtime not ready")
+	}
 	info, err := os.Stat(path)
 	switch {
 	case err != nil && os.IsNotExist(err):
-		return exec.Command("open", filepath.Dir(path)).Run()
+		return a.wailsApp.Env.OpenFileManager(filepath.Dir(path), false)
 	case err != nil:
 		return err
 	case info.IsDir():
-		return exec.Command("open", path).Run()
+		return a.wailsApp.Env.OpenFileManager(path, false)
 	default:
-		return exec.Command("open", "-R", path).Run()
+		return a.wailsApp.Env.OpenFileManager(path, true)
 	}
 }
 
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
-
+func (a *App) startup() {
 	supportDir, err := appstate.DefaultSupportDir()
 	if err != nil {
 		a.failStartup("resolve support dir", err)
@@ -202,8 +219,8 @@ func (a *App) startup(ctx context.Context) {
 	a.mu.Unlock()
 
 	devAddr := strings.TrimSpace(os.Getenv(devAPIEnvVar))
-	if devAddr == "" && wailsruntime.Environment(ctx).BuildType == "dev" {
-		// `wails dev` always exposes the API locally so a regular browser at
+	if devAddr == "" && a.wailsApp != nil && a.wailsApp.Env.Info().Debug {
+		// `wails3 dev` exposes the API locally so a regular browser at
 		// the Vite dev server can reach it too. Production builds never listen.
 		devAddr = "1"
 	}

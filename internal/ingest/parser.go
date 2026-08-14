@@ -413,6 +413,15 @@ func (s *parseState) rememberGameNumber(matchID string, gameNumber int64) {
 	if s.gameNumberByMatch == nil {
 		s.gameNumberByMatch = make(map[string]int64)
 	}
+	if s.gameNumberByMatch[matchID] != gameNumber {
+		// Arena stops restating turnInfo between games, so a remembered turn,
+		// phase, and active player describe the game that just ended. Dropping
+		// them keeps the next game's pre-game frames (its mulligan sequence)
+		// turnless instead of stamping them with the previous game's last turn.
+		delete(s.turnByMatch, matchID)
+		delete(s.phaseByMatch, matchID)
+		delete(s.activePlayerByMatch, matchID)
+	}
 	s.gameNumberByMatch[matchID] = gameNumber
 }
 

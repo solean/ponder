@@ -187,21 +187,62 @@ func aggregateOpeningCards(offered, kept replayHandSnapshot, decision string) []
 	return out
 }
 
+// replayStageIsGameplay reports whether a normalized GRE game stage means the
+// game itself is under way. "gameover" on its own does not: a game conceded
+// during the mulligan sequence reaches game over without ever being played.
+func replayStageIsGameplay(stage string) bool {
+	return strings.Contains(stage, "play")
+}
+
+// normalizeReplayGameFrames prepares one game's frames for derivation. GRE diff
+// messages restate gameInfo.stage only when it changes, and Arena keeps
+// reporting the previous game's turnInfo until the new game's first turn
+// begins, so games after the first arrive with pre-game frames stamped with the
+// prior game's turn number and phase. Forward-fill the stage and drop the stale
+// turn from every frame before gameplay starts, otherwise the mulligan offers
+// look like gameplay and the game inherits a phantom late turn. A frame with no
+// stage at all comes from a log that starts mid-game; its turn is genuine.
+func normalizeReplayGameFrames(frames []model.MatchReplayFrameRow) []model.MatchReplayFrameRow {
+	out := make([]model.MatchReplayFrameRow, len(frames))
+	copy(out, frames)
+	stage := ""
+	gameplayStarted := false
+	for index := range out {
+		if current := strings.ToLower(strings.TrimSpace(out[index].GameStage)); current != "" {
+			stage = current
+		}
+		out[index].GameStage = stage
+		if replayStageIsGameplay(stage) {
+			gameplayStarted = true
+		}
+		if gameplayStarted || stage == "" {
+			continue
+		}
+		out[index].TurnNumber = nil
+		out[index].Phase = ""
+	}
+	return out
+}
+
 // replayFrameIsPlay reports whether a frame belongs to actual gameplay rather
-// than the pre-game mulligan sequence.
+// than the pre-game mulligan sequence. Frames must come from
+// normalizeReplayGameFrames, which clears the turn number pre-gameplay; that
+// leaves the turn as the signal for post-mulligan frames whose stage is
+// "gameover" or absent.
 func replayFrameIsPlay(frame model.MatchReplayFrameRow) bool {
 	return (frame.TurnNumber != nil && *frame.TurnNumber > 0) ||
-		strings.Contains(strings.ToLower(frame.GameStage), "play") ||
-		strings.Contains(strings.ToLower(frame.GameStage), "gameover")
+		replayStageIsGameplay(strings.ToLower(frame.GameStage))
 }
 
 func deriveOpeningHands(frames []model.MatchReplayFrameRow) openingHandDerivation {
 	empty := openingHandDerivation{Kept: replayHandSnapshot{ByInstance: map[int64]int64{}}}
 	prePlay := make([]replayHandSnapshot, 0)
 	var firstPlayHand *replayHandSnapshot
+	sawPlayFrame := false
 	for _, frame := range frames {
 		hand := replaySelfHand(frame)
 		if replayFrameIsPlay(frame) {
+			sawPlayFrame = true
 			isOpeningTurn := frame.TurnNumber == nil || *frame.TurnNumber <= 1
 			if firstPlayHand == nil && isOpeningTurn && len(hand.ByInstance) > 0 {
 				copy := hand
@@ -263,6 +304,11 @@ func deriveOpeningHands(frames []model.MatchReplayFrameRow) openingHandDerivatio
 	if firstPlayHand != nil && handIsSubset(*firstPlayHand, finalOffer) {
 		kept = *firstPlayHand
 	}
+	// A game conceded during the mulligan sequence never reached a keep, so the
+	// final offer was neither kept nor bottomed down to an opening hand.
+	if !sawPlayFrame {
+		kept = replayHandSnapshot{ObservedAt: finalOffer.ObservedAt, ByInstance: map[int64]int64{}}
+	}
 
 	out := make([]derivedOpeningHand, 0, len(offers))
 	for index, offer := range offers {
@@ -271,9 +317,12 @@ func deriveOpeningHands(frames []model.MatchReplayFrameRow) openingHandDerivatio
 		keptForAttempt := replayHandSnapshot{ByInstance: map[int64]int64{}}
 		var keptSize *int64
 		if isFinal {
-			decision = "keep"
-			keptForAttempt = kept
-			keptSize = pointerInt64(int64(len(kept.ByInstance)))
+			decision = "unknown"
+			if sawPlayFrame {
+				decision = "keep"
+				keptForAttempt = kept
+				keptSize = pointerInt64(int64(len(kept.ByInstance)))
+			}
 		}
 		out = append(out, derivedOpeningHand{
 			AttemptNumber:   int64(index + 1),
@@ -285,13 +334,16 @@ func deriveOpeningHands(frames []model.MatchReplayFrameRow) openingHandDerivatio
 		})
 	}
 
-	return openingHandDerivation{
+	derivation := openingHandDerivation{
 		Hands:         out,
 		MulliganCount: pointerInt64(int64(len(offers) - 1)),
-		KeptHandSize:  pointerInt64(int64(len(kept.ByInstance))),
 		Offers:        offers,
 		Kept:          kept,
 	}
+	if sawPlayFrame {
+		derivation.KeptHandSize = pointerInt64(int64(len(kept.ByInstance)))
+	}
+	return derivation
 }
 
 // deriveGameCardStats reduces one game's replay frames to per-card hand facts:
@@ -379,7 +431,7 @@ func deriveReplayGames(frames []model.MatchReplayFrameRow) []derivedGame {
 
 	out := make([]derivedGame, 0, len(gameNumbers))
 	for _, gameNumber := range gameNumbers {
-		gameFrames := byGame[gameNumber]
+		gameFrames := normalizeReplayGameFrames(byGame[gameNumber])
 		game := derivedGame{
 			GameNumber:            gameNumber,
 			Result:                "unknown",

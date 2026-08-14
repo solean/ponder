@@ -976,6 +976,70 @@ func TestReplayFramesTrackSelfHandOnly(t *testing.T) {
 	}
 }
 
+// Arena omits turnInfo while a later game is still in its mulligan sequence.
+// The remembered turn must not survive the game boundary, or those pre-game
+// frames get stamped with the previous game's final turn.
+func TestReplayFramesDropPreviousGameTurnAtGameBoundary(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test-replay-game-boundary.db")
+	logPath := filepath.Join(tmpDir, "Player.log")
+
+	database, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	parser := NewParser(db.NewStore(database))
+	lines := []string{
+		`{"clientId":"self-user","screenName":"Self"}`,
+		`{"timestamp":"1773532594890","matchGameRoomStateChangedEvent":{"gameRoomInfo":{"gameRoomConfig":{"reservedPlayers":[{"userId":"self-user","playerName":"Self","systemSeatId":1,"teamId":1,"eventId":"Traditional_Ladder"},{"userId":"opp-user","playerName":"Opp","systemSeatId":2,"teamId":2,"eventId":"Traditional_Ladder"}],"matchId":"match-game-boundary"},"stateType":"MatchGameRoomStateType_Playing"}}}`,
+		`{"timestamp":"1773532605936","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[1],"gameStateMessage":{"type":"GameStateType_Full","gameStateId":1,"gameInfo":{"matchID":"match-game-boundary","gameNumber":1,"stage":"GameStage_Play"},"turnInfo":{"phase":"Phase_Combat","turnNumber":23,"activePlayer":1},"zones":[{"zoneId":31,"type":"ZoneType_Hand","visibility":"Visibility_Private","ownerSeatId":1,"objectInstanceIds":[101]}],"gameObjects":[{"instanceId":101,"grpId":5001,"type":"GameObjectType_Card","zoneId":31,"visibility":"Visibility_Private","ownerSeatId":1,"controllerSeatId":1}]}}]}}`,
+		`{"timestamp":"1773532605937","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[1],"gameStateMessage":{"type":"GameStateType_Full","gameStateId":1,"gameInfo":{"matchID":"match-game-boundary","gameNumber":2,"stage":"GameStage_Start"},"zones":[{"zoneId":31,"type":"ZoneType_Hand","visibility":"Visibility_Private","ownerSeatId":1,"objectInstanceIds":[201]}],"gameObjects":[{"instanceId":201,"grpId":5002,"type":"GameObjectType_Card","zoneId":31,"visibility":"Visibility_Private","ownerSeatId":1,"controllerSeatId":1}]}}]}}`,
+		`{"timestamp":"1773532605938","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[1],"gameStateMessage":{"type":"GameStateType_Diff","gameStateId":2,"prevGameStateId":1,"zones":[{"zoneId":31,"type":"ZoneType_Hand","visibility":"Visibility_Private","ownerSeatId":1,"objectInstanceIds":[301]}],"gameObjects":[{"instanceId":301,"grpId":5003,"type":"GameObjectType_Card","zoneId":31,"visibility":"Visibility_Private","ownerSeatId":1,"controllerSeatId":1}]}}]}}`,
+		`{"timestamp":"1773532605939","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[1],"gameStateMessage":{"type":"GameStateType_Diff","gameStateId":3,"prevGameStateId":2,"gameInfo":{"matchID":"match-game-boundary","gameNumber":2,"stage":"GameStage_Play"},"turnInfo":{"phase":"Phase_Main1","turnNumber":1,"activePlayer":1},"zones":[{"zoneId":31,"type":"ZoneType_Hand","visibility":"Visibility_Private","ownerSeatId":1,"objectInstanceIds":[301]}],"gameObjects":[{"instanceId":301,"grpId":5003,"type":"GameObjectType_Card","zoneId":31,"visibility":"Visibility_Private","ownerSeatId":1,"controllerSeatId":1}]}}]}}`,
+	}
+
+	if err := writeLogLines(logPath, lines, false); err != nil {
+		t.Fatalf("write log lines: %v", err)
+	}
+	if _, err := parser.ParseFile(ctx, logPath, false); err != nil {
+		t.Fatalf("parse file: %v", err)
+	}
+
+	store := db.NewStore(database)
+	frames, err := store.ListMatchReplayFrames(ctx, 1)
+	if err != nil {
+		t.Fatalf("list replay frames: %v", err)
+	}
+
+	gameTwo := make([]model.MatchReplayFrameRow, 0, 3)
+	for _, frame := range frames {
+		if frame.GameNumber != nil && *frame.GameNumber == 2 {
+			gameTwo = append(gameTwo, frame)
+		}
+	}
+	if len(gameTwo) != 3 {
+		t.Fatalf("game 2 frames = %d, want 3", len(gameTwo))
+	}
+	for _, frame := range gameTwo[:2] {
+		if frame.TurnNumber != nil {
+			t.Fatalf("pre-game frame turn = %#v, want no turn carried from game 1", frame.TurnNumber)
+		}
+		if frame.Phase != "" {
+			t.Fatalf("pre-game frame phase = %q, want no phase carried from game 1", frame.Phase)
+		}
+	}
+	if gameTwo[2].TurnNumber == nil || *gameTwo[2].TurnNumber != 1 {
+		t.Fatalf("first play frame turn = %#v, want 1", gameTwo[2].TurnNumber)
+	}
+}
+
 func replayObjectsInZone(frame model.MatchReplayFrameRow, zoneType string) []model.MatchReplayFrameObjectRow {
 	out := make([]model.MatchReplayFrameObjectRow, 0)
 	for _, obj := range frame.Objects {

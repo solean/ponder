@@ -76,6 +76,18 @@ func prepareOpponentCopiesBackfill(ctx context.Context, conn dbConn) error {
 	return invalidateAnalyticsCoverageOnce(ctx, conn, opponentCopiesBackfillMetadataKey)
 }
 
+// v2: v1 was consumable by a build that still credited a kept hand to a game
+// conceded inside its mulligan sequence.
+const mulliganBoundaryBackfillMetadataKey = "mulligan_boundary_backfill_v2"
+
+// prepareMulliganBoundaryBackfill invalidates analytics coverage once after the
+// pre-game frame fix. Games after the first inherited the previous game's turn
+// number on their mulligan frames, so every one of them derived zero mulligans
+// and a turn count borrowed from the game before it.
+func prepareMulliganBoundaryBackfill(ctx context.Context, conn dbConn) error {
+	return invalidateAnalyticsCoverageOnce(ctx, conn, mulliganBoundaryBackfillMetadataKey)
+}
+
 // invalidateAnalyticsCoverageOnce clears match_analytics_coverage exactly once,
 // keyed by markerKey, so the next maintenance pass (or per-match
 // EnsureMatchAnalytics) re-derives every match from archived replays. Used

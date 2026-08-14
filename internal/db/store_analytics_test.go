@@ -70,6 +70,97 @@ func TestDeriveOpeningHandsTracksLondonMulliganAndBottomedCard(t *testing.T) {
 	}
 }
 
+func testGameHandFrame(gameNumber, gameStateID int64, turnNumber *int64, stage string, cards map[int64]int64) model.MatchReplayFrameRow {
+	frame := testHandFrame(gameStateID, turnNumber, stage, cards)
+	frame.GameNumber = pointerInt64(gameNumber)
+	return frame
+}
+
+// Arena keeps reporting the previous game's turnInfo until a later game's first
+// turn begins, so its mulligan frames arrive stamped with that stale turn.
+// Treating them as gameplay hid every post-game-one mulligan and inflated the
+// game's turn count to the previous game's length.
+func TestDeriveReplayGamesIgnoresPreviousGameTurnOnLaterGameMulligans(t *testing.T) {
+	t.Parallel()
+
+	firstOffer := map[int64]int64{1: 101, 2: 102, 3: 103, 4: 104, 5: 105, 6: 106, 7: 107}
+	secondOffer := map[int64]int64{11: 201, 12: 202, 13: 203, 14: 204, 15: 205, 16: 206, 17: 207}
+	kept := map[int64]int64{11: 201, 12: 202, 13: 203, 14: 204, 15: 205, 16: 206}
+	staleTurn := int64(23)
+	turnOne := int64(1)
+	turnTwo := int64(2)
+	frames := []model.MatchReplayFrameRow{
+		testGameHandFrame(2, 1, &staleTurn, "start", nil),
+		testGameHandFrame(2, 2, &staleTurn, "", firstOffer),
+		testGameHandFrame(2, 3, &staleTurn, "", secondOffer),
+		testGameHandFrame(2, 4, &staleTurn, "", secondOffer),
+		testGameHandFrame(2, 5, &turnOne, "play", kept),
+		testGameHandFrame(2, 6, &turnTwo, "", kept),
+	}
+
+	games := deriveReplayGames(frames)
+	if len(games) != 1 {
+		t.Fatalf("derived games = %d, want 1", len(games))
+	}
+	game := games[0]
+	if game.MulliganCount == nil || *game.MulliganCount != 1 {
+		t.Fatalf("mulligan count = %#v, want 1", game.MulliganCount)
+	}
+	if game.KeptHandSize == nil || *game.KeptHandSize != 6 {
+		t.Fatalf("kept hand size = %#v, want 6", game.KeptHandSize)
+	}
+	if game.TurnCount == nil || *game.TurnCount != 2 {
+		t.Fatalf("turn count = %#v, want 2 (the stale turn 23 is not gameplay)", game.TurnCount)
+	}
+	if stat := game.CardStats[101]; stat == nil || stat.MulliganCopies != 1 {
+		t.Fatalf("card 101 stat = %#v, want one mulliganed copy", stat)
+	}
+	if stat := game.CardStats[201]; stat == nil || stat.OpeningKept != 1 {
+		t.Fatalf("card 201 stat = %#v, want one kept copy", stat)
+	}
+}
+
+// Conceding inside the mulligan sequence ends the game before any keep, and the
+// gameover frames still carry the previous game's turn. Neither a kept hand nor
+// a turn count may be invented from them.
+func TestDeriveReplayGamesReportsNoKeptHandWhenGameEndsInMulligans(t *testing.T) {
+	t.Parallel()
+
+	firstOffer := map[int64]int64{1: 101, 2: 102, 3: 103, 4: 104, 5: 105, 6: 106, 7: 107}
+	secondOffer := map[int64]int64{11: 201, 12: 202, 13: 203, 14: 204, 15: 205, 16: 206, 17: 207}
+	staleTurn := int64(15)
+	frames := []model.MatchReplayFrameRow{
+		testGameHandFrame(2, 1, &staleTurn, "start", nil),
+		testGameHandFrame(2, 2, &staleTurn, "", firstOffer),
+		testGameHandFrame(2, 3, &staleTurn, "", secondOffer),
+		testGameHandFrame(2, 4, &staleTurn, "gameover", secondOffer),
+	}
+
+	games := deriveReplayGames(frames)
+	if len(games) != 1 {
+		t.Fatalf("derived games = %d, want 1", len(games))
+	}
+	game := games[0]
+	if game.MulliganCount == nil || *game.MulliganCount != 1 {
+		t.Fatalf("mulligan count = %#v, want 1", game.MulliganCount)
+	}
+	if game.KeptHandSize != nil {
+		t.Fatalf("kept hand size = %#v, want none: the game ended before a keep", game.KeptHandSize)
+	}
+	if game.TurnCount != nil {
+		t.Fatalf("turn count = %#v, want none: gameplay never started", game.TurnCount)
+	}
+	if len(game.OpeningHands) != 2 || game.OpeningHands[1].Decision != "unknown" {
+		t.Fatalf("opening hands = %+v, want a mulligan then an undecided offer", game.OpeningHands)
+	}
+	if game.OpeningHands[1].KeptHandSize != nil {
+		t.Fatalf("final attempt kept size = %#v, want none", game.OpeningHands[1].KeptHandSize)
+	}
+	if stat := game.CardStats[201]; stat != nil && stat.OpeningKept != 0 {
+		t.Fatalf("card 201 stat = %#v, want no kept copies", stat)
+	}
+}
+
 func TestDeckVersionsAreImmutableAndMatchLinksUseHistoricalVersion(t *testing.T) {
 	t.Parallel()
 

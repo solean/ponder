@@ -4076,7 +4076,7 @@ function OpeningHandCardImage({
 }: {
   card: OpeningHandCard;
   preview: CardPreview | null;
-  disposition: "kept" | "bottomed" | "returned";
+  disposition: "kept" | "bottomed" | "returned" | "undecided";
 }) {
   const name = preview?.name ?? cardDisplayName(card);
   const href = preview?.scryfallUrl ?? cardFallbackHref(card);
@@ -4275,7 +4275,12 @@ function MatchAnalyticsPanel({
                     <section className="opening-hand" key={hand.id}>
                       <div className="opening-hand-head">
                         <h4>
-                          Hand {hand.attemptNumber.toLocaleString()} · {hand.decision === "keep" ? "Kept" : "Mulliganed"}
+                          Hand {hand.attemptNumber.toLocaleString()} ·{" "}
+                          {hand.decision === "keep"
+                            ? "Kept"
+                            : hand.decision === "mulligan"
+                              ? "Mulliganed"
+                              : "Never decided"}
                         </h4>
                         <span>{hand.offeredHandSize.toLocaleString()} offered</span>
                       </div>
@@ -4291,7 +4296,9 @@ function MatchAnalyticsPanel({
                                 ? "kept"
                                 : hand.decision === "keep"
                                   ? "bottomed"
-                                  : "returned";
+                                  : hand.decision === "mulligan"
+                                    ? "returned"
+                                    : "undecided";
                               return (
                                 <li
                                   className={`is-${disposition}`}

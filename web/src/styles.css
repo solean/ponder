@@ -3351,6 +3351,12 @@ small.settings-meta,
   filter: grayscale(0.2);
 }
 
+/* The game ended inside the mulligan sequence: this offer was never kept. */
+.opening-hand-cards li.is-undecided {
+  opacity: 0.52;
+  filter: grayscale(0.3);
+}
+
 .opening-hand-card {
   position: relative;
   display: block;

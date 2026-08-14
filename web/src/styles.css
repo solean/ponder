@@ -8996,6 +8996,11 @@ select option {
 /* Top decks / drafts columns */
 
 .overview-columns {
+  /* One row slot, shared by every compact row and the drafts chip row. Rows are
+     otherwise 67.4-68.2px depending on whether an inline event label (set icon)
+     inflates the line box, which knocks the two columns out of step; this floor
+     clears the tallest of them so every row lands on the same grid. */
+  --overview-row-h: 4.4rem;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(24rem, 100%), 1fr));
   gap: 0.82rem;
@@ -9006,11 +9011,29 @@ select option {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
   gap: 0.65rem;
-  margin-bottom: 0.65rem;
+  margin-bottom: 0.55rem; /* matches .list gap so the chip row is one slot */
+}
+
+/* These chips carry no rank symbol, so drop the 48px symbol slot `.rank-chip`
+   reserves and size them to one row slot instead. That keeps the drafts column
+   (chip row + 3 rows) flush with Top Decks (4 rows). */
+.overview-chip-row .rank-chip {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: var(--overview-row-h);
+  padding: 0.55rem 0.82rem;
+}
+
+.overview-chip-row .rank-chip > strong {
+  min-height: 0;
+  margin-top: 0;
 }
 
 .list-row--compact {
   grid-template-columns: minmax(0, 1fr) auto;
+  min-height: var(--overview-row-h);
   padding: 0.6rem 0.82rem;
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import { DeckMatchupsPanel, LimitedMatchupsPanel } from "../components/MatchupPa
 import { ManaSymbol } from "../components/ManaSymbol";
 import { RarityDot, RARITY_LABELS, RARITY_ORDER } from "../components/RarityDot";
 import { ResultPill } from "../components/ResultPill";
+import { SectionTabs, sectionPanelID, sectionTabID } from "../components/SectionTabs";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { parseEventName } from "../lib/events";
@@ -1077,9 +1078,9 @@ function DeckDetailSkeleton() {
         </div>
       </section>
 
-      <div className="tabs deck-section-tabs" aria-hidden="true">
+      <div className="section-tabs" aria-hidden="true">
         {DECK_SECTIONS.map((section, index) => (
-          <span className={`tab deck-section-tab ${index === 0 ? "is-active" : ""}`} key={section.id}>
+          <span className={`section-tab ${index === 0 ? "is-active" : ""}`} key={section.id}>
             {section.label}
           </span>
         ))}
@@ -1160,27 +1161,6 @@ export function DeckDetailPage() {
     }
   }, [activeSection, isGuideVisibilityLoading, isGuideVisible, isRequestedSectionValid, requestedSection]);
 
-  function handleSectionTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, section: DeckSection) {
-    const currentIndex = visibleSections.findIndex((candidate) => candidate.id === section);
-    if (currentIndex === -1) return;
-
-    let nextIndex: number | null = null;
-    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-      nextIndex = (currentIndex + visibleSections.length - 1) % visibleSections.length;
-    } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-      nextIndex = (currentIndex + 1) % visibleSections.length;
-    } else if (event.key === "Home") {
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      nextIndex = visibleSections.length - 1;
-    }
-
-    if (nextIndex === null) return;
-    event.preventDefault();
-    const nextSection = visibleSections[nextIndex];
-    setActiveSection(nextSection.id);
-    document.getElementById(`${sectionTabBaseId}-tab-${nextSection.id}`)?.focus();
-  }
   const { lookup: setLookup } = useEventSets([
     data?.eventName,
     ...(data?.matches ?? []).map((match) => match.eventName),
@@ -1510,31 +1490,20 @@ export function DeckDetailPage() {
         </div>
       </section>
 
-      <div className="tabs deck-section-tabs" role="tablist" aria-label="Deck detail sections">
-        {visibleSections.map((section) => (
-          <button
-            key={section.id}
-            type="button"
-            id={`${sectionTabBaseId}-tab-${section.id}`}
-            role="tab"
-            aria-selected={activeSection === section.id}
-            aria-controls={`${sectionTabBaseId}-panel-${section.id}`}
-            tabIndex={activeSection === section.id ? 0 : -1}
-            className={`tab deck-section-tab ${activeSection === section.id ? "is-active" : ""}`}
-            onClick={() => setActiveSection(section.id)}
-            onKeyDown={(event) => handleSectionTabKeyDown(event, section.id)}
-          >
-            {section.label}
-          </button>
-        ))}
-      </div>
+      <SectionTabs
+        sections={visibleSections}
+        activeSection={activeSection}
+        baseId={sectionTabBaseId}
+        label="Deck detail sections"
+        onSelect={setActiveSection}
+      />
 
       {activeSection === "decklist" ? (
         <section
-          id={`${sectionTabBaseId}-panel-decklist`}
+          id={sectionPanelID(sectionTabBaseId, "decklist")}
           className="panel decklist-panel"
           role="tabpanel"
-          aria-labelledby={`${sectionTabBaseId}-tab-decklist`}
+          aria-labelledby={sectionTabID(sectionTabBaseId, "decklist")}
         >
           <div className="panel-head">
             <div>
@@ -1547,7 +1516,7 @@ export function DeckDetailPage() {
               ) : null}
             </div>
             <div className="deck-detail-actions">
-              <div className="tabs deck-view-toggle" role="group" aria-label="Deck display mode">
+              <div className="tabs tabs--sm deck-view-toggle" role="group" aria-label="Deck display mode">
                 <button
                   type="button"
                   className={`tab ${deckDisplayMode === "list" ? "is-active" : ""}`}
@@ -1633,10 +1602,10 @@ export function DeckDetailPage() {
 
       {activeSection === "performance" ? (
         <div
-          id={`${sectionTabBaseId}-panel-performance`}
+          id={sectionPanelID(sectionTabBaseId, "performance")}
           className="stack-lg"
           role="tabpanel"
-          aria-labelledby={`${sectionTabBaseId}-tab-performance`}
+          aria-labelledby={sectionTabID(sectionTabBaseId, "performance")}
         >
           <DeckAnalyticsPanel deckId={deckId} versions={versions} />
           {/draft|sealed|limited/.test(`${data.format} ${data.eventName}`.toLowerCase()) ? (
@@ -1649,9 +1618,9 @@ export function DeckDetailPage() {
 
       {activeSection === "guide" ? (
         <div
-          id={`${sectionTabBaseId}-panel-guide`}
+          id={sectionPanelID(sectionTabBaseId, "guide")}
           role="tabpanel"
-          aria-labelledby={`${sectionTabBaseId}-tab-guide`}
+          aria-labelledby={sectionTabID(sectionTabBaseId, "guide")}
         >
           {isGuideVisible ? (
             <DeckPrimerPanel deckId={deckId} cards={cards} />
@@ -1665,10 +1634,10 @@ export function DeckDetailPage() {
 
       {activeSection === "matches" ? (
         <section
-          id={`${sectionTabBaseId}-panel-matches`}
+          id={sectionPanelID(sectionTabBaseId, "matches")}
           className="panel"
           role="tabpanel"
-          aria-labelledby={`${sectionTabBaseId}-tab-matches`}
+          aria-labelledby={sectionTabID(sectionTabBaseId, "matches")}
         >
         <div className="panel-head">
           <h3>Matches with this deck</h3>

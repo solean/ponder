@@ -23,6 +23,7 @@ import { MatchDeckColors } from "../components/MatchDeckColors";
 import { ManaSymbol } from "../components/ManaSymbol";
 import { RarityDot } from "../components/RarityDot";
 import { ResultPill } from "../components/ResultPill";
+import { SectionTabs, sectionPanelID, sectionTabID } from "../components/SectionTabs";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { formatDateTime, formatDuration } from "../lib/format";
@@ -4351,7 +4352,7 @@ function MatchGameTabs({
   onKeyDown: (event: KeyboardEvent<HTMLButtonElement>, gameNumber: number) => void;
 }) {
   return (
-    <div className="tabs match-timeline-game-tabs" role="tablist" aria-label={ariaLabel}>
+    <div className="tabs tabs--sm match-timeline-game-tabs" role="tablist" aria-label={ariaLabel}>
       {gameNumbers.map((gameNumber) => (
         <button
           key={gameNumber}
@@ -4361,7 +4362,7 @@ function MatchGameTabs({
           aria-selected={activeGameNumber === gameNumber}
           aria-controls={`${baseId}-panel-${gameNumber}`}
           tabIndex={activeGameNumber === gameNumber ? 0 : -1}
-          className={`tab match-timeline-button ${activeGameNumber === gameNumber ? "is-active" : ""}`}
+          className={`tab ${activeGameNumber === gameNumber ? "is-active" : ""}`}
           onClick={() => onSelect(gameNumber)}
           onKeyDown={(event) => onKeyDown(event, gameNumber)}
         >
@@ -4645,49 +4646,6 @@ export function MatchDetailPage() {
     }
   }
 
-  function handleSectionTabKeyDown(
-    event: KeyboardEvent<HTMLButtonElement>,
-    section: MatchSection,
-  ) {
-    const currentIndex = MATCH_SECTIONS.findIndex(
-      (candidate) => candidate.id === section,
-    );
-    if (currentIndex === -1) return;
-
-    const focusSection = (index: number) => {
-      const next = MATCH_SECTIONS[index];
-      setActiveSection(next.id);
-      document
-        .getElementById(`${sectionTabBaseId}-tab-${next.id}`)
-        ?.focus();
-    };
-
-    switch (event.key) {
-      case "ArrowLeft":
-      case "ArrowUp":
-        event.preventDefault();
-        focusSection(
-          (currentIndex + MATCH_SECTIONS.length - 1) % MATCH_SECTIONS.length,
-        );
-        break;
-      case "ArrowRight":
-      case "ArrowDown":
-        event.preventDefault();
-        focusSection((currentIndex + 1) % MATCH_SECTIONS.length);
-        break;
-      case "Home":
-        event.preventDefault();
-        focusSection(0);
-        break;
-      case "End":
-        event.preventDefault();
-        focusSection(MATCH_SECTIONS.length - 1);
-        break;
-      default:
-        break;
-    }
-  }
-
   if (!isValidMatchID)
     return <StatusMessage tone="error">Invalid match id.</StatusMessage>;
   if (query.isLoading) return <StatusMessage>Loading match…</StatusMessage>;
@@ -4771,34 +4729,19 @@ export function MatchDetailPage() {
         </dl>
       </section>
 
-      <div
-        className="tabs match-section-tabs"
-        role="tablist"
-        aria-label="Match detail sections"
-      >
-        {MATCH_SECTIONS.map((section) => (
-          <button
-            key={section.id}
-            type="button"
-            id={`${sectionTabBaseId}-tab-${section.id}`}
-            role="tab"
-            aria-selected={activeSection === section.id}
-            aria-controls={`${sectionTabBaseId}-panel-${section.id}`}
-            tabIndex={activeSection === section.id ? 0 : -1}
-            className={`tab match-section-tab ${activeSection === section.id ? "is-active" : ""}`}
-            onClick={() => setActiveSection(section.id)}
-            onKeyDown={(event) => handleSectionTabKeyDown(event, section.id)}
-          >
-            {section.label}
-          </button>
-        ))}
-      </div>
+      <SectionTabs
+        sections={MATCH_SECTIONS}
+        activeSection={activeSection}
+        baseId={sectionTabBaseId}
+        label="Match detail sections"
+        onSelect={setActiveSection}
+      />
 
       {activeSection === "review" ? (
         <div
-          id={`${sectionTabBaseId}-panel-review`}
+          id={sectionPanelID(sectionTabBaseId, "review")}
           role="tabpanel"
-          aria-labelledby={`${sectionTabBaseId}-tab-review`}
+          aria-labelledby={sectionTabID(sectionTabBaseId, "review")}
           className="stack-lg"
         >
           {replayQuery.isPending ? (
@@ -4837,9 +4780,9 @@ export function MatchDetailPage() {
 
       {activeSection === "analytics" ? (
         <div
-          id={`${sectionTabBaseId}-panel-analytics`}
+          id={sectionPanelID(sectionTabBaseId, "analytics")}
           role="tabpanel"
-          aria-labelledby={`${sectionTabBaseId}-tab-analytics`}
+          aria-labelledby={sectionTabID(sectionTabBaseId, "analytics")}
         >
           <MatchAnalyticsPanel games={query.data.games ?? []} coverage={query.data.coverage} />
         </div>
@@ -4847,9 +4790,9 @@ export function MatchDetailPage() {
 
       {activeSection === "replay" ? (
         <div
-          id={`${sectionTabBaseId}-panel-replay`}
+          id={sectionPanelID(sectionTabBaseId, "replay")}
           role="tabpanel"
-          aria-labelledby={`${sectionTabBaseId}-tab-replay`}
+          aria-labelledby={sectionTabID(sectionTabBaseId, "replay")}
         >
       <section className="panel">
         <div className="panel-head match-timeline-toolbar">
@@ -4949,9 +4892,9 @@ export function MatchDetailPage() {
 
       {activeSection === "opponent" ? (
         <div
-          id={`${sectionTabBaseId}-panel-opponent`}
+          id={sectionPanelID(sectionTabBaseId, "opponent")}
           role="tabpanel"
-          aria-labelledby={`${sectionTabBaseId}-tab-opponent`}
+          aria-labelledby={sectionTabID(sectionTabBaseId, "opponent")}
         >
       <section className="panel">
         <div className="panel-head">

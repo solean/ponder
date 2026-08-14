@@ -1165,6 +1165,9 @@ body.has-wide-deck-curve .app-shell {
 }
 
 .tab {
+  appearance: none;
+  cursor: pointer;
+  touch-action: manipulation;
   text-decoration: none;
   color: var(--muted);
   border: 1px solid transparent;
@@ -1214,6 +1217,83 @@ body.has-wide-deck-curve .app-shell {
   color: var(--muted);
   border-color: transparent;
   background: transparent;
+}
+
+/* ══════════════════════════════════════════
+   SECTION TABS — UNDERLINE (page sections)
+   ══════════════════════════════════════════
+   Hierarchy: segmented `.tabs` = app nav (topbar) and panel-scoped
+   switchers (`.tabs--sm`); `.section-tabs` = the page's own sections. */
+
+.section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0 1.65rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.section-tab {
+  position: relative;
+  appearance: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  border: 0;
+  border-radius: 3px 3px 0 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: var(--display-sm);
+  font-weight: 700;
+  letter-spacing: var(--track-display);
+  line-height: 1.15;
+  padding: 0.3rem 0.14rem 0.52rem;
+  white-space: nowrap;
+  transition: color 160ms ease;
+}
+
+.section-tab::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 2px;
+  background: transparent;
+  transition: background-color 160ms ease;
+}
+
+.section-tab:hover {
+  color: var(--muted-strong);
+}
+
+.section-tab:hover::after {
+  background: var(--line-strong);
+}
+
+.section-tab.is-active {
+  color: var(--text-soft);
+}
+
+.section-tab.is-active::after {
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+/* Panel-scoped switcher: segmented shell demoted to control weight so it
+   never competes with the section tabs above it. */
+.tabs--sm {
+  gap: 1px;
+  padding: 2px;
+}
+
+.tabs--sm .tab {
+  min-height: 1.72rem;
+  padding: 0.2rem 0.62rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: var(--track-md);
+  text-transform: uppercase;
 }
 
 /* ══════════════════════════════════════════
@@ -1673,11 +1753,6 @@ body.has-wide-deck-curve .app-shell {
   align-self: start;
 }
 
-.rank-toggle-button {
-  appearance: none;
-  cursor: pointer;
-  touch-action: manipulation;
-}
 
 .rank-season-select {
   position: relative;
@@ -1913,17 +1988,6 @@ body.has-wide-deck-curve .app-shell {
   }
 }
 
-.deck-section-tabs {
-  align-self: start;
-  width: fit-content;
-  max-width: 100%;
-}
-
-.deck-section-tab {
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
 .deck-version-disclosure {
   position: relative;
   flex: 0 0 auto;
@@ -1962,11 +2026,6 @@ body.has-wide-deck-curve .app-shell {
 
 .deck-version-popover > .panel-head {
   margin-bottom: 0;
-}
-
-.deck-view-toggle .tab {
-  cursor: pointer;
-  touch-action: manipulation;
 }
 
 .panel-head--stacked {
@@ -3631,17 +3690,6 @@ small.settings-meta,
 
 .match-timeline-heading h3 {
   white-space: nowrap;
-}
-
-.match-timeline-button {
-  appearance: none;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.match-section-tabs {
-  width: fit-content;
-  max-width: 100%;
 }
 
 .match-timeline-game-tabs {
@@ -7651,6 +7699,7 @@ select option {
   .metric-card,
   .panel,
   .tab,
+  .section-tab,
   .list-row,
   .data-table tbody tr,
   .match-replay-card,
@@ -7835,14 +7884,20 @@ select option {
     flex-wrap: wrap;
   }
 
-  .deck-section-tabs {
-    order: initial;
-    width: 100%;
+  .section-tabs {
+    flex-wrap: nowrap;
+    gap: 0 1.15rem;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
-  .deck-section-tab {
-    flex: 1 1 0;
-    justify-content: center;
+  .section-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .section-tab {
+    padding-top: 0.5rem;
+    padding-bottom: 0.62rem;
   }
 
   .deck-version-trigger {
@@ -7871,6 +7926,10 @@ select option {
   .tab {
     min-height: 2.75rem;
     padding: 0.52rem 0.82rem;
+  }
+
+  .tabs--sm .tab {
+    min-height: 2.25rem;
   }
 
   .match-timeline-toolbar .tabs {

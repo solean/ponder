@@ -3164,6 +3164,7 @@ small.settings-meta,
 .analytics-coverage-badge,
 .analytics-confidence,
 .deck-version-current,
+.deck-version-viewing,
 .deck-version-count {
   display: inline-flex;
   align-items: center;
@@ -3190,7 +3191,8 @@ small.settings-meta,
 
 .analytics-coverage-badge.is-partial,
 .analytics-confidence.is-derived,
-.deck-version-current {
+.deck-version-current,
+.deck-version-viewing {
   color: var(--accent);
   border-color: var(--tab-active-border);
   background: var(--accent-soft);
@@ -3611,13 +3613,40 @@ small.settings-meta,
 }
 
 .deck-version-row {
+  min-width: 0;
+  background: var(--surface-faint);
+}
+
+.deck-version-row-button {
   display: grid;
   grid-template-columns: minmax(10rem, 0.7fr) minmax(0, 2fr);
   align-items: center;
   gap: 1rem;
+  width: 100%;
   min-width: 0;
   padding: 0.78rem 0.85rem;
-  background: var(--surface-faint);
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.deck-version-row-button:hover {
+  background: var(--table-row-hover);
+}
+
+.deck-version-row-button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.deck-version-row.is-selected .deck-version-row-button {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .deck-version-identity {
@@ -3636,12 +3665,156 @@ small.settings-meta,
   margin: 0;
 }
 
+.deck-version-change-counts {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.deck-version-change-counts .is-added,
+.deck-version-change-quantity.is-added {
+  color: var(--pill-win-text);
+}
+
+.deck-version-change-counts .is-removed,
+.deck-version-change-quantity.is-removed {
+  color: var(--pill-loss-text);
+}
+
+.deck-version-viewing-note {
+  margin-top: 0.18rem !important;
+}
+
+.deck-version-changes {
+  margin-bottom: 1rem;
+  overflow: visible;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-faint);
+}
+
+.deck-version-changes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.72rem 0.85rem;
+  list-style: none;
+  cursor: pointer;
+}
+
+.deck-version-changes-head::-webkit-details-marker {
+  display: none;
+}
+
+.deck-version-changes-head:hover {
+  background: var(--table-row-hover);
+}
+
+.deck-version-changes-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.deck-version-changes[open] .deck-version-changes-head {
+  border-bottom: 1px solid var(--line);
+}
+
+.deck-version-changes-head h4,
+.deck-version-changes-head p,
+.deck-version-change-columns h5,
+.deck-version-change-columns p {
+  margin: 0;
+}
+
+.deck-version-changes-head p,
+.deck-version-changes-meta span,
+.deck-version-change-columns h5,
+.deck-version-change-columns small {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--track-md);
+  text-transform: uppercase;
+}
+
+.deck-version-changes-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  white-space: nowrap;
+}
+
+.deck-version-changes-action {
+  color: var(--accent) !important;
+}
+
+.deck-version-changes-action::before {
+  content: "View changes";
+}
+
+.deck-version-changes[open] .deck-version-changes-action::before {
+  content: "Hide changes";
+}
+
+.deck-version-change-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+}
+
+.deck-version-change-columns > div {
+  min-width: 0;
+  padding: 0.72rem 0.85rem;
+  background: var(--surface-faint);
+}
+
+.deck-version-change-columns ul {
+  display: grid;
+  gap: 0.38rem;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deck-version-change-columns li {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.deck-version-change-columns .card-preview-anchor {
+  width: 100%;
+}
+
+.deck-version-change-columns .card-preview-trigger {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.deck-version-change-quantity {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.deck-version-change-columns > div > p {
+  margin-top: 0.55rem;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
 @media (max-width: 900px) {
   .analytics-coverage-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .deck-version-row,
+  .deck-version-row-button,
   .deck-version-row dl {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3656,7 +3829,7 @@ small.settings-meta,
 
   .match-analytics-heading,
   .match-game-card-head,
-  .deck-version-row {
+  .deck-version-row-button {
     display: grid;
     grid-template-columns: 1fr;
   }
@@ -3665,6 +3838,14 @@ small.settings-meta,
   .match-game-stats,
   .deck-version-row dl {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .deck-version-change-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .deck-version-changes-head {
+    align-items: flex-start;
   }
 }
 

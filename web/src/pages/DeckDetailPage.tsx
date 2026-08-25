@@ -39,6 +39,12 @@ type FloatingPopoverPosition = {
 type ManaCostPart = { kind: "symbol"; token: string } | { kind: "separator"; value: string };
 type DeckDisplayMode = "list" | "curve" | "visual";
 type DeckSection = "decklist" | "performance" | "guide" | "matches";
+type DeckVersionChange = {
+  section: string;
+  cardId: number;
+  cardName?: string;
+  quantityDelta: number;
+};
 
 const DECK_SECTIONS: Array<{ id: DeckSection; label: string }> = [
   { id: "decklist", label: "Decklist" },
@@ -126,8 +132,41 @@ const BASIC_LAND_ORDER: Record<string, number> = {
   mountain: 3,
   plains: 4,
 };
+function deckVersionChanges(version: DeckVersion, previousVersion: DeckVersion): DeckVersionChange[] {
+  const changes = new Map<string, DeckVersionChange>();
 
-function cardDisplayName(card: DeckListCard): string {
+  for (const card of previousVersion.cards) {
+    const key = `${card.section}:${card.cardId}`;
+    changes.set(key, {
+      section: card.section,
+      cardId: card.cardId,
+      cardName: card.cardName,
+      quantityDelta: -card.quantity,
+    });
+  }
+
+  for (const card of version.cards) {
+    const key = `${card.section}:${card.cardId}`;
+    const existing = changes.get(key);
+    changes.set(key, {
+      section: card.section,
+      cardId: card.cardId,
+      cardName: card.cardName || existing?.cardName,
+      quantityDelta: (existing?.quantityDelta ?? 0) + card.quantity,
+    });
+  }
+
+  return Array.from(changes.values())
+    .filter((change) => change.quantityDelta !== 0)
+    .sort((a, b) => {
+      if (a.section !== b.section) {
+        return a.section.localeCompare(b.section);
+      }
+      return cardDisplayName(a).localeCompare(cardDisplayName(b), undefined, { sensitivity: "base" });
+    });
+}
+
+function cardDisplayName(card: Pick<DeckListCard, "cardId" | "cardName">): string {
   return card.cardName?.trim() || `Card ${card.cardId}`;
 }
 
@@ -995,19 +1034,32 @@ function DeckSectionSkeleton({ rowCount = 7, showMana = true }: { rowCount?: num
   );
 }
 
-function DeckVersionHistory({ versions }: { versions: DeckVersion[] }) {
+function DeckVersionHistory({
+  versions,
+  selectedVersion,
+  onSelect,
+}: {
+  versions: DeckVersion[];
+  selectedVersion?: DeckVersion;
+  onSelect: (version: DeckVersion) => void;
+}) {
+  const disclosureRef = useRef<HTMLDetailsElement>(null);
   const currentVersion = versions[0];
 
   return (
-    <details className="deck-version-disclosure">
+    <details className="deck-version-disclosure" ref={disclosureRef}>
       <summary className="tab deck-version-trigger">
-        {currentVersion ? `Current: v${currentVersion.versionNumber.toLocaleString()}` : "No version"}
+        {selectedVersion
+          ? selectedVersion.id === currentVersion?.id
+            ? `Current: v${selectedVersion.versionNumber.toLocaleString()}`
+            : `Viewing: v${selectedVersion.versionNumber.toLocaleString()}`
+          : "No version"}
       </summary>
       <div className="deck-version-popover">
         <div className="panel-head">
           <div>
             <h3>Deck Versions</h3>
-            <p>Immutable card snapshots used by match analytics</p>
+            <p>Select a snapshot to view its cards and changes</p>
           </div>
           <span className="deck-version-count">
             {versions.length.toLocaleString()} version{versions.length === 1 ? "" : "s"}
@@ -1023,38 +1075,153 @@ function DeckVersionHistory({ versions }: { versions: DeckVersion[] }) {
                 .filter((card) => card.section === "main")
                 .reduce((sum, card) => sum + card.quantity, 0);
               const sideboardCards = totalCards - mainCards;
+              const previousVersion = versions[index + 1];
+              const changes = previousVersion ? deckVersionChanges(version, previousVersion) : [];
+              const additions = changes.reduce(
+                (sum, change) => sum + Math.max(0, change.quantityDelta),
+                0,
+              );
+              const removals = changes.reduce(
+                (sum, change) => sum + Math.max(0, -change.quantityDelta),
+                0,
+              );
+              const isSelected = version.id === selectedVersion?.id;
+
               return (
-                <li className="deck-version-row" key={version.id}>
-                  <div className="deck-version-identity">
-                    <strong>Version {version.versionNumber.toLocaleString()}</strong>
-                    {index === 0 ? <span className="deck-version-current">Current</span> : null}
-                  </div>
-                  <dl>
-                    <div>
-                      <dt>Observed</dt>
-                      <dd>{version.effectiveAt ? formatDateTime(version.effectiveAt) : "Unknown"}</dd>
+                <li className={`deck-version-row ${isSelected ? "is-selected" : ""}`} key={version.id}>
+                  <button
+                    type="button"
+                    className="deck-version-row-button"
+                    aria-pressed={isSelected}
+                    onClick={() => {
+                      onSelect(version);
+                      disclosureRef.current?.removeAttribute("open");
+                    }}
+                  >
+                    <div className="deck-version-identity">
+                      <strong>Version {version.versionNumber.toLocaleString()}</strong>
+                      {index === 0 ? <span className="deck-version-current">Current</span> : null}
+                      {isSelected && index !== 0 ? <span className="deck-version-viewing">Viewing</span> : null}
                     </div>
-                    <div>
-                      <dt>Cards</dt>
-                      <dd>
-                        {mainCards.toLocaleString()} main
-                        {sideboardCards > 0 ? ` · ${sideboardCards.toLocaleString()} side` : ""}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Source</dt>
-                      <dd>{version.source?.split("_").join(" ") || "Arena deck list"}</dd>
-                    </div>
-                    <div>
-                      <dt>Fingerprint</dt>
-                      <dd title={version.cardsHash}>{version.cardsHash.slice(0, 10)}</dd>
-                    </div>
-                  </dl>
+                    <dl>
+                      <div>
+                        <dt>Observed</dt>
+                        <dd>{version.effectiveAt ? formatDateTime(version.effectiveAt) : "Unknown"}</dd>
+                      </div>
+                      <div>
+                        <dt>Cards</dt>
+                        <dd>
+                          {mainCards.toLocaleString()} main
+                          {sideboardCards > 0 ? ` · ${sideboardCards.toLocaleString()} side` : ""}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Source</dt>
+                        <dd>{version.source?.split("_").join(" ") || "Arena deck list"}</dd>
+                      </div>
+                      <div>
+                        <dt>Changes</dt>
+                        <dd className="deck-version-change-counts">
+                          {previousVersion ? (
+                            <>
+                              <span className="is-added">+{additions.toLocaleString()}</span>
+                              <span className="is-removed">−{removals.toLocaleString()}</span>
+                            </>
+                          ) : (
+                            "First snapshot"
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                  </button>
                 </li>
               );
             })}
           </ol>
         )}
+      </div>
+    </details>
+  );
+}
+
+function DeckVersionChanges({
+  version,
+  previousVersion,
+}: {
+  version?: DeckVersion;
+  previousVersion?: DeckVersion;
+}) {
+  if (!version || !previousVersion) {
+    return null;
+  }
+
+  const changes = deckVersionChanges(version, previousVersion);
+  const additions = changes.filter((change) => change.quantityDelta > 0);
+  const removals = changes.filter((change) => change.quantityDelta < 0);
+
+  return (
+    <details className="deck-version-changes" aria-labelledby="deck-version-changes-heading">
+      <summary className="deck-version-changes-head">
+        <div>
+          <h4 id="deck-version-changes-heading">Changes in version {version.versionNumber.toLocaleString()}</h4>
+          <p>Compared with version {previousVersion.versionNumber.toLocaleString()}</p>
+        </div>
+        <div className="deck-version-changes-meta">
+          <span>{changes.length.toLocaleString()} card change{changes.length === 1 ? "" : "s"}</span>
+          <span className="deck-version-changes-action" aria-hidden="true" />
+        </div>
+      </summary>
+      <div className="deck-version-change-columns">
+        <div>
+          <h5>Added</h5>
+          {additions.length > 0 ? (
+            <ul>
+              {additions.map((change) => (
+                <li key={`added-${change.section}-${change.cardId}`}>
+                  <span className="deck-version-change-quantity is-added">
+                    +{change.quantityDelta.toLocaleString()}x
+                  </span>
+                  <DeckCardPreviewName
+                    card={{
+                      section: change.section,
+                      cardId: change.cardId,
+                      cardName: change.cardName,
+                      quantity: Math.abs(change.quantityDelta),
+                    }}
+                  />
+                  <small>{formatSectionLabel(change.section)}</small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>None</p>
+          )}
+        </div>
+        <div>
+          <h5>Removed</h5>
+          {removals.length > 0 ? (
+            <ul>
+              {removals.map((change) => (
+                <li key={`removed-${change.section}-${change.cardId}`}>
+                  <span className="deck-version-change-quantity is-removed">
+                    −{Math.abs(change.quantityDelta).toLocaleString()}x
+                  </span>
+                  <DeckCardPreviewName
+                    card={{
+                      section: change.section,
+                      cardId: change.cardId,
+                      cardName: change.cardName,
+                      quantity: Math.abs(change.quantityDelta),
+                    }}
+                  />
+                  <small>{formatSectionLabel(change.section)}</small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>None</p>
+          )}
+        </div>
       </div>
     </details>
   );
@@ -1165,15 +1332,28 @@ export function DeckDetailPage() {
     data?.eventName,
     ...(data?.matches ?? []).map((match) => match.eventName),
   ]);
+  const versions = data?.versions || [];
+  const currentVersion = versions[0];
+  const requestedVersionNumber = Number(searchParams.get("version"));
+  const selectedVersion =
+    (searchParams.has("version")
+      ? versions.find((version) => version.versionNumber === requestedVersionNumber)
+      : undefined) ?? currentVersion;
+  const selectedVersionIndex = selectedVersion
+    ? versions.findIndex((version) => version.id === selectedVersion.id)
+    : -1;
+  const previousVersion = selectedVersionIndex >= 0 ? versions[selectedVersionIndex + 1] : undefined;
+
 
   const cards = useMemo(() => {
-    return (data?.cards ?? []).map((card) => ({
+    const snapshotCards = selectedVersion?.cards.length ? selectedVersion.cards : data?.cards ?? [];
+    return snapshotCards.map((card) => ({
       section: card.section,
       cardId: card.cardId,
       cardName: card.cardName,
       quantity: card.quantity,
     }));
-  }, [data?.cards]);
+  }, [data?.cards, selectedVersion]);
 
   const mainboardCards = useMemo(() => {
     return cards.filter((card) => card.section === "main");
@@ -1441,11 +1621,25 @@ export function DeckDetailPage() {
   if (!data) return <StatusMessage>Deck not found.</StatusMessage>;
 
   const matches = data.matches ?? [];
-  const versions = data.versions ?? [];
   const matchWins = matches.filter((match) => match.result === "win").length;
   const matchLosses = matches.filter((match) => match.result === "loss").length;
   const decidedMatches = matchWins + matchLosses;
   const matchWinRate = decidedMatches > 0 ? (matchWins / decidedMatches) * 100 : null;
+  const selectDeckVersion = (version: DeckVersion) => {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("tab");
+        if (version.id === currentVersion?.id) {
+          next.delete("version");
+        } else {
+          next.set("version", version.versionNumber.toString());
+        }
+        return next;
+      },
+      { state: location.state, preventScrollReset: true },
+    );
+  };
   const setDeckDisplayMode = (mode: DeckDisplayMode) => {
     setSearchParams(
       (current) => {
@@ -1486,7 +1680,11 @@ export function DeckDetailPage() {
               <dd>{matchWinRate == null ? "—" : `${matchWinRate.toFixed(1)}%`}</dd>
             </div>
           </dl>
-          <DeckVersionHistory versions={versions} />
+          <DeckVersionHistory
+            versions={versions}
+            selectedVersion={selectedVersion}
+            onSelect={selectDeckVersion}
+          />
         </div>
       </section>
 
@@ -1508,6 +1706,13 @@ export function DeckDetailPage() {
           <div className="panel-head">
             <div>
               <h3>Decklist</h3>
+              {selectedVersion ? (
+                <p className="deck-version-viewing-note">
+                  Viewing version {selectedVersion.versionNumber.toLocaleString()}
+                  {selectedVersion.id === currentVersion?.id ? " (current)" : ""}
+                  {selectedVersion.effectiveAt ? ` · Observed ${formatDateTime(selectedVersion.effectiveAt)}` : ""}
+                </p>
+              ) : null}
               {!isCardMetadataLoading ? (
                 <div className="deck-rarity-summary">
                   <RaritySummaryGroup label="Main" cards={enrichedMainboardCards} />
@@ -1516,6 +1721,11 @@ export function DeckDetailPage() {
               ) : null}
             </div>
             <div className="deck-detail-actions">
+              {selectedVersion && currentVersion && selectedVersion.id !== currentVersion.id ? (
+                <button type="button" className="text-link" onClick={() => selectDeckVersion(currentVersion)}>
+                  Return to current version
+                </button>
+              ) : null}
               <div className="tabs tabs--sm deck-view-toggle" role="group" aria-label="Deck display mode">
                 <button
                   type="button"
@@ -1544,6 +1754,7 @@ export function DeckDetailPage() {
               </div>
             </div>
           </div>
+          <DeckVersionChanges version={selectedVersion} previousVersion={previousVersion} />
 
         <div className="stack-md">
           {deckDisplayMode === "curve" ? (

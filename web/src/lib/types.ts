@@ -382,6 +382,99 @@ export type DeckVersion = {
   cards: DeckCard[];
 };
 
+// One Arena printing from the local builder card catalog.
+export type CardDefinition = {
+  arenaId: number;
+  name: string;
+  setCode: string;
+  collectorNumber: string;
+  rarity: string;
+  manaCost: string;
+  manaValue: number | null;
+  colors: string[];
+  colorIdentity: string[];
+  typeLine: string;
+  isDigitalOnly: boolean;
+  isRebalanced: boolean;
+};
+
+export type CardSearchResult = {
+  cards: CardDefinition[];
+  total: number;
+};
+
+export type CardSearchParams = {
+  q?: string;
+  colors?: string;
+  type?: string;
+  rarity?: string;
+  set?: string;
+  mvMin?: number;
+  mvMax?: number;
+  sort?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type DeckProjectSection = "main" | "sideboard";
+
+export type DeckProjectCard = {
+  section: DeckProjectSection;
+  arenaId: number;
+  quantity: number;
+  name: string;
+  setCode: string;
+  collectorNumber: string;
+  rarity: string;
+  manaCost: string;
+  manaValue: number | null;
+  colors: string[];
+  typeLine: string;
+  // The printing is no longer present in the current Arena catalog.
+  missing: boolean;
+};
+
+export type DeckProject = {
+  id: number;
+  name: string;
+  format: string;
+  createdAt: string;
+  updatedAt: string;
+  cards: DeckProjectCard[];
+};
+
+export type DeckProjectSummary = {
+  id: number;
+  name: string;
+  format: string;
+  createdAt: string;
+  updatedAt: string;
+  mainCount: number;
+  sideboardCount: number;
+};
+
+export type DeckProjectCardInput = {
+  section: DeckProjectSection;
+  arenaId: number;
+  quantity: number;
+};
+
+export type DeckProjectSaveRequest = {
+  name: string;
+  format: string;
+  cards: DeckProjectCardInput[];
+};
+
+export type DeckProjectImportResult = {
+  project: DeckProject;
+  unresolved: string[];
+};
+
+export type DeckProjectExport = {
+  text: string;
+  unresolved: number[];
+};
+
 // Win/loss/draw tally over games with a known result; unknown results are
 // excluded and reported separately beside every RecordAgg.
 export type RecordAgg = {

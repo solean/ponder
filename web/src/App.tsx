@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { Layout } from "./components/Layout";
+import { DeckBuilderEditorPage } from "./pages/DeckBuilderEditorPage";
+import { DeckBuilderPage } from "./pages/DeckBuilderPage";
 import { DeckDetailPage } from "./pages/DeckDetailPage";
 import { DecksPage } from "./pages/DecksPage";
 import { DraftDetailPage } from "./pages/DraftDetailPage";
@@ -23,6 +25,8 @@ export function App() {
         <Route path="ranked" element={<RankedPage />} />
         <Route path="economy" element={<EconomyPage />} />
         <Route path="decks/:deckId" element={<DeckDetailPage />} />
+        <Route path="builder" element={<DeckBuilderPage />} />
+        <Route path="builder/:projectId" element={<DeckBuilderEditorPage />} />
         <Route path="drafts" element={<DraftsPage />} />
         <Route path="drafts/:draftId" element={<DraftDetailPage />} />
         <Route path="settings" element={<SettingsPage />} />

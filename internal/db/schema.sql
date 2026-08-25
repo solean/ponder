@@ -601,3 +601,49 @@ CREATE TABLE IF NOT EXISTS ai_usage_events (
 
 CREATE INDEX IF NOT EXISTS idx_ai_usage_events_created_at ON ai_usage_events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_events_provider ON ai_usage_events(provider);
+
+-- Builder-oriented card catalog extracted from the installed Arena raw card
+-- database. Unlike card_catalog (a lazy name cache), this table is rebuilt
+-- wholesale whenever the Arena data version changes and backs offline card
+-- search for the deck builder.
+CREATE TABLE IF NOT EXISTS card_definitions (
+  arena_id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  name_normalized TEXT NOT NULL,
+  set_code TEXT NOT NULL DEFAULT '',
+  collector_number TEXT NOT NULL DEFAULT '',
+  rarity TEXT NOT NULL DEFAULT '',
+  mana_cost TEXT NOT NULL DEFAULT '',
+  mana_value REAL,
+  colors TEXT NOT NULL DEFAULT '',
+  color_identity TEXT NOT NULL DEFAULT '',
+  type_line TEXT NOT NULL DEFAULT '',
+  is_primary INTEGER NOT NULL DEFAULT 0,
+  is_token INTEGER NOT NULL DEFAULT 0,
+  is_digital_only INTEGER NOT NULL DEFAULT 0,
+  is_rebalanced INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_card_definitions_name ON card_definitions(name_normalized);
+CREATE INDEX IF NOT EXISTS idx_card_definitions_set ON card_definitions(set_code);
+
+-- Editable local deck projects for the deck builder. Kept separate from the
+-- Arena-observed decks/deck_cards tables so ingest never overwrites drafts
+-- and analytics never associate local-only state with observed matches.
+CREATE TABLE IF NOT EXISTS deck_projects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  format TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS deck_project_cards (
+  project_id INTEGER NOT NULL,
+  section TEXT NOT NULL,
+  arena_id INTEGER NOT NULL,
+  quantity INTEGER NOT NULL CHECK(quantity > 0),
+  PRIMARY KEY (project_id, section, arena_id),
+  FOREIGN KEY (project_id) REFERENCES deck_projects(id) ON DELETE CASCADE
+);

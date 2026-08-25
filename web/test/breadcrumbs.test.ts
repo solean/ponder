@@ -34,6 +34,18 @@ describe("breadcrumbsForPath", () => {
     ]);
   });
 
+  test("supports the deck builder section and editor", () => {
+    expect(breadcrumbsForPath("/builder")).toEqual([
+      { label: "Overview", to: "/" },
+      { label: "Builder" },
+    ]);
+    expect(breadcrumbsForPath("/builder/3", "Izzet Phoenix")).toEqual([
+      { label: "Overview", to: "/" },
+      { label: "Builder", to: "/builder" },
+      { label: "Izzet Phoenix" },
+    ]);
+  });
+
   test("keeps a draft session in the trail when its submitted deck is opened", () => {
     expect(
       breadcrumbsForPath("/decks/42", "Draft Deck", [

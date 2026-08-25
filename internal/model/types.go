@@ -679,6 +679,79 @@ type RankState struct {
 	MatchesLost      *int64   `json:"matchesLost"`
 }
 
+// CardDefinition is one Arena printing from the builder card catalog
+// extracted out of the installed Arena raw card database.
+type CardDefinition struct {
+	ArenaID         int64    `json:"arenaId"`
+	Name            string   `json:"name"`
+	SetCode         string   `json:"setCode"`
+	CollectorNumber string   `json:"collectorNumber"`
+	Rarity          string   `json:"rarity"`
+	ManaCost        string   `json:"manaCost"`
+	ManaValue       *float64 `json:"manaValue"`
+	Colors          []string `json:"colors"`
+	ColorIdentity   []string `json:"colorIdentity"`
+	TypeLine        string   `json:"typeLine"`
+	IsDigitalOnly   bool     `json:"isDigitalOnly"`
+	IsRebalanced    bool     `json:"isRebalanced"`
+}
+
+type CardSearchResult struct {
+	Cards []CardDefinition `json:"cards"`
+	Total int64            `json:"total"`
+}
+
+// DeckProjectCard is a card row in an editable local deck project. The
+// definition fields are hydrated from card_definitions when available so the
+// editor can render without extra lookups; Name may fall back to the
+// card_catalog cache when a printing is missing from the current catalog.
+type DeckProjectCard struct {
+	Section         string   `json:"section"`
+	ArenaID         int64    `json:"arenaId"`
+	Quantity        int64    `json:"quantity"`
+	Name            string   `json:"name"`
+	SetCode         string   `json:"setCode"`
+	CollectorNumber string   `json:"collectorNumber"`
+	Rarity          string   `json:"rarity"`
+	ManaCost        string   `json:"manaCost"`
+	ManaValue       *float64 `json:"manaValue"`
+	Colors          []string `json:"colors"`
+	TypeLine        string   `json:"typeLine"`
+	Missing         bool     `json:"missing"`
+}
+
+type DeckProject struct {
+	ID        int64             `json:"id"`
+	Name      string            `json:"name"`
+	Format    string            `json:"format"`
+	CreatedAt string            `json:"createdAt"`
+	UpdatedAt string            `json:"updatedAt"`
+	Cards     []DeckProjectCard `json:"cards"`
+}
+
+type DeckProjectSummary struct {
+	ID             int64  `json:"id"`
+	Name           string `json:"name"`
+	Format         string `json:"format"`
+	CreatedAt      string `json:"createdAt"`
+	UpdatedAt      string `json:"updatedAt"`
+	MainCount      int64  `json:"mainCount"`
+	SideboardCount int64  `json:"sideboardCount"`
+}
+
+// DeckProjectImportResult reports how an Arena deck-list import resolved.
+// Unresolved lines are preserved verbatim so the UI can warn without
+// silently dropping cards.
+type DeckProjectImportResult struct {
+	Project    DeckProject `json:"project"`
+	Unresolved []string    `json:"unresolved"`
+}
+
+type DeckProjectExport struct {
+	Text       string  `json:"text"`
+	Unresolved []int64 `json:"unresolved"`
+}
+
 type RankHistoryPoint struct {
 	MatchID      int64     `json:"matchId"`
 	ArenaMatchID string    `json:"arenaMatchId"`

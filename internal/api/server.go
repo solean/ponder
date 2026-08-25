@@ -37,6 +37,7 @@ type Server struct {
 	httpClient   *http.Client
 	aiProvider   *ai.Service
 	aiGenBusy    sync.Mutex
+	cardDefsSync cardDefinitionsSyncState
 }
 
 func NewServer(store *db.Store, staticDir string, appState *appstate.Service) *Server {
@@ -68,6 +69,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/limited/matchups/refs", s.handleLimitedMatchupRefs)
 	mux.HandleFunc("/api/decks", s.handleDecks)
 	mux.HandleFunc("/api/decks/", s.handleDeckDetail)
+	mux.HandleFunc("/api/cards", s.handleCardSearch)
+	mux.HandleFunc("/api/deck-projects", s.handleDeckProjects)
+	mux.HandleFunc("/api/deck-projects/", s.handleDeckProjectDetail)
 	mux.HandleFunc("/api/drafts", s.handleDrafts)
 	mux.HandleFunc("/api/drafts/", s.handleDraftPicks)
 	mux.HandleFunc("/api/sets", s.handleSets)

@@ -14,6 +14,7 @@ export type BreadcrumbNavigationState = {
 const sectionLabels = {
   matches: "Matches",
   decks: "Decks",
+  builder: "Builder",
   drafts: "Drafts",
   ranked: "Ranked",
   economy: "Economy",
@@ -25,6 +26,7 @@ type Section = keyof typeof sectionLabels;
 const detailPrefixes: Partial<Record<Section, string>> = {
   matches: "Match",
   decks: "Deck",
+  builder: "Deck",
   drafts: "Draft",
 };
 

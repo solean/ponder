@@ -1,11 +1,18 @@
 import type {
   AiStatus,
   AutostartStatus,
+  CardSearchParams,
+  CardSearchResult,
   DeckAnalytics,
   DeckAnalyticsGameRef,
   DeckAnalyticsGamesParams,
   DeckDetail,
   DeckPrimer,
+  DeckProject,
+  DeckProjectExport,
+  DeckProjectImportResult,
+  DeckProjectSaveRequest,
+  DeckProjectSummary,
   DeckSummary,
   DraftPick,
   DraftSession,
@@ -47,6 +54,30 @@ async function postJSON<T>(path: string, body?: unknown): Promise<T> {
     },
     body: body == null ? undefined : JSON.stringify(body),
   });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Request failed (${res.status}): ${text}`);
+  }
+  return (await res.json()) as T;
+}
+
+async function putJSON<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Request failed (${res.status}): ${text}`);
+  }
+  return (await res.json()) as T;
+}
+
+async function deleteJSON<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, { method: "DELETE" });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Request failed (${res.status}): ${text}`);
@@ -110,6 +141,30 @@ export const api = {
   },
   setOpponentArchetype: (matchId: number, archetype: string) =>
     postJSON<{ status: string; archetype: string }>(`/api/matches/${matchId}/opponent-archetype`, { archetype }),
+  cardSearch: (params: CardSearchParams) => {
+    const search = new URLSearchParams();
+    if (params.q) search.set("q", params.q);
+    if (params.colors) search.set("colors", params.colors);
+    if (params.type) search.set("type", params.type);
+    if (params.rarity) search.set("rarity", params.rarity);
+    if (params.set) search.set("set", params.set);
+    if (params.mvMin != null) search.set("mvMin", String(params.mvMin));
+    if (params.mvMax != null) search.set("mvMax", String(params.mvMax));
+    if (params.sort) search.set("sort", params.sort);
+    if (params.limit != null) search.set("limit", String(params.limit));
+    if (params.offset != null) search.set("offset", String(params.offset));
+    const query = search.toString();
+    return getJSON<CardSearchResult>(query ? `/api/cards?${query}` : "/api/cards");
+  },
+  deckProjects: () => getJSON<DeckProjectSummary[]>("/api/deck-projects"),
+  deckProject: (projectId: number) => getJSON<DeckProject>(`/api/deck-projects/${projectId}`),
+  createDeckProject: (body: DeckProjectSaveRequest) => postJSON<DeckProject>("/api/deck-projects", body),
+  saveDeckProject: (projectId: number, body: DeckProjectSaveRequest) =>
+    putJSON<DeckProject>(`/api/deck-projects/${projectId}`, body),
+  deleteDeckProject: (projectId: number) => deleteJSON<{ status: string }>(`/api/deck-projects/${projectId}`),
+  importDeckProject: (text: string, name = "", format = "") =>
+    postJSON<DeckProjectImportResult>("/api/deck-projects/import", { text, name, format }),
+  exportDeckProject: (projectId: number) => getJSON<DeckProjectExport>(`/api/deck-projects/${projectId}/export`),
   drafts: () => getJSON<DraftSession[]>("/api/drafts"),
   draftPicks: (draftId: number) => getJSON<DraftPick[]>(`/api/drafts/${draftId}/picks`),
   sets: (codes: string[]) =>

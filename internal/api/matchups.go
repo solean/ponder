@@ -214,7 +214,7 @@ func (s *Server) resolveCardMetadata(ctx context.Context, cardIDs []int64) map[i
 	if len(unresolved) > 0 {
 		fetched, fetchErr := s.fetchCardMetadataFromScryfall(ctx, unresolved)
 		if fetchErr != nil {
-			log.Printf("scryfall card metadata lookup failed: %v", fetchErr)
+			logScryfallError("scryfall card metadata lookup failed: %v", fetchErr)
 		}
 		for cardID, meta := range fetched {
 			resolved[cardID] = meta
@@ -367,7 +367,7 @@ func (s *Server) fetchCardMetadataBatch(ctx context.Context, cardIDs []int64) (m
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("User-Agent", "ponder/0.1 (local tracker)")
 
-		res, err := s.httpClient.Do(req)
+		res, err := s.doScryfallRequest(req)
 		if err != nil {
 			return out, fmt.Errorf("request scryfall metadata: %w", err)
 		}

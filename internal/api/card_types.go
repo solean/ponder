@@ -60,7 +60,7 @@ func (s *Server) resolveCardTypeLines(ctx context.Context, cardIDs []int64) map[
 
 	fetched, fetchErr := s.fetchCardTypeLinesFromScryfall(ctx, unresolved)
 	if fetchErr != nil {
-		log.Printf("scryfall card type lookup failed: %v", fetchErr)
+		logScryfallError("scryfall card type lookup failed: %v", fetchErr)
 	}
 	for id, typeLine := range fetched {
 		trimmed := strings.TrimSpace(typeLine)
@@ -132,7 +132,7 @@ func (s *Server) fetchCardTypeLineBatch(ctx context.Context, cardIDs []int64) (m
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "ponder/0.1 (local tracker)")
 
-	res, err := s.httpClient.Do(req)
+	res, err := s.doScryfallRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("request scryfall types: %w", err)
 	}
@@ -170,7 +170,7 @@ func (s *Server) fetchCardTypeLineBatch(ctx context.Context, cardIDs []int64) (m
 		nextReq.Header.Set("Accept", "application/json")
 		nextReq.Header.Set("User-Agent", "ponder/0.1 (local tracker)")
 
-		nextRes, err := s.httpClient.Do(nextReq)
+		nextRes, err := s.doScryfallRequest(nextReq)
 		if err != nil {
 			return out, fmt.Errorf("request scryfall type next page: %w", err)
 		}

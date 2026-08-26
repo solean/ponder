@@ -145,7 +145,7 @@ func (s *Server) resolveCardColorIdentities(ctx context.Context, cardIDs []int64
 	if len(unresolved) > 0 {
 		fetchedColors, fetchErr := s.fetchCardColorIdentitiesFromScryfall(ctx, unresolved)
 		if fetchErr != nil {
-			log.Printf("scryfall card color lookup failed: %v", fetchErr)
+			logScryfallError("scryfall card color lookup failed: %v", fetchErr)
 		}
 		for cardID, colors := range fetchedColors {
 			resolved[cardID] = colors
@@ -274,7 +274,7 @@ func (s *Server) fetchCardColorBatch(ctx context.Context, cardIDs []int64) (map[
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "ponder/0.1 (local tracker)")
 
-	res, err := s.httpClient.Do(req)
+	res, err := s.doScryfallRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("request scryfall colors: %w", err)
 	}
@@ -312,7 +312,7 @@ func (s *Server) fetchCardColorBatch(ctx context.Context, cardIDs []int64) (map[
 		nextReq.Header.Set("Accept", "application/json")
 		nextReq.Header.Set("User-Agent", "ponder/0.1 (local tracker)")
 
-		nextRes, err := s.httpClient.Do(nextReq)
+		nextRes, err := s.doScryfallRequest(nextReq)
 		if err != nil {
 			return out, fmt.Errorf("request scryfall color next page: %w", err)
 		}

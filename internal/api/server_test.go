@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -74,6 +75,43 @@ func TestRunUpdateCheckUsesPonderRepository(t *testing.T) {
 	}
 	if result.Note != "no releases published yet" {
 		t.Fatalf("update note = %q, want %q", result.Note, "no releases published yet")
+	}
+}
+
+func TestScryfallRequestsStopDuringRateLimitCooldown(t *testing.T) {
+	requestCount := 0
+	server := NewServer(nil, "", nil)
+	server.httpClient = &http.Client{
+		Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			requestCount++
+			return &http.Response{
+				StatusCode: http.StatusTooManyRequests,
+				Header:     http.Header{"Retry-After": []string{"60"}},
+				Body:       io.NopCloser(strings.NewReader("rate limited")),
+				Request:    req,
+			}, nil
+		}),
+	}
+
+	firstRequest, err := http.NewRequest(http.MethodGet, "https://api.scryfall.com/cards/arena/1", nil)
+	if err != nil {
+		t.Fatalf("build first Scryfall request: %v", err)
+	}
+	firstResponse, err := server.doScryfallRequest(firstRequest)
+	if err != nil {
+		t.Fatalf("first Scryfall request: %v", err)
+	}
+	firstResponse.Body.Close()
+
+	secondRequest, err := http.NewRequest(http.MethodGet, "https://api.scryfall.com/cards/arena/2", nil)
+	if err != nil {
+		t.Fatalf("build second Scryfall request: %v", err)
+	}
+	if _, err := server.doScryfallRequest(secondRequest); !errors.Is(err, errScryfallCooldown) {
+		t.Fatalf("second Scryfall request error = %v, want cooldown", err)
+	}
+	if requestCount != 1 {
+		t.Fatalf("Scryfall network requests = %d, want 1", requestCount)
 	}
 }
 

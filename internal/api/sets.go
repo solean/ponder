@@ -65,7 +65,7 @@ func (s *Server) resolveSets(ctx context.Context, codes []string) map[string]mod
 		}
 		info, fetchErr := s.fetchSetFromScryfall(ctx, code)
 		if fetchErr != nil {
-			log.Printf("scryfall set lookup failed for %q: %v", code, fetchErr)
+			logScryfallError(fmt.Sprintf("scryfall set lookup failed for %q: %%v", code), fetchErr)
 			continue
 		}
 		if info == nil {
@@ -95,7 +95,7 @@ func (s *Server) fetchSetFromScryfall(ctx context.Context, code string) (*model.
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "ponder/0.1 (local tracker)")
 
-	res, err := s.httpClient.Do(req)
+	res, err := s.doScryfallRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("request scryfall set: %w", err)
 	}

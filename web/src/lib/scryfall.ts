@@ -41,6 +41,58 @@ type ScryfallCard = {
 };
 
 const SCRYFALL_BASE_URL = "https://api.scryfall.com";
+const SCRYFALL_MIN_REQUEST_INTERVAL_MS = 200;
+const SCRYFALL_DEFAULT_COOLDOWN_MS = 60_000;
+
+let scryfallRequestQueue: Promise<void> = Promise.resolve();
+let nextScryfallRequestAt = 0;
+let scryfallCooldownUntil = 0;
+
+function retryAfterMilliseconds(value: string | null, now: number): number {
+  const trimmed = value?.trim() ?? "";
+  const seconds = Number(trimmed);
+  if (trimmed && Number.isFinite(seconds) && seconds > 0) {
+    return seconds * 1000;
+  }
+
+  const retryAt = Date.parse(trimmed);
+  if (Number.isFinite(retryAt) && retryAt > now) {
+    return retryAt - now;
+  }
+  return SCRYFALL_DEFAULT_COOLDOWN_MS;
+}
+
+function scheduleScryfallFetch(path: string): Promise<Response> {
+  const request = scryfallRequestQueue.then(async () => {
+    const now = Date.now();
+    if (now < scryfallCooldownUntil) {
+      throw new Error("Scryfall requests paused after rate limit");
+    }
+
+    const waitMilliseconds = Math.max(0, nextScryfallRequestAt - now);
+    if (waitMilliseconds > 0) {
+      await new Promise((resolve) => setTimeout(resolve, waitMilliseconds));
+    }
+
+    nextScryfallRequestAt = Date.now() + SCRYFALL_MIN_REQUEST_INTERVAL_MS;
+    const response = await fetch(`${SCRYFALL_BASE_URL}${path}`, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
+    if (response.status === 429) {
+      const receivedAt = Date.now();
+      scryfallCooldownUntil = receivedAt + retryAfterMilliseconds(response.headers.get("Retry-After"), receivedAt);
+    }
+    return response;
+  });
+
+  scryfallRequestQueue = request.then(
+    () => undefined,
+    () => undefined,
+  );
+  return request;
+}
 
 function pickImageURL(card: ScryfallCard): string {
   const root = card.image_uris ?? undefined;
@@ -150,11 +202,7 @@ function normalizeRarity(value?: string): CardRarity | undefined {
 }
 
 async function fetchScryfallCard(path: string): Promise<ScryfallCard | null> {
-  const response = await fetch(`${SCRYFALL_BASE_URL}${path}`, {
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  const response = await scheduleScryfallFetch(path);
   if (response.status === 404) {
     return null;
   }

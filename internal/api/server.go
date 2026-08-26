@@ -29,14 +29,17 @@ import (
 )
 
 type Server struct {
-	store        *db.Store
-	staticDir    string
-	staticAssets fs.FS
-	appState     *appstate.Service
-	desktop      Desktop
-	httpClient   *http.Client
-	aiProvider   *ai.Service
-	aiGenBusy    sync.Mutex
+	store                 *db.Store
+	staticDir             string
+	staticAssets          fs.FS
+	appState              *appstate.Service
+	desktop               Desktop
+	httpClient            *http.Client
+	scryfallRequestMu     sync.Mutex
+	scryfallNextRequest   time.Time
+	scryfallCooldownUntil time.Time
+	aiProvider            *ai.Service
+	aiGenBusy             sync.Mutex
 }
 
 func NewServer(store *db.Store, staticDir string, appState *appstate.Service) *Server {
@@ -49,6 +52,52 @@ func NewServer(store *db.Store, staticDir string, appState *appstate.Service) *S
 		},
 		aiProvider: ai.NewService(),
 	}
+}
+
+func (s *Server) doScryfallRequest(req *http.Request) (*http.Response, error) {
+	s.scryfallRequestMu.Lock()
+	defer s.scryfallRequestMu.Unlock()
+
+	now := time.Now()
+	if now.Before(s.scryfallCooldownUntil) {
+		return nil, fmt.Errorf("%w until %s", errScryfallCooldown, s.scryfallCooldownUntil.Format(time.RFC3339))
+	}
+
+	if wait := time.Until(s.scryfallNextRequest); wait > 0 {
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
+		select {
+		case <-req.Context().Done():
+			return nil, fmt.Errorf("wait for Scryfall request: %w", req.Context().Err())
+		case <-timer.C:
+		}
+	}
+
+	s.scryfallNextRequest = time.Now().Add(scryfallMinRequestInterval)
+	res, err := s.httpClient.Do(req)
+	if res != nil && res.StatusCode == http.StatusTooManyRequests {
+		receivedAt := time.Now()
+		s.scryfallCooldownUntil = receivedAt.Add(scryfallRetryAfter(res.Header.Get("Retry-After"), receivedAt))
+	}
+	return res, err
+}
+
+func scryfallRetryAfter(value string, now time.Time) time.Duration {
+	trimmed := strings.TrimSpace(value)
+	if seconds, err := strconv.Atoi(trimmed); err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	if retryAt, err := http.ParseTime(trimmed); err == nil && retryAt.After(now) {
+		return retryAt.Sub(now)
+	}
+	return scryfallDefaultCooldown
+}
+
+func logScryfallError(format string, err error) {
+	if err == nil || errors.Is(err, errScryfallCooldown) {
+		return
+	}
+	log.Printf(format, err)
 }
 
 func (s *Server) routes() http.Handler {
@@ -832,10 +881,14 @@ func ParseAddr(raw string) (string, error) {
 }
 
 const (
-	scryfallSearchURL      = "https://api.scryfall.com/cards/search"
-	scryfallSearchBatchMax = 40
-	mtgaRawCardDBEnvVar    = "MTGA_RAW_CARD_DB"
+	scryfallSearchURL          = "https://api.scryfall.com/cards/search"
+	scryfallSearchBatchMax     = 40
+	scryfallMinRequestInterval = 500 * time.Millisecond
+	scryfallDefaultCooldown    = 60 * time.Second
+	mtgaRawCardDBEnvVar        = "MTGA_RAW_CARD_DB"
 )
+
+var errScryfallCooldown = errors.New("Scryfall request cooldown active")
 
 func parseDraftCardIDs(raw string) []int64 {
 	raw = strings.TrimSpace(raw)
@@ -924,7 +977,7 @@ func (s *Server) resolveCardNames(ctx context.Context, cardIDs []int64) map[int6
 	if len(unresolved) > 0 {
 		fetchedNames, fetchErr := s.fetchCardNamesFromScryfall(ctx, unresolved)
 		if fetchErr != nil {
-			log.Printf("scryfall card name lookup failed: %v", fetchErr)
+			logScryfallError("scryfall card name lookup failed: %v", fetchErr)
 		}
 		for cardID, name := range fetchedNames {
 			trimmed := strings.TrimSpace(name)
@@ -1041,7 +1094,7 @@ func (s *Server) enrichDeckCardNames(ctx context.Context, cards []model.DeckCard
 	if len(unresolved) > 0 {
 		fetchedNames, fetchErr := s.fetchCardNamesFromScryfall(ctx, unresolved)
 		if fetchErr != nil {
-			log.Printf("scryfall card name lookup failed: %v", fetchErr)
+			logScryfallError("scryfall card name lookup failed: %v", fetchErr)
 		}
 		if len(fetchedNames) > 0 {
 			for cardID, name := range fetchedNames {
@@ -1167,7 +1220,7 @@ func (s *Server) enrichOpponentObservedCardNames(ctx context.Context, cards []mo
 	if len(unresolved) > 0 {
 		fetchedNames, fetchErr := s.fetchCardNamesFromScryfall(ctx, unresolved)
 		if fetchErr != nil {
-			log.Printf("scryfall card name lookup failed: %v", fetchErr)
+			logScryfallError("scryfall card name lookup failed: %v", fetchErr)
 		}
 		for cardID, name := range fetchedNames {
 			resolvedNames[cardID] = name
@@ -1242,7 +1295,7 @@ func (s *Server) enrichMatchCardPlayNames(ctx context.Context, plays []model.Mat
 	if len(unresolved) > 0 {
 		fetchedNames, fetchErr := s.fetchCardNamesFromScryfall(ctx, unresolved)
 		if fetchErr != nil {
-			log.Printf("scryfall card name lookup failed: %v", fetchErr)
+			logScryfallError("scryfall card name lookup failed: %v", fetchErr)
 		}
 		for cardID, name := range fetchedNames {
 			resolvedNames[cardID] = name
@@ -1328,7 +1381,7 @@ func (s *Server) enrichMatchReplayNames(ctx context.Context, frames []model.Matc
 	if len(unresolved) > 0 {
 		fetchedNames, fetchErr := s.fetchCardNamesFromScryfall(ctx, unresolved)
 		if fetchErr != nil {
-			log.Printf("scryfall card name lookup failed: %v", fetchErr)
+			logScryfallError("scryfall card name lookup failed: %v", fetchErr)
 		}
 		for cardID, name := range fetchedNames {
 			resolvedNames[cardID] = name
@@ -1534,7 +1587,7 @@ func (s *Server) fetchCardNameBatch(ctx context.Context, cardIDs []int64) (map[i
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "ponder/0.1 (local tracker)")
 
-	res, err := s.httpClient.Do(req)
+	res, err := s.doScryfallRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("request scryfall: %w", err)
 	}
@@ -1573,7 +1626,7 @@ func (s *Server) fetchCardNameBatch(ctx context.Context, cardIDs []int64) (map[i
 		nextReq.Header.Set("Accept", "application/json")
 		nextReq.Header.Set("User-Agent", "ponder/0.1 (local tracker)")
 
-		nextRes, err := s.httpClient.Do(nextReq)
+		nextRes, err := s.doScryfallRequest(nextReq)
 		if err != nil {
 			return names, fmt.Errorf("request scryfall next page: %w", err)
 		}

@@ -51,6 +51,9 @@ func (s *Store) RunMaintenance(ctx context.Context) (MaintenanceResult, error) {
 	if err := s.RepairDraftDataFromRawEvents(ctx); err != nil {
 		return result, err
 	}
+	if err := s.RepairEventRunInstances(ctx); err != nil {
+		return result, err
+	}
 
 	refreshed, err := s.RefreshPendingMatchAnalytics(ctx)
 	result.AnalyticsRefreshed = refreshed

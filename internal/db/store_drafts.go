@@ -28,6 +28,9 @@ func (s *Store) EnsureDraftSession(ctx context.Context, tx *sql.Tx, eventName st
 				SET event_name = COALESCE(?, event_name), started_at = COALESCE(started_at, ?), updated_at = ?
 				WHERE id = ?
 			`, nullIfEmpty(eventName), nullIfEmpty(ts), nowUTC(), sessionID)
+			if err := s.ensureDraftSessionEventRun(ctx, tx, sessionID); err != nil {
+				return 0, err
+			}
 			return sessionID, nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
@@ -50,6 +53,9 @@ func (s *Store) EnsureDraftSession(ctx context.Context, tx *sql.Tx, eventName st
 				SET started_at = COALESCE(started_at, ?), updated_at = ?
 				WHERE id = ?
 			`, nullIfEmpty(ts), nowUTC(), sessionID)
+			if err := s.ensureDraftSessionEventRun(ctx, tx, sessionID); err != nil {
+				return 0, err
+			}
 			return sessionID, nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
@@ -69,7 +75,29 @@ func (s *Store) EnsureDraftSession(ctx context.Context, tx *sql.Tx, eventName st
 		return 0, fmt.Errorf("last_insert_rowid draft_session: %w", err)
 	}
 
+	if err := s.ensureDraftSessionEventRun(ctx, tx, sessionID); err != nil {
+		return 0, err
+	}
 	return sessionID, nil
+}
+
+func (s *Store) ensureDraftSessionEventRun(ctx context.Context, tx *sql.Tx, sessionID int64) error {
+	var eventName, startedAt string
+	if err := tx.QueryRowContext(ctx, `
+		SELECT COALESCE(event_name, ''), COALESCE(started_at, '')
+		FROM draft_sessions
+		WHERE id = ?
+	`, sessionID).Scan(&eventName, &startedAt); err != nil {
+		return fmt.Errorf("read draft session event run fields: %w", err)
+	}
+	_, attached, err := s.attachDraftSessionToEventRun(ctx, tx, sessionID, eventName, startedAt)
+	if err != nil {
+		return err
+	}
+	if attached {
+		return s.repairUnlinkedEconomyTransactionsTx(ctx, tx)
+	}
+	return nil
 }
 
 func nullDraftID(v *string) any {
@@ -490,16 +518,27 @@ func chooseDraftDeckCandidate(candidates []draftDeckCandidate, startedAt, comple
 }
 
 func (s *Store) resolveDraftSessionDeckResults(ctx context.Context, eventName, startedAt, completedAt string) (int64, int64, bool, error) {
+	candidate, ok, err := s.resolveDraftSessionDeckCandidate(ctx, eventName, startedAt, completedAt)
+	if err != nil || !ok {
+		return 0, 0, ok, err
+	}
+	return candidate.Wins, candidate.Losses, true, nil
+}
+
+func (s *Store) resolveDraftSessionDeckCandidate(
+	ctx context.Context,
+	eventName, startedAt, completedAt string,
+) (draftDeckCandidate, bool, error) {
 	eventName = strings.TrimSpace(eventName)
 	if eventName == "" {
-		return 0, 0, false, nil
+		return draftDeckCandidate{}, false, nil
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT
 			COALESCE(d.last_updated, d.created_at, ''),
 			COALESCE(MIN(COALESCE(m.started_at, m.ended_at)), ''),
-			COALESCE(MAX(COALESCE(m.started_at, m.ended_at)), ''),
+			COALESCE(MAX(COALESCE(m.ended_at, m.started_at)), ''),
 			COALESCE(SUM(CASE WHEN m.result = 'win' THEN 1 ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN m.result = 'loss' THEN 1 ELSE 0 END), 0)
 		FROM decks d
@@ -513,7 +552,7 @@ func (s *Store) resolveDraftSessionDeckResults(ctx context.Context, eventName, s
 		GROUP BY d.id, d.last_updated, d.created_at
 	`, eventName)
 	if err != nil {
-		return 0, 0, false, fmt.Errorf("resolve draft session deck results: %w", err)
+		return draftDeckCandidate{}, false, fmt.Errorf("resolve draft session deck results: %w", err)
 	}
 	defer rows.Close()
 
@@ -522,7 +561,7 @@ func (s *Store) resolveDraftSessionDeckResults(ctx context.Context, eventName, s
 		var deckTSRaw, firstPlayedRaw, lastPlayedRaw string
 		var candidate draftDeckCandidate
 		if err := rows.Scan(&deckTSRaw, &firstPlayedRaw, &lastPlayedRaw, &candidate.Wins, &candidate.Losses); err != nil {
-			return 0, 0, false, fmt.Errorf("scan draft deck candidate: %w", err)
+			return draftDeckCandidate{}, false, fmt.Errorf("scan draft deck candidate: %w", err)
 		}
 		if parsed, ok := parseStoredTime(deckTSRaw); ok {
 			candidate.DeckTS = parsed
@@ -536,14 +575,11 @@ func (s *Store) resolveDraftSessionDeckResults(ctx context.Context, eventName, s
 		candidates = append(candidates, candidate)
 	}
 	if err := rows.Err(); err != nil {
-		return 0, 0, false, fmt.Errorf("iterate draft deck candidates: %w", err)
+		return draftDeckCandidate{}, false, fmt.Errorf("iterate draft deck candidates: %w", err)
 	}
 
 	candidate, ok := chooseDraftDeckCandidate(candidates, startedAt, completedAt)
-	if !ok {
-		return 0, 0, false, nil
-	}
-	return candidate.Wins, candidate.Losses, true, nil
+	return candidate, ok, nil
 }
 
 func (s *Store) ListDraftPicks(ctx context.Context, draftSessionID int64) ([]model.DraftPickRow, error) {

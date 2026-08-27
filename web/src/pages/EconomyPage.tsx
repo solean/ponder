@@ -509,7 +509,7 @@ export function EconomyPage() {
                 </thead>
                 <tbody>
                   {eventRuns.map((run) => (
-                    <tr key={run.eventName}>
+                    <tr key={run.id}>
                       <td title={run.startedAt ? formatDateTime(run.startedAt) : run.eventName}>
                         <EventLabel eventName={run.eventName} lookup={setLookup} />
                       </td>

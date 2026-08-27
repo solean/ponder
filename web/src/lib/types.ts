@@ -286,6 +286,7 @@ export type EconomyTransaction = {
 };
 
 export type EventRunEconomy = {
+  id: number;
   eventName: string;
   eventType: string;
   setCode: string;

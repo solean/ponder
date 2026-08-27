@@ -657,6 +657,9 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		if err := p.store.RepairDraftDataFromRawEvents(ctx); err != nil {
 			return stats, fmt.Errorf("repair draft data after ingest: %w", err)
 		}
+		if err := p.store.RepairEventRunInstances(ctx); err != nil {
+			return stats, fmt.Errorf("repair event runs after ingest: %w", err)
+		}
 	}
 
 	stats.CompletedAt = time.Now().UTC()

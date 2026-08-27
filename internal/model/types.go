@@ -637,6 +637,7 @@ type EconomyTransaction struct {
 // EventRunEconomy is the cost/reward summary of one event run. Entry deltas
 // are negative; net values keep gold and gems separate deliberately.
 type EventRunEconomy struct {
+	ID                  int64                 `json:"id"`
 	EventName           string                `json:"eventName"`
 	EventType           string                `json:"eventType"`
 	SetCode             string                `json:"setCode"`

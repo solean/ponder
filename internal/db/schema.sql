@@ -31,8 +31,9 @@ CREATE INDEX IF NOT EXISTS idx_events_raw_method ON events_raw(method_name);
 
 CREATE TABLE IF NOT EXISTS event_runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  event_name TEXT NOT NULL UNIQUE,
+  event_name TEXT NOT NULL,
   event_type TEXT,
+  draft_session_id INTEGER UNIQUE,
   entry_currency_type TEXT,
   entry_currency_paid INTEGER,
   -- SourceId of the EventPayEntry inventory change that paid for this run;
@@ -45,6 +46,8 @@ CREATE TABLE IF NOT EXISTS event_runs (
   losses INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_event_runs_name_started ON event_runs(event_name, started_at);
 
 CREATE TABLE IF NOT EXISTS decks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -516,6 +519,7 @@ CREATE TABLE IF NOT EXISTS economy_transactions (
   source TEXT NOT NULL,
   source_id TEXT,
   event_name TEXT,
+  event_run_id INTEGER,
   event_link TEXT,
   gold_delta INTEGER NOT NULL DEFAULT 0,
   gems_delta INTEGER NOT NULL DEFAULT 0,
@@ -530,7 +534,8 @@ CREATE TABLE IF NOT EXISTS economy_transactions (
   vouchers_delta_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   UNIQUE(snapshot_id, change_index),
-  FOREIGN KEY(snapshot_id) REFERENCES economy_snapshots(id) ON DELETE CASCADE
+  FOREIGN KEY(snapshot_id) REFERENCES economy_snapshots(id) ON DELETE CASCADE,
+  FOREIGN KEY(event_run_id) REFERENCES event_runs(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_economy_transactions_event ON economy_transactions(event_name);

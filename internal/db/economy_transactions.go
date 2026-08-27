@@ -115,7 +115,7 @@ func (s *Store) DeriveEconomyTransactions(
 			continue
 		}
 
-		eventName, eventLink, err := s.linkEconomyChangeToEvent(ctx, tx, change, observedAt)
+		eventRunID, eventName, eventLink, err := s.linkEconomyChangeToEvent(ctx, tx, change, observedAt)
 		if err != nil {
 			return inserted, err
 		}
@@ -141,6 +141,7 @@ func (s *Store) DeriveEconomyTransactions(
 				source,
 				source_id,
 				event_name,
+				event_run_id,
 				event_link,
 				gold_delta,
 				gems_delta,
@@ -154,10 +155,10 @@ func (s *Store) DeriveEconomyTransactions(
 				custom_tokens_delta_json,
 				vouchers_delta_json,
 				created_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(snapshot_id, change_index) DO NOTHING
 		`, snapshotID, index, nullIfEmpty(observedAt), change.Source, nullIfEmpty(change.SourceID),
-			nullIfEmpty(eventName), nullIfEmpty(eventLink),
+			nullIfEmpty(eventName), nullableInt(eventRunID), nullIfEmpty(eventLink),
 			change.GoldDelta, change.GemsDelta,
 			change.WildcardDeltas.Common, change.WildcardDeltas.Uncommon,
 			change.WildcardDeltas.Rare, change.WildcardDeltas.Mythic,
@@ -172,15 +173,11 @@ func (s *Store) DeriveEconomyTransactions(
 		}
 		inserted += rows
 
-		// Remember the pay GUID on the run so later EventReward changes with
-		// the same SourceId link exactly instead of by proximity.
-		if rows > 0 && change.Source == "EventPayEntry" && change.SourceID != "" && eventName != "" {
-			if _, err := tx.ExecContext(ctx, `
-				UPDATE event_runs
-				SET pay_source_id = COALESCE(pay_source_id, ?), updated_at = ?
-				WHERE event_name = ?
-			`, change.SourceID, nowUTC(), eventName); err != nil {
-				return inserted, fmt.Errorf("record event pay source id: %w", err)
+		// Remember the pay GUID on this run so its later EventReward links
+		// exactly even when another run reuses the same Arena event name.
+		if rows > 0 && change.Source == "EventPayEntry" && change.SourceID != "" && eventRunID > 0 {
+			if err := recordEventRunPaySource(ctx, tx, eventRunID, change.SourceID); err != nil {
+				return inserted, err
 			}
 		}
 	}
@@ -192,72 +189,160 @@ func (s *Store) linkEconomyChangeToEvent(
 	tx *sql.Tx,
 	change EconomyChange,
 	observedAt string,
-) (eventName, eventLink string, err error) {
+) (eventRunID int64, eventName, eventLink string, err error) {
 	switch change.Source {
 	case "EventGrantCardPool":
 		if change.SourceID == "" {
-			return "", "", nil
+			return 0, "", "", nil
 		}
-		var name string
 		err := tx.QueryRowContext(ctx, `
-			SELECT event_name FROM event_runs WHERE event_name = ?
-		`, change.SourceID).Scan(&name)
+			SELECT id, event_name
+			FROM event_runs
+			WHERE event_name = ?
+			  AND (
+				? = ''
+				OR started_at IS NULL
+				OR started_at = ''
+				OR ABS(julianday(?) - julianday(started_at)) * 1440.0 <= ?
+			  )
+			ORDER BY
+				CASE WHEN status = 'active' THEN 0 ELSE 1 END,
+				ABS(julianday(?) - julianday(started_at)),
+				id DESC
+			LIMIT 1
+		`, change.SourceID, observedAt, observedAt, economyEventLinkWindowMinutes, observedAt).Scan(&eventRunID, &eventName)
 		if err == nil {
-			return name, "event_name", nil
+			return eventRunID, eventName, "event_name", nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
-			return "", "", fmt.Errorf("link card pool grant to event: %w", err)
+			return 0, "", "", fmt.Errorf("link card pool grant to event: %w", err)
 		}
-		// The event name is authoritative even without a tracked run.
-		return change.SourceID, "event_name", nil
+		// The event name remains useful on the ledger even without a run.
+		return 0, change.SourceID, "event_name", nil
 	}
 
 	if !economyChangeUsesPaySourceID(change.Source) {
-		return "", "", nil
+		return 0, "", "", nil
 	}
 
 	if change.SourceID != "" {
-		var name string
 		err := tx.QueryRowContext(ctx, `
-			SELECT event_name FROM event_runs WHERE pay_source_id = ?
-		`, change.SourceID).Scan(&name)
+			SELECT id, event_name
+			FROM event_runs
+			WHERE pay_source_id = ?
+			ORDER BY id DESC
+			LIMIT 1
+		`, change.SourceID).Scan(&eventRunID, &eventName)
 		if err == nil {
-			return name, "source_id", nil
+			return eventRunID, eventName, "source_id", nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
-			return "", "", fmt.Errorf("link economy change by pay source id: %w", err)
+			return 0, "", "", fmt.Errorf("link economy change by pay source id: %w", err)
 		}
 	}
 
 	if observedAt == "" {
-		return "", "", nil
+		return 0, "", "", nil
 	}
 
-	// Proximity fallback: the pay change lands seconds after EventJoin sets
-	// started_at, and rewards land seconds after EventClaimPrize sets
-	// ended_at. Ladder-style runs never pay or claim, so exclude free entries.
+	// Entry changes land near a run's start; rewards land near its claim or
+	// final match. Draft-session runs qualify before their entry currency is
+	// known, while free ladder/open-play rows remain excluded.
 	timeColumn := "started_at"
 	if change.Source == "EventReward" {
 		timeColumn = "ended_at"
 	}
 	query := fmt.Sprintf(`
-		SELECT event_name
+		SELECT id, event_name
 		FROM event_runs
 		WHERE %[1]s IS NOT NULL AND %[1]s != ''
-		  AND COALESCE(entry_currency_type, 'None') != 'None'
+		  AND (
+			COALESCE(entry_currency_type, 'None') != 'None'
+			OR draft_session_id IS NOT NULL
+		  )
 		  AND ABS(julianday(?) - julianday(%[1]s)) * 1440.0 <= ?
-		ORDER BY ABS(julianday(?) - julianday(%[1]s)) ASC
+		ORDER BY ABS(julianday(?) - julianday(%[1]s)) ASC, id DESC
 		LIMIT 1
 	`, timeColumn)
-	var name string
-	err = tx.QueryRowContext(ctx, query, observedAt, economyEventLinkWindowMinutes, observedAt).Scan(&name)
+	err = tx.QueryRowContext(ctx, query, observedAt, economyEventLinkWindowMinutes, observedAt).Scan(&eventRunID, &eventName)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", "", nil
+		return 0, "", "", nil
 	}
 	if err != nil {
-		return "", "", fmt.Errorf("link economy change by proximity: %w", err)
+		return 0, "", "", fmt.Errorf("link economy change by proximity: %w", err)
 	}
-	return name, "proximity", nil
+	return eventRunID, eventName, "proximity", nil
+}
+
+func recordEventRunPaySource(ctx context.Context, tx *sql.Tx, eventRunID int64, sourceID string) error {
+	if eventRunID <= 0 || sourceID == "" {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE event_runs
+		SET pay_source_id = COALESCE(pay_source_id, ?), updated_at = ?
+		WHERE id = ?
+	`, sourceID, nowUTC(), eventRunID); err != nil {
+		return fmt.Errorf("record event pay source id: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) repairUnlinkedEconomyTransactionsTx(ctx context.Context, tx *sql.Tx) error {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, source, COALESCE(source_id, ''), COALESCE(observed_at, '')
+		FROM economy_transactions
+		WHERE event_run_id IS NULL
+		  AND source IN ('EventPayEntry', 'EventReward', 'EventRefund', 'EventGrantCardPool')
+		ORDER BY COALESCE(observed_at, created_at), id
+	`)
+	if err != nil {
+		return fmt.Errorf("list unlinked event transactions: %w", err)
+	}
+	type pendingLink struct {
+		id         int64
+		source     string
+		sourceID   string
+		observedAt string
+	}
+	pending := make([]pendingLink, 0)
+	for rows.Next() {
+		var link pendingLink
+		if err := rows.Scan(&link.id, &link.source, &link.sourceID, &link.observedAt); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan unlinked event transaction: %w", err)
+		}
+		pending = append(pending, link)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("iterate unlinked event transactions: %w", err)
+	}
+	rows.Close()
+
+	for _, pendingLink := range pending {
+		change := EconomyChange{Source: pendingLink.source, SourceID: pendingLink.sourceID}
+		eventRunID, eventName, eventLink, err := s.linkEconomyChangeToEvent(ctx, tx, change, pendingLink.observedAt)
+		if err != nil {
+			return err
+		}
+		if eventRunID <= 0 {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE economy_transactions
+			SET event_run_id = ?, event_name = ?, event_link = ?
+			WHERE id = ?
+		`, eventRunID, eventName, eventLink, pendingLink.id); err != nil {
+			return fmt.Errorf("repair event transaction link: %w", err)
+		}
+		if pendingLink.source == "EventPayEntry" {
+			if err := recordEventRunPaySource(ctx, tx, eventRunID, pendingLink.sourceID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // backfillEconomyTransactions derives normalized transactions for snapshots
@@ -315,19 +400,95 @@ func backfillEconomyTransactions(ctx context.Context, conn dbConn, store *Store)
 	return nil
 }
 
-// migrateEconomyTables brings pre-ledger databases up to the current economy
-// schema. Purely additive and safe to run repeatedly.
+// migrateEconomyTables gives each repeated event name a distinct run identity
+// and adds that identity to the transaction ledger.
 func migrateEconomyTables(ctx context.Context, conn dbConn) error {
-	hasPaySourceID, err := tableHasColumn(ctx, conn, "event_runs", "pay_source_id")
+	hasDraftSessionID, err := tableHasColumn(ctx, conn, "event_runs", "draft_session_id")
 	if err != nil {
-		return fmt.Errorf("inspect event_runs pay source schema: %w", err)
+		return fmt.Errorf("inspect event_runs instance schema: %w", err)
 	}
-	if !hasPaySourceID {
-		if _, err := conn.ExecContext(ctx, `
-			ALTER TABLE event_runs ADD COLUMN pay_source_id TEXT
-		`); err != nil {
-			return fmt.Errorf("add event_runs pay source id: %w", err)
+	if !hasDraftSessionID {
+		hasPaySourceID, err := tableHasColumn(ctx, conn, "event_runs", "pay_source_id")
+		if err != nil {
+			return fmt.Errorf("inspect event_runs pay source schema: %w", err)
 		}
+		if err := rebuildEventRunsTable(ctx, conn, hasPaySourceID); err != nil {
+			return err
+		}
+	}
+
+	hasEventRunID, err := tableHasColumn(ctx, conn, "economy_transactions", "event_run_id")
+	if err != nil {
+		return fmt.Errorf("inspect economy transaction run schema: %w", err)
+	}
+	if !hasEventRunID {
+		if _, err := conn.ExecContext(ctx, `
+			ALTER TABLE economy_transactions
+			ADD COLUMN event_run_id INTEGER REFERENCES event_runs(id) ON DELETE SET NULL
+		`); err != nil {
+			return fmt.Errorf("add economy transaction run id: %w", err)
+		}
+	}
+
+	for _, statement := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_event_runs_name_started ON event_runs(event_name, started_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_event_runs_pay_source ON event_runs(pay_source_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_economy_transactions_run ON economy_transactions(event_run_id)`,
+	} {
+		if _, err := conn.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("create economy run index: %w", err)
+		}
+	}
+	return nil
+}
+
+func rebuildEventRunsTable(ctx context.Context, conn dbConn, hasPaySourceID bool) error {
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin event run instance migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	paySource := "NULL"
+	if hasPaySourceID {
+		paySource = "pay_source_id"
+	}
+	steps := []string{
+		`ALTER TABLE event_runs RENAME TO event_runs_old`,
+		`DROP INDEX IF EXISTS idx_event_runs_name_started`,
+		`DROP INDEX IF EXISTS idx_event_runs_pay_source`,
+		`CREATE TABLE event_runs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			event_name TEXT NOT NULL,
+			event_type TEXT,
+			draft_session_id INTEGER UNIQUE,
+			entry_currency_type TEXT,
+			entry_currency_paid INTEGER,
+			pay_source_id TEXT,
+			status TEXT NOT NULL DEFAULT 'active',
+			started_at TEXT,
+			ended_at TEXT,
+			wins INTEGER NOT NULL DEFAULT 0,
+			losses INTEGER NOT NULL DEFAULT 0,
+			updated_at TEXT NOT NULL
+		)`,
+		fmt.Sprintf(`INSERT INTO event_runs (
+			id, event_name, event_type, entry_currency_type, entry_currency_paid,
+			pay_source_id, status, started_at, ended_at, wins, losses, updated_at
+		)
+		SELECT
+			id, event_name, event_type, entry_currency_type, entry_currency_paid,
+			%s, status, started_at, ended_at, wins, losses, updated_at
+		FROM event_runs_old`, paySource),
+		`DROP TABLE event_runs_old`,
+	}
+	for _, step := range steps {
+		if _, err := tx.ExecContext(ctx, step); err != nil {
+			return fmt.Errorf("migrate event run instances: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit event run instance migration: %w", err)
 	}
 	return nil
 }

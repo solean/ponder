@@ -86,13 +86,20 @@ func Init(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("acquire migration connection: %w", err)
 	}
-	defer conn.Close()
+	connClosed := false
+	defer func() {
+		if !connClosed {
+			_ = conn.Close()
+		}
+	}()
 
 	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
 		return fmt.Errorf("disable foreign keys for migration: %w", err)
 	}
 	defer func() {
-		_, _ = conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`)
+		if !connClosed {
+			_, _ = conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`)
+		}
 	}()
 
 	if err := migrateRankSnapshots(ctx, conn); err != nil {
@@ -148,6 +155,18 @@ func Init(ctx context.Context, db *sql.DB) error {
 	}
 
 	if err := dropRedundantIndexes(ctx, conn); err != nil {
+		return err
+	}
+
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
+		return fmt.Errorf("restore foreign keys after migration: %w", err)
+	}
+	if err := conn.Close(); err != nil {
+		return fmt.Errorf("release migration connection: %w", err)
+	}
+	connClosed = true
+
+	if err := NewStore(db).RepairEventRunInstances(ctx); err != nil {
 		return err
 	}
 

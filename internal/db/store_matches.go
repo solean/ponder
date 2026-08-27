@@ -154,12 +154,25 @@ func (s *Store) UpsertMatchStart(ctx context.Context, tx *sql.Tx, arenaMatchID, 
 	}
 
 	if resolvedEventName != "" {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO event_runs (event_name, event_type, status, started_at, updated_at)
-			VALUES (?, ?, 'active', ?, ?)
-			ON CONFLICT(event_name) DO UPDATE SET updated_at = excluded.updated_at
-		`, resolvedEventName, detectEventType(resolvedEventName), nullIfEmpty(startedAt), now); err != nil {
-			return 0, fmt.Errorf("ensure event run from match start: %w", err)
+		var runID int64
+		findErr := tx.QueryRowContext(ctx, `
+			SELECT id
+			FROM event_runs
+			WHERE event_name = ?
+			  AND status = 'active'
+			  AND (? = '' OR started_at IS NULL OR started_at <= ?)
+			ORDER BY COALESCE(started_at, updated_at) DESC, id DESC
+			LIMIT 1
+		`, resolvedEventName, startedAt, startedAt).Scan(&runID)
+		if errors.Is(findErr, sql.ErrNoRows) {
+			if _, insertErr := tx.ExecContext(ctx, `
+				INSERT INTO event_runs (event_name, event_type, status, started_at, updated_at)
+				VALUES (?, ?, 'active', ?, ?)
+			`, resolvedEventName, detectEventType(resolvedEventName), nullIfEmpty(startedAt), now); insertErr != nil {
+				return 0, fmt.Errorf("ensure event run from match start: %w", insertErr)
+			}
+		} else if findErr != nil {
+			return 0, fmt.Errorf("find event run from match start: %w", findErr)
 		}
 	}
 
@@ -291,7 +304,7 @@ func (s *Store) UpdateMatchEnd(ctx context.Context, tx *sql.Tx, arenaMatchID str
 
 	// Idempotency guard: only increment run record when match result changes into a terminal result.
 	if eventName != "" && terminalChange {
-		if err := s.BumpEventRunRecord(ctx, tx, eventName, result); err != nil {
+		if err := s.BumpEventRunRecord(ctx, tx, eventName, result, endedAt); err != nil {
 			return "", "", false, err
 		}
 	}

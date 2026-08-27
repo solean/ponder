@@ -223,6 +223,7 @@ func (s *Store) ListEconomyTransactions(ctx context.Context) ([]model.EconomyTra
 func (s *Store) ListEventRunEconomies(ctx context.Context) ([]model.EventRunEconomy, error) {
 	runRows, err := s.db.QueryContext(ctx, `
 		SELECT
+			id,
 			event_name,
 			COALESCE(event_type, 'other'),
 			COALESCE(entry_currency_type, ''),
@@ -245,6 +246,7 @@ func (s *Store) ListEventRunEconomies(ctx context.Context) ([]model.EventRunEcon
 		var run model.EventRunEconomy
 		var entryPaid sql.NullInt64
 		if err := runRows.Scan(
+			&run.ID,
 			&run.EventName,
 			&run.EventType,
 			&run.EntryCurrencyType,
@@ -279,28 +281,30 @@ func (s *Store) ListEventRunEconomies(ctx context.Context) ([]model.EventRunEcon
 		hasReward       bool
 		boosterCounts   map[string]int64
 	}
-	economies := make(map[string]*runEconomy)
-	economyFor := func(eventName string) *runEconomy {
-		if entry, ok := economies[eventName]; ok {
+	economies := make(map[int64]*runEconomy)
+	economyFor := func(eventRunID int64) *runEconomy {
+		if entry, ok := economies[eventRunID]; ok {
 			return entry
 		}
 		entry := &runEconomy{boosterCounts: make(map[string]int64)}
-		economies[eventName] = entry
+		economies[eventRunID] = entry
 		return entry
 	}
 
 	txnRows, err := s.db.QueryContext(ctx, `
-		SELECT
-			event_name,
+		SELECT DISTINCT
+			event_run_id,
 			COALESCE(event_link, ''),
 			source,
+			COALESCE(source_id, ''),
+			COALESCE(observed_at, ''),
 			gold_delta,
 			gems_delta,
 			cards_granted,
 			vault_progress_delta,
 			boosters_delta_json
 		FROM economy_transactions
-		WHERE event_name IS NOT NULL AND event_name != ''
+		WHERE event_run_id IS NOT NULL
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("list event-linked transactions: %w", err)
@@ -308,12 +312,16 @@ func (s *Store) ListEventRunEconomies(ctx context.Context) ([]model.EventRunEcon
 	defer txnRows.Close()
 
 	for txnRows.Next() {
-		var eventName, eventLink, source, boostersJSON string
+		var eventRunID int64
+		var eventLink, source, sourceID, observedAt, boostersJSON string
 		var gold, gems, cards, vault int64
-		if err := txnRows.Scan(&eventName, &eventLink, &source, &gold, &gems, &cards, &vault, &boostersJSON); err != nil {
+		if err := txnRows.Scan(
+			&eventRunID, &eventLink, &source, &sourceID, &observedAt,
+			&gold, &gems, &cards, &vault, &boostersJSON,
+		); err != nil {
 			return nil, fmt.Errorf("scan event-linked transaction: %w", err)
 		}
-		economy := economyFor(eventName)
+		economy := economyFor(eventRunID)
 		economy.hasTransactions = true
 		if eventLink == "proximity" {
 			economy.hasProximity = true
@@ -340,7 +348,7 @@ func (s *Store) ListEventRunEconomies(ctx context.Context) ([]model.EventRunEcon
 
 	out := make([]model.EventRunEconomy, 0, len(runs))
 	for _, run := range runs {
-		economy := economies[run.EventName]
+		economy := economies[run.ID]
 		paidEntry := run.EntryCurrencyType != "" && run.EntryCurrencyType != "None"
 		if economy == nil && !paidEntry {
 			continue

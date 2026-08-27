@@ -6,6 +6,12 @@ import { Link } from "react-router-dom";
 import { EventLabel } from "../components/EventLabel";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import {
+  eventEntryLabel as entryLabel,
+  eventRewardLabel as rewardLabel,
+  formatEconomyDelta as formatDelta,
+  humanizeInventoryKey,
+} from "../lib/economy";
 import { parseEventName } from "../lib/events";
 import { formatDateTime, formatRelativeTime } from "../lib/format";
 import { useEventSets } from "../lib/useEventSets";
@@ -67,10 +73,6 @@ function economyChanges(history: EconomySnapshot[]): SnapshotDelta[] {
   return changes.slice(-MAX_RECENT_CHANGES).reverse();
 }
 
-function formatDelta(value: number): string {
-  if (value === 0) return "—";
-  return `${value > 0 ? "+" : "−"}${integerFormatter.format(Math.abs(value))}`;
-}
 
 function formatVaultDelta(value: number): string {
   if (value === 0) return "—";
@@ -83,19 +85,6 @@ function deltaTone(value: number): string {
   return "economy-delta";
 }
 
-function humanizeInventoryKey(value: string): string {
-  const known: Record<string, string> = {
-    PlayInToken: "Play-In token",
-    Token_JumpIn: "Jump In token",
-  };
-  if (known[value]) return known[value];
-  const battlePassOrb = value.match(/^BattlePass_([^_]+)_Orb$/i);
-  if (battlePassOrb) return `${battlePassOrb[1].toUpperCase()} mastery orb`;
-  return value
-    .replace(/^Token_/, "")
-    .replace(/_/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2");
-}
 
 function sourceLabel(sources: string[]): string {
   if (sources.length === 0) return "Balance update";
@@ -131,27 +120,6 @@ function eventRunLabel(run: EventRunEconomy): string {
   return parsed.setCode ? `${parsed.setCode} ${kind}` : kind;
 }
 
-function entryLabel(run: EventRunEconomy): string {
-  if (run.entryGold < 0) return `${formatDelta(run.entryGold)} gold`;
-  if (run.entryGems < 0) return `${formatDelta(run.entryGems)} gems`;
-  const type = run.entryCurrencyType;
-  if (!type || type === "None") return "Free";
-  if (run.entryCurrencyPaid != null && run.entryCurrencyPaid > 1) {
-    return `${integerFormatter.format(run.entryCurrencyPaid)} × ${humanizeInventoryKey(type)}`;
-  }
-  return humanizeInventoryKey(type);
-}
-
-function rewardLabel(run: EventRunEconomy): string {
-  const parts: string[] = [];
-  if (run.rewardGold !== 0) parts.push(`${formatDelta(run.rewardGold)} gold`);
-  if (run.rewardGems !== 0) parts.push(`${formatDelta(run.rewardGems)} gems`);
-  const packCount = run.rewardBoosters.reduce((sum, booster) => sum + booster.count, 0);
-  if (packCount > 0) parts.push(`${integerFormatter.format(packCount)} pack${packCount === 1 ? "" : "s"}`);
-  if (run.rewardCards > 0) parts.push(`${integerFormatter.format(run.rewardCards)} cards`);
-  if (parts.length === 0) return run.linkConfidence === "none" ? "not captured" : "—";
-  return parts.join(" · ");
-}
 
 type EventValueGroup = {
   key: string;

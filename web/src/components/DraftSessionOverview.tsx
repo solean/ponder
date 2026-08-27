@@ -6,6 +6,7 @@ import {
   draftSessionStatus,
   draftSessionStatusLabel,
 } from "../lib/draftReport";
+import { eventEntryLabel, eventRewardLabel, formatEconomyDelta } from "../lib/economy";
 import { formatDateTime, formatDuration, pct } from "../lib/format";
 import type { DraftPick, DraftSession } from "../lib/types";
 import { useEventSets } from "../lib/useEventSets";
@@ -15,17 +16,19 @@ function SummaryItem({
   value,
   detail,
   mono = false,
+  valueClassName,
 }: {
   label: string;
   value: string | number;
   detail?: string;
   mono?: boolean;
+  valueClassName?: string;
 }) {
   return (
     <div className={mono ? "is-mono" : undefined}>
       <dt>{label}</dt>
       <dd>
-        <strong>{value}</strong>
+        <strong className={valueClassName}>{value}</strong>
         {detail ? <span>{detail}</span> : null}
       </dd>
     </div>
@@ -46,6 +49,20 @@ export function DraftSessionOverview({
   const replayCoverage = draftReplayCoverage(picks);
   const loadedPickMismatch = session.picks !== picks.length;
   const incompleteReplay = replayCoverage.covered < replayCoverage.total;
+  const entry = session.economy ? eventEntryLabel(session.economy) : "—";
+  const winnings = session.economy ? eventRewardLabel(session.economy) : "—";
+  const gemsDelta = session.economy?.netGems;
+  const gemsDeltaLabel = gemsDelta == null ? "—" : `${formatEconomyDelta(gemsDelta)} gems`;
+  const gemsDeltaClass =
+    gemsDelta == null
+      ? undefined
+      : `economy-delta ${
+          gemsDelta > 0
+            ? "economy-delta--positive"
+            : gemsDelta < 0
+              ? "economy-delta--negative"
+              : ""
+        }`;
 
   return (
     <section className="panel draft-report-overview">
@@ -66,9 +83,28 @@ export function DraftSessionOverview({
           mono
         />
         <SummaryItem
-          label="Picks"
-          value={session.picks}
-          detail={`${picks.length} loaded`}
+          label="Cost"
+          value={entry}
+          detail={session.economy ? "Event entry" : "No economy data"}
+          mono
+        />
+        <SummaryItem
+          label="Winnings"
+          value={winnings}
+          detail={
+            session.economy
+              ? session.economy.linkConfidence === "none"
+                ? "No reward data"
+                : "Event rewards"
+              : "No economy data"
+          }
+          mono
+        />
+        <SummaryItem
+          label="Gems delta"
+          value={gemsDeltaLabel}
+          detail={session.economy ? "Winnings minus cost" : "No economy data"}
+          valueClassName={gemsDeltaClass}
           mono
         />
         <SummaryItem

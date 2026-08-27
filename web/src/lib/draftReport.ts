@@ -1,5 +1,6 @@
 import { parseEventName } from "./events";
 import type { DraftPick, DraftPickCard, DraftSession } from "./types";
+import type { CardRarity } from "./scryfall";
 
 export type DraftSessionStatus =
   | "complete"
@@ -158,4 +159,19 @@ export function draftReplayCoverage(picks: DraftPick[]): {
     covered: picks.filter((pick) => (pick.packCards?.length ?? 0) > 0).length,
     total: picks.length,
   };
+}
+
+export function countRareAndMythicPicks(
+  cards: ReadonlyArray<{ poolCopies: number; rarity?: CardRarity }>,
+): { rare: number; mythic: number } {
+  let rare = 0;
+  let mythic = 0;
+  for (const card of cards) {
+    if (card.rarity === "rare") {
+      rare += card.poolCopies;
+    } else if (card.rarity === "mythic") {
+      mythic += card.poolCopies;
+    }
+  }
+  return { rare, mythic };
 }

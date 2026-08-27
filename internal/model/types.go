@@ -533,15 +533,17 @@ type GameReview struct {
 }
 
 type DraftSessionRow struct {
-	ID          int64   `json:"id"`
-	EventName   string  `json:"eventName"`
-	DraftID     *string `json:"draftId"`
-	IsBotDraft  bool    `json:"isBotDraft"`
-	StartedAt   string  `json:"startedAt"`
-	CompletedAt string  `json:"completedAt"`
-	Picks       int64   `json:"picks"`
-	Wins        *int64  `json:"wins,omitempty"`
-	Losses      *int64  `json:"losses,omitempty"`
+	ID          int64            `json:"id"`
+	EventName   string           `json:"eventName"`
+	DraftID     *string          `json:"draftId"`
+	IsBotDraft  bool             `json:"isBotDraft"`
+	StartedAt   string           `json:"startedAt"`
+	CompletedAt string           `json:"completedAt"`
+	Picks       int64            `json:"picks"`
+	EventRunID  *int64           `json:"-"`
+	Economy     *EventRunEconomy `json:"economy"`
+	Wins        *int64           `json:"wins,omitempty"`
+	Losses      *int64           `json:"losses,omitempty"`
 }
 
 type DraftPickRow struct {

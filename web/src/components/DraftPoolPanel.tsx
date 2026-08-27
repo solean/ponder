@@ -5,8 +5,8 @@ import { ContextualLink } from "./Breadcrumbs";
 import { ManaSymbol } from "./ManaSymbol";
 import { StatusMessage } from "./StatusMessage";
 import { api } from "../lib/api";
-import { pct } from "../lib/format";
-import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
+import { countRareAndMythicPicks } from "../lib/draftReport";
+import { fetchCardPreview, type CardPreview, type CardRarity } from "../lib/scryfall";
 import type { DeckSummary, DraftPick } from "../lib/types";
 
 type PoolCard = {
@@ -15,6 +15,7 @@ type PoolCard = {
   manaValue: number | null;
   typeLine?: string;
   colors?: string[];
+  rarity?: CardRarity;
 };
 
 const COLOR_ORDER = ["W", "U", "B", "R", "G"];
@@ -165,16 +166,15 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
         manaValue: typeof preview?.manaValue === "number" ? preview.manaValue : null,
         typeLine: preview?.typeLine,
         colors: preview?.colors,
+        rarity: preview?.rarity,
       };
     });
   }, [deckCards, pool, poolCardIDs, previewByCardID]);
 
   const summary = useMemo(() => {
     let poolCopies = 0;
-    let mainFromPool = 0;
     for (const card of poolCards) {
       poolCopies += card.poolCopies;
-      mainFromPool += Math.min(card.mainCopies, card.poolCopies);
     }
     const mainNonPool = new Map<number, number>();
     const poolIDs = new Set(poolCardIDs);
@@ -183,8 +183,9 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
         mainNonPool.set(card.cardId, (mainNonPool.get(card.cardId) ?? 0) + card.quantity);
       }
     }
-    return { poolCopies, mainFromPool, mainNonPool };
+    return { poolCopies, mainNonPool };
   }, [deckCards, poolCardIDs, poolCards]);
+  const premiumPicks = useMemo(() => countRareAndMythicPicks(poolCards), [poolCards]);
 
   const mainColorCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -271,12 +272,18 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
               </dd>
             </div>
             <div className="deck-analytics-tile">
-              <dt>Made main deck</dt>
+              <dt>Rare &amp; mythic picks</dt>
               <dd>
-                <strong>{summary.mainFromPool}</strong>
-                <span>
-                  {summary.poolCopies > 0 ? pct(summary.mainFromPool / summary.poolCopies) : "—"} of picks
-                </span>
+                {isMetadataLoading ? (
+                  <strong>—</strong>
+                ) : (
+                  <>
+                    <strong>{premiumPicks.rare}</strong>
+                    <span>rare</span>
+                    <strong>{premiumPicks.mythic}</strong>
+                    <span>mythic</span>
+                  </>
+                )}
               </dd>
             </div>
             <div className="deck-analytics-tile">

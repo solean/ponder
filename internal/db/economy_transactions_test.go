@@ -395,6 +395,17 @@ func TestDraftSessionRepairsEntryObservedBeforeRun(t *testing.T) {
 	if runs[0].EntryGems != -1500 || runs[0].RewardGems != 1800 || runs[0].NetGems != 300 {
 		t.Fatalf("draft gems = entry %d reward %d net %d", runs[0].EntryGems, runs[0].RewardGems, runs[0].NetGems)
 	}
+
+	sessions, err := store.ListDraftSessions(ctx)
+	if err != nil {
+		t.Fatalf("list draft sessions: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].Economy == nil {
+		t.Fatalf("draft session economy = %#v", sessions)
+	}
+	if sessions[0].Economy.EntryGems != -1500 || sessions[0].Economy.RewardGems != 1800 {
+		t.Fatalf("draft session gems = entry %d reward %d", sessions[0].Economy.EntryGems, sessions[0].Economy.RewardGems)
+	}
 }
 
 func TestRepairEventRunInstancesSplitsRepeatedDraftSessions(t *testing.T) {

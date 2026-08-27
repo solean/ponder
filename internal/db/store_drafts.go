@@ -408,10 +408,12 @@ func (s *Store) ListDraftSessions(ctx context.Context) ([]model.DraftSessionRow,
 			ds.is_bot_draft,
 			COALESCE(ds.started_at, ''),
 			COALESCE(ds.completed_at, ''),
+			er.id,
 			COUNT(dp.id) AS picks
 		FROM draft_sessions ds
 		LEFT JOIN draft_picks dp ON dp.draft_session_id = ds.id
-		GROUP BY ds.id, ds.event_name, ds.draft_id, ds.is_bot_draft, ds.started_at, ds.completed_at
+		LEFT JOIN event_runs er ON er.draft_session_id = ds.id
+		GROUP BY ds.id, ds.event_name, ds.draft_id, ds.is_bot_draft, ds.started_at, ds.completed_at, er.id
 		ORDER BY ds.id DESC
 	`)
 	if err != nil {
@@ -423,10 +425,15 @@ func (s *Store) ListDraftSessions(ctx context.Context) ([]model.DraftSessionRow,
 	for rows.Next() {
 		var row model.DraftSessionRow
 		var isBotInt int64
-		if err := rows.Scan(&row.ID, &row.EventName, &row.DraftID, &isBotInt, &row.StartedAt, &row.CompletedAt, &row.Picks); err != nil {
+		var eventRunID sql.NullInt64
+		if err := rows.Scan(
+			&row.ID, &row.EventName, &row.DraftID, &isBotInt, &row.StartedAt, &row.CompletedAt,
+			&eventRunID, &row.Picks,
+		); err != nil {
 			return nil, fmt.Errorf("scan draft session row: %w", err)
 		}
 		row.IsBotDraft = isBotInt == 1
+		row.EventRunID = nullInt64Ptr(eventRunID)
 		out = append(out, row)
 	}
 	if err := rows.Err(); err != nil {
@@ -434,6 +441,9 @@ func (s *Store) ListDraftSessions(ctx context.Context) ([]model.DraftSessionRow,
 	}
 
 	if err := s.enrichDraftSessionsWithDeckResults(ctx, out); err != nil {
+		return nil, err
+	}
+	if err := s.enrichDraftSessionsWithEconomy(ctx, out); err != nil {
 		return nil, err
 	}
 
@@ -459,6 +469,28 @@ func (s *Store) enrichDraftSessionsWithDeckResults(ctx context.Context, sessions
 		}
 		sessions[idx].Wins = nullableInt64Ptr(wins)
 		sessions[idx].Losses = nullableInt64Ptr(losses)
+	}
+	return nil
+}
+
+func (s *Store) enrichDraftSessionsWithEconomy(ctx context.Context, sessions []model.DraftSessionRow) error {
+	runs, err := s.ListEventRunEconomies(ctx)
+	if err != nil {
+		return err
+	}
+	byID := make(map[int64]model.EventRunEconomy, len(runs))
+	for _, run := range runs {
+		byID[run.ID] = run
+	}
+	for index := range sessions {
+		if sessions[index].EventRunID == nil {
+			continue
+		}
+		run, ok := byID[*sessions[index].EventRunID]
+		if !ok {
+			continue
+		}
+		sessions[index].Economy = &run
 	}
 	return nil
 }

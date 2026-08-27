@@ -685,6 +685,7 @@ export type DraftSession = {
   picks: number;
   wins?: number | null;
   losses?: number | null;
+  economy: EventRunEconomy | null;
 };
 
 export type DraftPick = {

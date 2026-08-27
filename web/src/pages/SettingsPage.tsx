@@ -200,6 +200,15 @@ function HexIcon() {
   );
 }
 
+function LeafIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+      <path d="M3.6 12.4C2.5 8.2 5.2 4 11.6 3c1 5.8-2.2 9.8-8 9.4Z" strokeLinejoin="round" />
+      <path d="M3.2 13.2c1.3-2.9 3.4-5.1 6.2-6.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 const modeOptions: Array<{ value: ModePreference; label: string; icon: () => JSX.Element }> = [
   { value: "dark", label: "Dark", icon: MoonIcon },
   { value: "light", label: "Light", icon: SunIcon },
@@ -210,6 +219,7 @@ const schemeOptions: Array<{ value: ColorScheme; label: string; icon: () => JSX.
   { value: "ember", label: "Ember", icon: FlameIcon },
   { value: "dimir", label: "Dimir Ink", icon: DropIcon },
   { value: "steel", label: "Cold Steel", icon: HexIcon },
+  { value: "bamboo", label: "Bamboo", icon: LeafIcon },
 ];
 
 const runtimeStatusKey = ["runtime-status"] as const;

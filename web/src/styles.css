@@ -594,6 +594,156 @@
 }
 
 /* ══════════════════════════════════════════
+   BAMBOO — GROVE AT NIGHT
+   Ported from bamboo.nvim (vulgaris) — ribru17/bamboo.nvim
+   ══════════════════════════════════════════ */
+
+:root[data-scheme="bamboo"] {
+
+  --bg: #1c1e1b;
+  --bg-mid: #252623;
+  --bg-end: #2f312c;
+  --bg-orb-a: rgba(143, 181, 115, 0.08);
+  --bg-orb-b: rgba(112, 194, 190, 0.05);
+  --veil-orb: rgba(143, 181, 115, 0.07);
+  --veil-line: rgba(143, 181, 115, 0.03);
+  --grid-line: rgba(143, 181, 115, 0.035);
+  --surface: rgba(37, 38, 35, 0.88);
+  --surface-strong: rgba(47, 49, 44, 0.94);
+  --surface-faint: rgba(28, 30, 27, 0.85);
+  --line: rgba(143, 181, 115, 0.16);
+  --line-strong: rgba(163, 197, 137, 0.34);
+  --text: #f1e9d2;
+  --muted: #7d817a;
+  --muted-strong: #b6bda8;
+  --accent: #8fb573;
+  --accent-strong: #6f9455;
+  --accent-contrast: #131710;
+  --accent-soft: rgba(143, 181, 115, 0.12);
+  --accent-glow: rgba(143, 181, 115, 0.24);
+  --link: #a8cf8c;
+  --link-hover: #c9e3b4;
+  --link-hover-border: rgba(201, 227, 180, 0.38);
+  --text-soft: #faf4e4;
+  --kicker: #93a87c;
+  --tabs-bg: rgba(28, 30, 27, 0.74);
+  --tab-hover-border: rgba(163, 197, 137, 0.22);
+  --tab-active-border: rgba(143, 181, 115, 0.6);
+  --tab-active-bg-a: rgba(143, 181, 115, 0.14);
+  --tab-active-bg-b: rgba(64, 83, 27, 0.22);
+  --tab-active-shine: rgba(186, 214, 160, 0.12);
+  --shell-frame: rgba(143, 181, 115, 0.12);
+  --corner-mark: rgba(160, 195, 133, 0.34);
+  --card-inner-border: rgba(255, 255, 255, 0.02);
+  --card-accent-glow: rgba(143, 181, 115, 0.12);
+  --metric-neutral-corner: rgba(168, 175, 155, 0.34);
+  --metric-neutral-border: rgba(168, 175, 155, 0.42);
+  --metric-neutral-text: #c3c9b2;
+  --panel-inner-a: rgba(41, 43, 38, 0.92);
+  --panel-inner-b: rgba(28, 30, 27, 0.96);
+  --list-bg-a: rgba(28, 30, 27, 0.48);
+  --list-bg-b: rgba(37, 38, 35, 0.72);
+  --list-hover-border: rgba(143, 181, 115, 0.28);
+  --list-hover-bg-a: rgba(41, 43, 38, 0.72);
+  --list-hover-bg-b: rgba(47, 49, 44, 0.86);
+  --pill-bg: rgba(31, 33, 30, 0.55);
+  --table-wrap-border: rgba(143, 181, 115, 0.15);
+  --table-row-border: rgba(143, 181, 115, 0.12);
+  --table-head-text: #9aa48c;
+  --table-head-bg-a: rgba(37, 38, 35, 0.97);
+  --table-head-bg-b: rgba(31, 33, 30, 0.97);
+  --table-head-solid: #212320;
+  --table-row-hover: rgba(143, 181, 115, 0.06);
+  --deck-card-bg-a: rgba(37, 38, 35, 0.76);
+  --deck-card-bg-b: rgba(26, 28, 25, 0.9);
+  --skeleton-base: rgba(143, 181, 115, 0.1);
+  --skeleton-highlight: rgba(143, 181, 115, 0.22);
+  --card-trigger-hover: #c9e3b4;
+  --popover-bg: rgba(26, 28, 25, 0.97);
+  --popover-card-bg: rgba(37, 38, 35, 0.96);
+  --focus-ring: #9ec482;
+  --tap-highlight: rgba(143, 181, 115, 0.18);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.52), 0 0 40px rgba(143, 181, 115, 0.08);
+  --shadow-md: 0 12px 30px rgba(0, 0, 0, 0.42), 0 0 20px rgba(143, 181, 115, 0.06);
+  --scan-sweep: rgba(143, 181, 115, 0.03);
+}
+
+/* ══════════════════════════════════════════
+   BAMBOO · LIGHT — GROVE IN DAYLIGHT
+   Ported from the ghostty bamboo_light theme: parchment #fafaf0 ground,
+   #dadac2 / #c7c7af rules, #3a4238 ink, #252623 strong ink.
+   ══════════════════════════════════════════ */
+
+:root[data-theme="light"][data-scheme="bamboo"] {
+  --bg: #fafaf0;
+  --bg-mid: #f5f5e8;
+  --bg-end: #efefdf;
+  --bg-orb-a: rgba(39, 133, 11, 0.06);
+  --bg-orb-b: rgba(24, 138, 158, 0.04);
+  --veil-orb: rgba(39, 133, 11, 0.045);
+  --veil-line: rgba(58, 66, 56, 0.02);
+  --grid-line: rgba(58, 66, 56, 0.04);
+  --surface: rgba(253, 253, 245, 0.9);
+  --surface-strong: rgba(255, 254, 248, 0.96);
+  --surface-faint: rgba(247, 247, 236, 0.92);
+  --line: rgba(122, 124, 96, 0.28);
+  --line-strong: rgba(122, 124, 96, 0.5);
+  --text: #3a4238;
+  --muted: #6d7368;
+  --muted-strong: #4a5246;
+  --accent: #27850b;
+  --accent-strong: #1d6608;
+  --accent-contrast: #fafaf0;
+  --accent-soft: rgba(39, 133, 11, 0.1);
+  --accent-glow: rgba(39, 133, 11, 0.15);
+  --link: #22700a;
+  --link-hover: #164f05;
+  --link-hover-border: rgba(22, 79, 5, 0.35);
+  --text-soft: #252623;
+  --kicker: #6b7360;
+  --tabs-bg: rgba(240, 240, 226, 0.8);
+  --tab-hover-border: rgba(122, 124, 96, 0.35);
+  --tab-active-border: rgba(39, 133, 11, 0.55);
+  --tab-active-bg-a: rgba(39, 133, 11, 0.1);
+  --tab-active-bg-b: rgba(122, 124, 96, 0.08);
+  --tab-active-shine: rgba(255, 255, 255, 0.6);
+  --shell-frame: rgba(39, 133, 11, 0.15);
+  --corner-mark: rgba(39, 133, 11, 0.3);
+  --card-inner-border: rgba(255, 255, 255, 0.55);
+  --card-accent-glow: rgba(39, 133, 11, 0.08);
+  --metric-neutral-corner: rgba(107, 112, 100, 0.24);
+  --metric-neutral-border: rgba(107, 112, 100, 0.36);
+  --metric-neutral-text: #565d51;
+  --panel-inner-a: rgba(250, 250, 240, 0.95);
+  --panel-inner-b: rgba(245, 245, 233, 0.97);
+  --list-bg-a: rgba(246, 246, 235, 0.7);
+  --list-bg-b: rgba(241, 241, 228, 0.84);
+  --list-hover-border: rgba(39, 133, 11, 0.24);
+  --list-hover-bg-a: rgba(244, 244, 232, 0.94);
+  --list-hover-bg-b: rgba(238, 238, 224, 0.96);
+  --pill-bg: rgba(246, 246, 234, 0.9);
+  --table-wrap-border: rgba(122, 124, 96, 0.24);
+  --table-row-border: rgba(122, 124, 96, 0.18);
+  --table-head-text: #5e6555;
+  --table-head-bg-a: rgba(245, 245, 234, 0.98);
+  --table-head-bg-b: rgba(240, 240, 227, 0.98);
+  --table-head-solid: #f2f2e4;
+  --table-row-hover: rgba(39, 133, 11, 0.05);
+  --deck-card-bg-a: rgba(246, 246, 235, 0.85);
+  --deck-card-bg-b: rgba(240, 240, 227, 0.95);
+  --skeleton-base: rgba(122, 124, 96, 0.12);
+  --skeleton-highlight: rgba(39, 133, 11, 0.16);
+  --card-trigger-hover: #164f05;
+  --popover-bg: rgba(252, 252, 244, 0.98);
+  --popover-card-bg: rgba(245, 245, 233, 0.96);
+  --focus-ring: #2f9410;
+  --tap-highlight: rgba(39, 133, 11, 0.15);
+  --shadow-lg: 0 18px 36px rgba(46, 48, 30, 0.14);
+  --shadow-md: 0 10px 22px rgba(46, 48, 30, 0.1);
+  --scan-sweep: rgba(39, 133, 11, 0.02);
+}
+
+/* ══════════════════════════════════════════
    RESET & BASE
    ══════════════════════════════════════════ */
 
@@ -2562,8 +2712,10 @@ small.settings-meta,
 
 .settings-segmented {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 0.22rem;
   width: fit-content;
+  max-width: 100%;
   border: 1px solid var(--line);
   border-radius: 3px;
   padding: 0.22rem;
@@ -8440,12 +8592,20 @@ select option {
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a9b4c1' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 
+:root[data-scheme="bamboo"] {
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23b6bda8' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
 :root[data-theme="light"][data-scheme="dimir"] {
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2333495a' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 
 :root[data-theme="light"][data-scheme="steel"] {
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23414b58' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+:root[data-theme="light"][data-scheme="bamboo"] {
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%234a5246' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 
 .match-filter-field .settings-input {

@@ -5,9 +5,9 @@ export type ThemeMode = "dark" | "light";
 export type ModePreference = ThemeMode | "system";
 
 /** Palette identity applied on top of the mode. */
-export type ColorScheme = "ember" | "dimir" | "steel";
+export type ColorScheme = "ember" | "dimir" | "steel" | "bamboo";
 
-export const COLOR_SCHEMES: readonly ColorScheme[] = ["ember", "dimir", "steel"];
+export const COLOR_SCHEMES: readonly ColorScheme[] = ["ember", "dimir", "steel", "bamboo"];
 
 export type ThemeContextValue = {
   /** Resolved appearance actually applied to the document. */

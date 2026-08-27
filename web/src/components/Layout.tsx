@@ -45,6 +45,7 @@ function applyThemeColorMeta(mode: ThemeMode, scheme: ColorScheme) {
     ember: { dark: "#020101", light: "#f4ece1" },
     dimir: { dark: "#020507", light: "#f7f9fa" },
     steel: { dark: "#040608", light: "#eef0f3" },
+    bamboo: { dark: "#1c1e1b", light: "#fafaf0" },
   };
   metaThemeColor.setAttribute("content", themeColors[scheme][mode]);
 }

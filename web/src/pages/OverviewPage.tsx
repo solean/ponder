@@ -478,8 +478,8 @@ export function OverviewPage() {
     queryFn: () => api.matches(MATCH_WINDOW),
   });
   const decksQuery = useQuery({
-    queryKey: ["decks", "all"],
-    queryFn: () => api.decks("all"),
+    queryKey: ["decks"],
+    queryFn: () => api.decks(),
   });
   const draftsQuery = useQuery({
     queryKey: ["drafts"],

@@ -7314,11 +7314,17 @@ button.match-replay-zonechip.is-button {
   outline-offset: 3px;
 }
 
+/* Absolute inset, not height: 100% — the tile's height comes from aspect-ratio, so
+   a percentage height cannot resolve and portrait art (Sagas return 312×752) would
+   render at intrinsic height and be clipped to a sliver. */
 .deck-visual-card img {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center top;
 }
 
 .deck-visual-card .deck-curve-card-qty {
@@ -7566,6 +7572,45 @@ button.match-replay-zonechip.is-button {
   min-width: 0;
 }
 
+/* Art-crop thumbnail beside each pick, matching the visual decklist tiles. The
+   slot is reserved before Scryfall answers so rows do not reflow on load. */
+.draft-card-list .card-preview-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.draft-card-list .card-preview-trigger code {
+  min-width: 0;
+}
+
+.draft-pick-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: clamp(52px, 4.3vw, 66px);
+  aspect-ratio: 626 / 457;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: linear-gradient(165deg, var(--surface-strong) 0%, var(--surface-faint) 100%);
+  box-shadow: 0 0 0 1px var(--card-inner-border) inset;
+}
+
+/* Absolute inset, not height: 100% — a percentage height cannot resolve against
+   the box's aspect-ratio-derived (indefinite) height, so the art would render at
+   its intrinsic height and get clipped to a sliver by overflow: hidden. */
+.draft-pick-thumb img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Saga art comes back portrait (312×752); anchor the crop where the subject is. */
+  object-fit: cover;
+  object-position: center top;
+}
+
 .draft-pack-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -7590,14 +7635,27 @@ button.match-replay-zonechip.is-button {
   table-layout: fixed;
 }
 
+/* Rows are thumbnail-height, so the pick number rides the middle and the padding
+   tightens — the reclaimed width keeps most card names on one line. */
 .draft-pack-table th,
 .draft-pack-table td {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+.draft-pack-table th {
   vertical-align: top;
+}
+
+.draft-pack-table td {
+  vertical-align: middle;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
 }
 
 .draft-pack-table th:first-child,
 .draft-pack-table td:first-child {
-  width: 3.8rem;
+  width: 2.6rem;
   white-space: nowrap;
 }
 

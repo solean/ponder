@@ -17,7 +17,9 @@ type ScryfallImageURIs = {
   large?: string;
   normal?: string;
   small?: string;
+  /** Printed art region — aspect follows the layout (Sagas are portrait). */
   art?: string;
+  /** Always 626×457, which is what the fixed-aspect art tiles assume. */
   art_crop?: string;
 };
 
@@ -141,13 +143,16 @@ function pickImageURL(card: ScryfallCard): string {
 
 
 function pickArtCropURL(card: ScryfallCard): string {
-  const rootArtCrop = card.image_uris?.art ?? card.image_uris?.art_crop;
+  // art_crop before art: the newer `art` variant keeps the printed art's aspect
+  // ratio (a Saga returns 312×752), which the landscape art tiles would crop to
+  // an unrecognizable zoomed sliver.
+  const rootArtCrop = card.image_uris?.art_crop ?? card.image_uris?.art;
   if (rootArtCrop) {
     return rootArtCrop;
   }
 
   for (const face of card.card_faces ?? []) {
-    const faceArtCrop = face.image_uris?.art ?? face.image_uris?.art_crop;
+    const faceArtCrop = face.image_uris?.art_crop ?? face.image_uris?.art;
     if (faceArtCrop) {
       return faceArtCrop;
     }

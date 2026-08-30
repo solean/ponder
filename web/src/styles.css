@@ -993,66 +993,48 @@ body.has-wide-deck-curve .app-shell {
    ══════════════════════════════════════════ */
 
 .live-banner {
+  display: block;
+  max-width: 100%;
   margin-bottom: 1.35rem;
   border: 1px solid var(--accent);
   border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
   background:
     linear-gradient(160deg, var(--accent-soft) 0%, transparent 60%),
     var(--surface);
   box-shadow: 0 0 0 1px var(--accent-soft), inset 0 1px 0 var(--card-inner-border);
   overflow: hidden;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.live-banner:hover {
+  border-color: var(--link-hover);
+  text-decoration: none;
+  box-shadow: 0 0 0 1px var(--accent), inset 0 1px 0 var(--card-inner-border);
+}
+
+.live-banner:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .live-banner-head {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: baseline;
-  gap: 0.5rem 0.9rem;
-  padding: 0.6rem 0.85rem;
-  border-bottom: 1px solid var(--line);
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.3rem 0.5rem 0.3rem 0.62rem;
   cursor: pointer;
   user-select: none;
 }
 
-.live-banner-head:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 2px var(--focus-ring);
-}
-
-.live-banner.is-minimized .live-banner-head {
-  border-bottom: 0;
-}
-
-.live-minimize {
-  align-self: center;
-  margin-left: auto;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.7rem;
-  height: 1.7rem;
-  border: 1px solid var(--line-strong);
-  border-radius: 3px;
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: var(--text-md);
-  line-height: 1;
-  transition:
-    background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease;
-}
-
-.live-banner-head:hover .live-minimize,
-.live-banner-head:focus-visible .live-minimize {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
 .live-badge {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 0.4rem;
   font-family: var(--font-mono);
@@ -1067,7 +1049,8 @@ body.has-wide-deck-curve .app-shell {
 .live-vs,
 .live-banner-head > .event-label,
 .live-progress,
-.live-deck {
+.live-deck,
+.live-open {
   line-height: 1.25rem;
 }
 
@@ -1082,122 +1065,55 @@ body.has-wide-deck-curve .app-shell {
 }
 
 .live-vs {
-  font-size: var(--text-md);
+  min-width: 0;
+  overflow: hidden;
   color: var(--muted);
+  font-size: var(--text-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .live-vs strong {
   color: var(--text);
 }
 
-.live-progress,
-.live-deck {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  letter-spacing: var(--track-sm);
-  color: var(--muted);
-}
-
-.live-deck {
-  margin-left: auto;
-  color: var(--text);
-}
-
-.live-banner-body {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.85rem;
-  padding: 0.75rem 0.85rem;
-}
-
-.live-col h4 {
-  margin: 0 0 0.4rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: var(--track-lg);
-  text-transform: uppercase;
-  color: var(--table-head-text);
-}
-
-.live-est {
-  color: var(--muted);
-  letter-spacing: var(--track-sm);
-}
-
-.live-empty {
-  margin: 0;
-  font-size: var(--text-base);
-  color: var(--muted);
-}
-
-.live-card-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-}
-
-.live-card-list li {
-  padding: 0.16rem 0.46rem;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: var(--surface-faint);
-  font-size: var(--text-base);
-}
-
-.live-library {
-  margin: 0 0 0.35rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--muted);
-}
-
-.live-odds {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-base);
-  font-variant-numeric: tabular-nums;
-}
-
-.live-odds th {
-  text-align: left;
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  letter-spacing: var(--track-md);
-  text-transform: uppercase;
-  color: var(--table-head-text);
-  padding: 0 0.5rem 0.2rem 0;
-}
-
-.live-odds th:not(:first-child),
-.live-odds td:not(:first-child) {
-  text-align: right;
-  width: 3.4rem;
-  font-family: var(--font-mono);
-}
-
-.live-odds td {
-  padding: 0.14rem 0.5rem 0.14rem 0;
-  border-top: 1px solid var(--table-row-border);
+.live-banner-head > .event-label {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.live-progress,
+.live-deck,
+.live-open {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: var(--track-sm);
   white-space: nowrap;
-  max-width: 0;
 }
 
-.live-odds-land td {
+.live-progress {
+  flex: none;
+  color: var(--muted);
+}
+
+.live-deck {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 14rem;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+}
+
+.live-open {
+  flex: none;
+  margin-left: 0.15rem;
   color: var(--accent);
-  font-weight: 600;
 }
 
-@media (max-width: 720px) {
-  .live-banner-body {
-    grid-template-columns: 1fr;
-  }
+.live-banner:hover .live-open {
+  color: var(--link-hover);
 }
 
 /* ══════════════════════════════════════════
@@ -1467,67 +1383,22 @@ body.has-wide-deck-curve .app-shell {
   display: none;
 }
 
-.page-context-bar > .live-banner,
 .page-context-bar > .breadcrumbs {
   grid-column: 1 / -1;
 }
 
 .page-context-bar > .live-banner {
-  margin-bottom: 0;
-}
-
-.page-context-bar > .live-banner.is-minimized {
   grid-column: 2;
   grid-row: 1;
   justify-self: end;
   width: fit-content;
   max-width: min(58rem, 72vw);
+  margin-bottom: 0;
 }
 
-.page-context-bar > .live-banner.is-minimized + .breadcrumbs {
+.page-context-bar > .live-banner + .breadcrumbs {
   grid-column: 1;
   grid-row: 1;
-}
-
-.live-banner.is-minimized .live-banner-head {
-  flex-wrap: nowrap;
-  gap: 0.55rem;
-  min-width: 0;
-  padding: 0.3rem 0.38rem 0.3rem 0.62rem;
-}
-
-.live-banner.is-minimized :is(.live-vs, .live-progress, .live-deck) {
-  white-space: nowrap;
-}
-
-.live-banner.is-minimized .live-vs {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.live-banner.is-minimized :is(.live-badge, .live-progress) {
-  flex: none;
-}
-
-.live-banner.is-minimized .event-label {
-  flex: 0 1 auto;
-}
-
-.live-banner.is-minimized .live-deck {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 14rem;
-  margin-left: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.live-banner.is-minimized .live-minimize {
-  width: 1.45rem;
-  height: 1.45rem;
-  margin-left: 0.15rem;
-  font-size: var(--text-base);
 }
 
 .breadcrumbs {
@@ -1598,11 +1469,11 @@ body.has-wide-deck-curve .app-shell {
 }
 
 @media (max-width: 900px) {
-  .page-context-bar > .live-banner.is-minimized {
+  .page-context-bar > .live-banner {
     max-width: 66vw;
   }
 
-  .live-banner.is-minimized .live-deck {
+  .live-deck {
     display: none;
   }
 }
@@ -1612,19 +1483,18 @@ body.has-wide-deck-curve .app-shell {
     column-gap: 0.55rem;
   }
 
-  .page-context-bar > .live-banner.is-minimized {
+  .page-context-bar > .live-banner {
     max-width: 62vw;
   }
 
-  .live-banner.is-minimized .live-banner-head {
+  .live-banner-head {
     gap: 0.42rem;
     padding-left: 0.5rem;
   }
 
-  .live-banner.is-minimized :is(.event-label, .live-progress) {
+  .live-banner-head > :is(.event-label, .live-progress, .live-open) {
     display: none;
   }
-
 }
 
 .stack-lg {
@@ -8913,18 +8783,12 @@ select option {
 }
 
 .overview-header > .live-banner {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  width: 100%;
-  margin: 0;
-}
-
-.overview-header > .live-banner.is-minimized {
   grid-column: 2;
   grid-row: 1;
   justify-self: center;
   width: fit-content;
   max-width: 100%;
+  margin: 0;
 }
 
 .overview-sync {
@@ -9608,8 +9472,7 @@ select option {
     align-items: start;
   }
 
-  .overview-header > .live-banner,
-  .overview-header > .live-banner.is-minimized {
+  .overview-header > .live-banner {
     grid-column: 1 / -1;
     grid-row: 2;
     justify-self: stretch;

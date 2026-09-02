@@ -4,45 +4,54 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"sort"
+	"strings"
 
 	"github.com/solean/ponder/internal/model"
 )
 
-// openingHandSize is subtracted from the deck total when estimating how many
-// cards remain in the library mid-match. The MTGA log doesn't expose your hand,
-// so this (and the per-turn draw subtraction) makes the draw odds an estimate.
-const openingHandSize = 7
-
-// livePlayerDrawCount estimates how many normal draw steps the player has
-// taken from Arena's per-player turn ordinal. The player on the play skips the
-// first draw step; the player on the draw does not. Unknown play/draw data uses
-// completed full turns as the conservative fallback.
-func livePlayerDrawCount(arenaTurn int64, playDraw string) int64 {
-	if arenaTurn <= 0 {
-		return 0
+func projectLiveDeck(
+	cards []model.DeckCardRow,
+	knownOutsideLibrary map[int64]int64,
+	stateAvailable bool,
+) ([]model.LiveDeckCardRow, int64, *int64) {
+	deck := make([]model.LiveDeckCardRow, 0, len(cards))
+	var deckTotal, libraryCount int64
+	for _, card := range cards {
+		if card.Section != "main" || card.Quantity <= 0 {
+			continue
+		}
+		row := model.LiveDeckCardRow{
+			Section:  card.Section,
+			CardID:   card.CardID,
+			Quantity: card.Quantity,
+			CardName: card.CardName,
+		}
+		deckTotal += card.Quantity
+		if stateAvailable {
+			remaining := max(int64(0), card.Quantity-knownOutsideLibrary[card.CardID])
+			row.Remaining = &remaining
+			libraryCount += remaining
+		}
+		deck = append(deck, row)
 	}
-	switch playDraw {
-	case "play":
-		return (arenaTurn - 1) / 2
-	case "draw":
-		return arenaTurn / 2
-	default:
-		return arenaTurn / 2
+	sort.SliceStable(deck, func(i, j int) bool {
+		left := strings.ToLower(strings.TrimSpace(deck[i].CardName))
+		right := strings.ToLower(strings.TrimSpace(deck[j].CardName))
+		if left != right {
+			return left < right
+		}
+		return deck[i].CardID < deck[j].CardID
+	})
+	if !stateAvailable || len(deck) == 0 {
+		return deck, deckTotal, nil
 	}
+	return deck, deckTotal, &libraryCount
 }
 
-func liveLibraryEstimate(deckTotal, arenaTurn int64, playDraw string) int64 {
-	estimate := deckTotal - openingHandSize - livePlayerDrawCount(arenaTurn, playDraw)
-	if estimate < 1 {
-		return 1
-	}
-	return estimate
-}
-
-// handleLive returns the match currently in progress, enriched with opponent
-// revealed cards, your decklist, game/turn state, and a library-size estimate
-// the frontend uses for draw odds. Responds {"live": null} when nothing is
-// being played.
+// handleLive returns the match currently in progress with the current
+// submitted deck, per-card remaining-library counts, and opponent public
+// reveals. Responds {"live": null} when nothing is being played.
 func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/api/live" {
 		writeError(w, http.StatusNotFound, "not found")
@@ -74,43 +83,9 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 	matchRows := []model.MatchRow{detail.Match}
 	s.enrichMatchDeckColors(ctx, matchRows)
 
-	// Always emit JSON arrays (not null) so the frontend can treat these as
-	// lists unconditionally — early in a game both are empty.
 	opponentCards := detail.OpponentObservedCards
 	if opponentCards == nil {
 		opponentCards = []model.OpponentObservedCardRow{}
-	}
-
-	live := model.LiveMatch{
-		Match:                 matchRows[0],
-		OpponentObservedCards: opponentCards,
-		Deck:                  []model.DeckCardRow{},
-	}
-
-	if detail.Match.DeckID != nil && *detail.Match.DeckID > 0 {
-		cards, err := s.store.ListDeckCards(ctx, *detail.Match.DeckID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		mainboard := make([]model.DeckCardRow, 0, len(cards))
-		cardIDs := make([]int64, 0, len(cards))
-		for _, c := range cards {
-			if c.Section == "main" {
-				mainboard = append(mainboard, c)
-				cardIDs = append(cardIDs, c.CardID)
-				live.DeckTotal += c.Quantity
-			}
-		}
-		s.enrichDeckCardNames(ctx, mainboard)
-		live.Deck = mainboard
-
-		typeLines := s.resolveCardTypeLines(ctx, cardIDs)
-		for _, c := range mainboard {
-			if isLandTypeLine(typeLines[c.CardID]) || isBasicLandName(c.CardName) {
-				live.LandCount += c.Quantity
-			}
-		}
 	}
 
 	game, arenaTurn, err := s.store.GetLiveProgress(ctx, id)
@@ -118,10 +93,49 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	live.GameNumber = game
-	live.TurnNumber = model.ArenaTurnToFullTurn(arenaTurn)
+	gameForState := game
+	if gameForState <= 0 {
+		gameForState = 1
+	}
 
-	live.LibraryEstimate = liveLibraryEstimate(live.DeckTotal, arenaTurn, detail.Match.PlayDraw)
+	deckCards, submitted, err := s.store.ListMatchGameDeckCards(ctx, id, gameForState)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	deckSource := "submitted"
+	if !submitted {
+		deckSource = "unavailable"
+		if detail.Match.DeckID != nil && *detail.Match.DeckID > 0 {
+			deckCards, err = s.store.ListDeckCards(ctx, *detail.Match.DeckID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			deckSource = "linked"
+		}
+	}
+	if deckCards == nil {
+		deckCards = []model.DeckCardRow{}
+	}
+	s.enrichDeckCardNames(ctx, deckCards)
 
+	knownOutsideLibrary, stateAvailable, err := s.store.GetLiveKnownSelfCardCounts(ctx, id, gameForState)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	deck, deckTotal, libraryCount := projectLiveDeck(deckCards, knownOutsideLibrary, stateAvailable)
+
+	live := model.LiveMatch{
+		Match:                 matchRows[0],
+		OpponentObservedCards: opponentCards,
+		Deck:                  deck,
+		DeckTotal:             deckTotal,
+		LibraryCount:          libraryCount,
+		DeckSource:            deckSource,
+		GameNumber:            game,
+		TurnNumber:            model.ArenaTurnToFullTurn(arenaTurn),
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"live": live})
 }

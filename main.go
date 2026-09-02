@@ -49,12 +49,46 @@ func main() {
 		BackgroundColour: application.NewRGBA(8, 12, 21, 255),
 		URL:              "/",
 	})
-	desktop.setDesktopRuntime(wailsApp, mainWindow)
+
+	overlayWindow := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:              "overlay",
+		Title:             appDisplayName + " Overlay",
+		Width:             1440,
+		Height:            900,
+		AlwaysOnTop:       true,
+		URL:               "/overlay",
+		DisableResize:     true,
+		Frameless:         true,
+		BackgroundType:    application.BackgroundTypeTransparent,
+		BackgroundColour:  application.NewRGBA(0, 0, 0, 0),
+		InitialPosition:   application.WindowXY,
+		Hidden:            true,
+		IgnoreMouseEvents: true,
+		Mac: application.MacWindow{
+			Backdrop:      application.MacBackdropTransparent,
+			DisableShadow: true,
+			CornerType:    application.MacWindowCornerTypeSquare,
+			WindowLevel:   application.MacWindowLevelScreenSaver,
+			CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces |
+				application.MacWindowCollectionBehaviorFullScreenAuxiliary |
+				application.MacWindowCollectionBehaviorIgnoresCycle |
+				application.MacWindowCollectionBehaviorStationary,
+		},
+		MinimiseButtonState:   application.ButtonHidden,
+		MaximiseButtonState:   application.ButtonHidden,
+		CloseButtonState:      application.ButtonHidden,
+		FullscreenButtonState: application.ButtonHidden,
+	})
+	desktop.setDesktopRuntime(wailsApp, mainWindow, overlayWindow)
 
 	// Closing the main window keeps the log tailer running. The Dock icon or a
 	// second launch restores the existing window; Cmd+Q still quits the app.
 	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		mainWindow.Hide()
+		event.Cancel()
+	})
+	overlayWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		hideOverlayWindow(overlayWindow)
 		event.Cancel()
 	})
 	wailsApp.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {

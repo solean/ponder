@@ -20,6 +20,10 @@ import "@fontsource/space-grotesk/700.css";
 
 import "./styles.css";
 
+// Apply transparency before React's first overlay paint to avoid an opaque
+// flash while the dedicated Wails window loads.
+document.documentElement.classList.toggle("overlay-document", window.location.pathname === "/overlay");
+
 const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

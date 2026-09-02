@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -30,14 +31,20 @@ const (
 	// desktopDBEnvVar lets local Wails development reuse an existing database.
 	// Installed apps use the application-support database when it is unset.
 	desktopDBEnvVar = "PONDER_DB_PATH"
+
+	// The transparent center must pass mouse input through to Arena. Only the
+	// edge strips containing the two HUD panels become interactive.
+	overlayInteractiveEdgeWidth = 430
+	overlayPointerPollInterval  = time.Second / 30
 )
 
 type App struct {
-	cancel       context.CancelFunc
-	database     *sql.DB
-	staticAssets fs.FS
-	wailsApp     *application.App
-	mainWindow   application.Window
+	cancel        context.CancelFunc
+	database      *sql.DB
+	staticAssets  fs.FS
+	wailsApp      *application.App
+	mainWindow    application.Window
+	overlayWindow application.Window
 
 	mu         sync.RWMutex
 	apiHandler http.Handler
@@ -48,9 +55,13 @@ func NewApp(staticAssets fs.FS) *App {
 	return &App{staticAssets: staticAssets}
 }
 
-func (a *App) setDesktopRuntime(wailsApp *application.App, mainWindow application.Window) {
+func (a *App) setDesktopRuntime(
+	wailsApp *application.App,
+	mainWindow, overlayWindow application.Window,
+) {
 	a.wailsApp = wailsApp
 	a.mainWindow = mainWindow
+	a.overlayWindow = overlayWindow
 }
 
 // APIMiddleware mounts the backend API on the Wails asset server so the
@@ -228,6 +239,7 @@ func (a *App) startup() {
 	a.mu.Lock()
 	a.apiHandler = server.Handler()
 	a.mu.Unlock()
+	a.startOverlayMonitor(bgCtx, store)
 
 	devAddr := strings.TrimSpace(os.Getenv(devAPIEnvVar))
 	if devAddr == "" && a.wailsApp != nil && a.wailsApp.Env.Info().Debug {
@@ -259,6 +271,105 @@ func (a *App) startup() {
 		}
 	}()
 }
+func overlayPointInHUD(bounds application.Rect, x, y float64) bool {
+	if bounds.Width <= 0 || bounds.Height <= 0 ||
+		x < float64(bounds.X) || x >= float64(bounds.X+bounds.Width) ||
+		y < float64(bounds.Y) || y >= float64(bounds.Y+bounds.Height) {
+		return false
+	}
+	relativeX := x - float64(bounds.X)
+	return relativeX <= overlayInteractiveEdgeWidth ||
+		relativeX >= float64(bounds.Width-overlayInteractiveEdgeWidth)
+}
+
+func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
+	if a.overlayWindow == nil || a.wailsApp == nil {
+		return
+	}
+
+	go func() {
+		visibilityTicker := time.NewTicker(time.Second)
+		pointerTicker := time.NewTicker(overlayPointerPollInterval)
+		defer visibilityTicker.Stop()
+		defer pointerTicker.Stop()
+
+		visible := false
+		mouseInteractive := false
+		hadReadError := false
+		var overlayBounds application.Rect
+		setMouseInteractive := func(interactive bool) {
+			if interactive == mouseInteractive {
+				return
+			}
+			mouseInteractive = interactive
+			a.overlayWindow.SetIgnoreMouseEvents(!interactive)
+		}
+		updateVisibility := func() {
+			_, isLive, err := store.GetLiveMatchID(ctx)
+			if err != nil {
+				if !hadReadError {
+					log.Printf("overlay live-state check failed: %v", err)
+					hadReadError = true
+				}
+				return
+			}
+			hadReadError = false
+			if isLive == visible {
+				return
+			}
+			visible = isLive
+			if !isLive {
+				setMouseInteractive(false)
+				hideOverlayWindow(a.overlayWindow)
+				return
+			}
+
+			if screen := a.wailsApp.Screen.GetPrimary(); screen != nil &&
+				screen.Bounds.Width > 0 && screen.Bounds.Height > 0 {
+				overlayBounds = screen.Bounds
+				a.overlayWindow.SetBounds(overlayBounds)
+			} else {
+				overlayBounds = a.overlayWindow.Bounds()
+			}
+			// Hidden webviews may suspend timers. Reload on the hidden-to-live
+			// transition so the first visible frame hydrates current match data.
+			setMouseInteractive(false)
+			a.overlayWindow.Reload()
+			configured, level, behavior := showOverlayWindow(a.overlayWindow)
+			if !configured {
+				log.Printf("overlay window did not accept the required fullscreen configuration (level=%d behavior=%#x)", level, behavior)
+			} else {
+				log.Printf("overlay window configured for fullscreen (level=%d behavior=%#x)", level, behavior)
+			}
+		}
+		updatePointerMode := func() {
+			if !visible {
+				return
+			}
+			x, y, supported := overlayPointerPosition()
+			if !supported {
+				// Wails has no portable cursor API. Keep hover behavior on other
+				// platforms until they gain the native edge-hit-test bridge.
+				setMouseInteractive(true)
+				return
+			}
+			setMouseInteractive(overlayPointInHUD(overlayBounds, x, y))
+		}
+
+		updateVisibility()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-visibilityTicker.C:
+				updateVisibility()
+			case <-pointerTicker.C:
+				updatePointerMode()
+			}
+		}
+	}()
+}
+
 func desktopDatabasePath(supportDir string) string {
 	if explicit := strings.TrimSpace(os.Getenv(desktopDBEnvVar)); explicit != "" {
 		return filepath.Clean(explicit)

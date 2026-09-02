@@ -1,12 +1,16 @@
+export type LiveDeckCard = DeckCard & {
+  remaining?: number;
+};
+
 export type LiveMatch = {
   match: Match;
   opponentObservedCards: OpponentObservedCard[];
-  deck: DeckCard[];
+  deck: LiveDeckCard[];
   deckTotal: number;
-  landCount: number;
+  libraryCount?: number;
+  deckSource: "submitted" | "linked" | "unavailable";
   gameNumber: number;
   turnNumber: number;
-  libraryEstimate: number;
 };
 
 export type SetInfo = {

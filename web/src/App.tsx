@@ -9,12 +9,14 @@ import { DraftsPage } from "./pages/DraftsPage";
 import { MatchDetailPage } from "./pages/MatchDetailPage";
 import { MatchesPage } from "./pages/MatchesPage";
 import { OverviewPage } from "./pages/OverviewPage";
+import { OverlayPage } from "./pages/OverlayPage";
 import { RankedPage } from "./pages/RankedPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
 export function App() {
   return (
     <Routes>
+      <Route path="/overlay" element={<OverlayPage />} />
       <Route path="/" element={<Layout />}>
         <Route index element={<OverviewPage />} />
         <Route path="matches" element={<MatchesPage />} />

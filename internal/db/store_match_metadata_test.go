@@ -183,6 +183,47 @@ func TestMatchListDerivesBestOfAndPlayDraw(t *testing.T) {
 	}
 }
 
+func TestUpsertMatchStartBackfillsEarlierObservation(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database := openTempSQLiteDB(t)
+	if err := Init(ctx, database); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	store := NewStore(database)
+	tx, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+	if _, _, _, err := store.UpdateMatchEnd(
+		ctx, tx, "recovered-match", 1, 1, 0, 0, "Concede", "2026-09-02T14:16:53Z",
+	); err != nil {
+		t.Fatalf("UpdateMatchEnd: %v", err)
+	}
+	if _, err := store.UpsertMatchStart(
+		ctx, tx, "recovered-match", "PremierDraft_HOB_20260811", 1, "2026-09-02T14:07:12Z",
+	); err != nil {
+		t.Fatalf("UpsertMatchStart: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	var startedAt, endedAt string
+	if err := database.QueryRowContext(ctx, `
+		SELECT started_at, ended_at
+		FROM matches
+		WHERE arena_match_id = 'recovered-match'
+	`).Scan(&startedAt, &endedAt); err != nil {
+		t.Fatalf("read recovered match timestamps: %v", err)
+	}
+	if startedAt != "2026-09-02T14:07:12Z" || endedAt != "2026-09-02T14:16:53Z" {
+		t.Fatalf("recovered timestamps = %s–%s, want 14:07:12–14:16:53", startedAt, endedAt)
+	}
+}
+
 func TestLinkMatchToLatestDeckByEventPrefersMostRecentlyObservedDeck(t *testing.T) {
 	t.Parallel()
 
@@ -260,6 +301,71 @@ func TestLinkMatchToLatestDeckByEventPrefersMostRecentlyObservedDeck(t *testing.
 	}
 	if detail.Match.Format != "TraditionalStandard" {
 		t.Fatalf("detail Format = %q, want TraditionalStandard", detail.Match.Format)
+	}
+}
+
+func TestLinkMatchToLatestDeckByEventUsesArenaTimestampForDrafts(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database := openTempSQLiteDB(t)
+	if err := Init(ctx, database); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	store := NewStore(database)
+	tx, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+
+	const eventName = "PremierDraft_HOB_20260811"
+	if _, err := store.UpsertDeck(
+		ctx, tx, "old-draft-deck", eventName, "Draft Deck", "Draft", "event_set_deck",
+		"2026-08-30T21:22:18Z", nil,
+	); err != nil {
+		t.Fatalf("UpsertDeck(old): %v", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE decks
+		SET updated_at = '2026-08-31T03:30:38Z'
+		WHERE arena_deck_id = 'old-draft-deck'
+	`); err != nil {
+		t.Fatalf("age old deck ingestion timestamp: %v", err)
+	}
+	if _, err := store.UpsertDeck(
+		ctx, tx, "new-draft-deck", eventName, "Draft Deck", "Draft", "event_set_deck",
+		"2026-09-02T01:05:29Z", nil,
+	); err != nil {
+		t.Fatalf("UpsertDeck(new): %v", err)
+	}
+
+	if _, err := store.UpsertMatchStart(
+		ctx, tx, "recovered-draft-match", eventName, 1, "2026-09-02T14:07:12Z",
+	); err != nil {
+		t.Fatalf("UpsertMatchStart: %v", err)
+	}
+	if err := store.LinkMatchToLatestDeckByEvent(
+		ctx, tx, "recovered-draft-match", eventName, "room_state",
+	); err != nil {
+		t.Fatalf("LinkMatchToLatestDeckByEvent: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	var arenaDeckID string
+	if err := database.QueryRowContext(ctx, `
+		SELECT d.arena_deck_id
+		FROM match_decks md
+		JOIN decks d ON d.id = md.deck_id
+		JOIN matches m ON m.id = md.match_id
+		WHERE m.arena_match_id = 'recovered-draft-match'
+	`).Scan(&arenaDeckID); err != nil {
+		t.Fatalf("read linked draft deck: %v", err)
+	}
+	if arenaDeckID != "new-draft-deck" {
+		t.Fatalf("linked deck = %q, want new-draft-deck", arenaDeckID)
 	}
 }
 

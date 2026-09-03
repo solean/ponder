@@ -3,7 +3,9 @@ package ingest
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -517,11 +519,35 @@ type clientToGREEnvelope struct {
 	} `json:"payload"`
 }
 
+const ingestSignatureWindowBytes int64 = 4096
+
+// ingestFileSignature fingerprints the bytes immediately before a durable
+// cursor. Appends leave that window unchanged; truncation or log rotation does
+// not, even when the replacement file has already grown past the old offset.
+func ingestFileSignature(file *os.File, offset int64) (string, error) {
+	if offset <= 0 {
+		return "", nil
+	}
+	windowSize := min(offset, ingestSignatureWindowBytes)
+	start := offset - windowSize
+	var window [ingestSignatureWindowBytes]byte
+	n, err := file.ReadAt(window[:windowSize], start)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+	if int64(n) != windowSize {
+		return "", io.ErrUnexpectedEOF
+	}
+	sum := sha256.Sum256(window[:n])
+	return hex.EncodeToString(sum[:]), nil
+}
+
 func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (model.ParseStats, error) {
 	stats := model.ParseStats{LogPath: logPath, StartedAt: time.Now().UTC()}
 
 	startOffset := int64(0)
 	startLine := int64(0)
+	savedFileSignature := ""
 	resetState := !resume
 	if resume {
 		ingestState, err := p.store.GetIngestState(ctx, logPath)
@@ -531,6 +557,7 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		if ingestState.Found {
 			startOffset = ingestState.Offset
 			startLine = ingestState.LineNo
+			savedFileSignature = ingestState.FileSignature
 			if startOffset == 0 && startLine == 0 {
 				resetState = true
 			}
@@ -548,12 +575,23 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		return stats, fmt.Errorf("stat log file: %w", err)
 	}
 
-	// MTGA rotates/truncates Player.log. If our saved offset points past EOF,
-	// restart from the beginning of the current file so tailing can recover.
+	// MTGA rotates/truncates Player.log and replaces Player-prev.log. A size
+	// regression catches truncation; the saved cursor-window signature catches
+	// replacement files that have already grown beyond the previous offset.
 	if startOffset > info.Size() {
 		startOffset = 0
 		startLine = 0
 		resetState = true
+	} else if startOffset > 0 {
+		currentFileSignature, signatureErr := ingestFileSignature(file, startOffset)
+		if signatureErr != nil {
+			return stats, fmt.Errorf("fingerprint log file at offset %d: %w", startOffset, signatureErr)
+		}
+		if savedFileSignature == "" || currentFileSignature != savedFileSignature {
+			startOffset = 0
+			startLine = 0
+			resetState = true
+		}
 	}
 	// A zero cursor can represent either a first import, a schema backfill, or
 	// recovery of a pending logical record. Keep intermediate batch commits at
@@ -590,7 +628,11 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		if pinCheckpointUntilFinalCommit {
 			checkpointOffset, checkpointLine = 0, 0
 		}
-		if err := p.store.SaveIngestState(ctx, tx, logPath, checkpointOffset, checkpointLine); err != nil {
+		fileSignature, signatureErr := ingestFileSignature(file, checkpointOffset)
+		if signatureErr != nil {
+			return fmt.Errorf("fingerprint log checkpoint at offset %d: %w", checkpointOffset, signatureErr)
+		}
+		if err := p.store.SaveIngestState(ctx, tx, logPath, checkpointOffset, checkpointLine, fileSignature); err != nil {
 			return err
 		}
 		if err := tx.Commit(); err != nil {
@@ -643,7 +685,11 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 	}
 
 	checkpointOffset, checkpointLine := state.ingestCheckpoint(byteOffset, lineNo)
-	if err := p.store.SaveIngestState(ctx, tx, logPath, checkpointOffset, checkpointLine); err != nil {
+	fileSignature, err := ingestFileSignature(file, checkpointOffset)
+	if err != nil {
+		return stats, fmt.Errorf("fingerprint final log checkpoint at offset %d: %w", checkpointOffset, err)
+	}
+	if err := p.store.SaveIngestState(ctx, tx, logPath, checkpointOffset, checkpointLine, fileSignature); err != nil {
 		return stats, err
 	}
 	if err := tx.Commit(); err != nil {

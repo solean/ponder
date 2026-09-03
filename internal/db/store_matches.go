@@ -140,7 +140,12 @@ func (s *Store) UpsertMatchStart(ctx context.Context, tx *sql.Tx, arenaMatchID, 
 		ON CONFLICT(arena_match_id) DO UPDATE SET
 			event_name = COALESCE(excluded.event_name, matches.event_name),
 			player_seat_id = COALESCE(excluded.player_seat_id, matches.player_seat_id),
-			started_at = COALESCE(matches.started_at, excluded.started_at),
+			started_at = CASE
+				WHEN excluded.started_at IS NULL THEN matches.started_at
+				WHEN matches.started_at IS NULL THEN excluded.started_at
+				WHEN julianday(excluded.started_at) < julianday(matches.started_at) THEN excluded.started_at
+				ELSE matches.started_at
+			END,
 			updated_at = excluded.updated_at
 	`, arenaMatchID, nullIfEmpty(resolvedEventName), nullableInt(seatID), nullIfEmpty(startedAt), now, now)
 	if err != nil {

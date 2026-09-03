@@ -272,33 +272,40 @@ func (s *Store) LinkMatchToLatestDeckByEvent(ctx context.Context, tx *sql.Tx, ar
 	}
 
 	var deckID int64
+	observedAtExpression := "updated_at"
+	if isDraftDeck("", eventName) {
+		// Draft deck IDs are unique to a run. Arena's LastUpdated timestamp
+		// identifies the run even when a missed log is imported after the match;
+		// updated_at only records when Ponder happened to ingest that log.
+		observedAtExpression = "COALESCE(NULLIF(last_updated, ''), updated_at)"
+	}
 	queryArgs := []any{eventName}
-	query := `
+	query := fmt.Sprintf(`
 		SELECT id
 		FROM decks
 		WHERE event_name = ?
-		ORDER BY updated_at DESC, id DESC
+		ORDER BY %s DESC, id DESC
 		LIMIT 1
-	`
+	`, observedAtExpression)
 	if startedAt.Valid && strings.TrimSpace(startedAt.String) != "" {
 		normalizedStartedAt := normalizeTS(startedAt.String)
-		query = `
+		query = fmt.Sprintf(`
 			SELECT id
 			FROM decks
 			WHERE event_name = ?
 			ORDER BY
 				CASE
-					WHEN julianday(updated_at) <= julianday(?) THEN 0
+					WHEN julianday(%[1]s) <= julianday(?) THEN 0
 					ELSE 1
 				END,
 				CASE
-					WHEN julianday(updated_at) <= julianday(?) THEN julianday(updated_at)
+					WHEN julianday(%[1]s) <= julianday(?) THEN julianday(%[1]s)
 					ELSE NULL
 				END DESC,
-				julianday(updated_at) DESC,
+				julianday(%[1]s) DESC,
 				id DESC
 			LIMIT 1
-		`
+		`, observedAtExpression)
 		queryArgs = append(queryArgs, normalizedStartedAt, normalizedStartedAt)
 	}
 

@@ -156,7 +156,7 @@ func (s *Store) DeriveEconomyTransactions(
 				vouchers_delta_json,
 				created_at
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(snapshot_id, change_index) DO NOTHING
+			ON CONFLICT DO NOTHING
 		`, snapshotID, index, nullIfEmpty(observedAt), change.Source, nullIfEmpty(change.SourceID),
 			nullIfEmpty(eventName), nullableInt(eventRunID), nullIfEmpty(eventLink),
 			change.GoldDelta, change.GemsDelta,
@@ -430,6 +430,10 @@ func migrateEconomyTables(ctx context.Context, conn dbConn) error {
 		}
 	}
 
+	if err := ensureUniqueEconomyTransactionObservations(ctx, conn); err != nil {
+		return err
+	}
+
 	for _, statement := range []string{
 		`CREATE INDEX IF NOT EXISTS idx_event_runs_name_started ON event_runs(event_name, started_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_event_runs_pay_source ON event_runs(pay_source_id)`,
@@ -438,6 +442,60 @@ func migrateEconomyTables(ctx context.Context, conn dbConn) error {
 		if _, err := conn.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("create economy run index: %w", err)
 		}
+	}
+	return nil
+}
+
+const economyTransactionObservationIndex = "idx_economy_transactions_observation"
+
+// ensureUniqueEconomyTransactionObservations collapses the same Arena
+// InventoryInfo change when a rotated Player.log is later re-read under the
+// Player-prev.log path, then prevents future copies from entering the ledger.
+func ensureUniqueEconomyTransactionObservations(ctx context.Context, conn dbConn) error {
+	var indexExists int64
+	if err := conn.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM sqlite_master
+		WHERE type = 'index' AND name = ?
+	`, economyTransactionObservationIndex).Scan(&indexExists); err != nil {
+		return fmt.Errorf("inspect economy observation index: %w", err)
+	}
+	if indexExists > 0 {
+		return nil
+	}
+
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin economy observation deduplication: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM economy_transactions
+		WHERE COALESCE(observed_at, '') != ''
+		  AND id NOT IN (
+			SELECT MIN(id)
+			FROM economy_transactions
+			WHERE COALESCE(observed_at, '') != ''
+			GROUP BY observed_at, change_index, source, COALESCE(source_id, '')
+		  )
+	`); err != nil {
+		return fmt.Errorf("deduplicate economy observations: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		CREATE UNIQUE INDEX idx_economy_transactions_observation
+		ON economy_transactions (
+			observed_at,
+			change_index,
+			source,
+			COALESCE(source_id, '')
+		)
+		WHERE COALESCE(observed_at, '') != ''
+	`); err != nil {
+		return fmt.Errorf("index economy observations: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit economy observation deduplication: %w", err)
 	}
 	return nil
 }

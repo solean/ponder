@@ -102,6 +102,9 @@ func Init(ctx context.Context, db *sql.DB) error {
 		}
 	}()
 
+	if err := migrateIngestState(ctx, conn); err != nil {
+		return err
+	}
 	if err := migrateRankSnapshots(ctx, conn); err != nil {
 		return err
 	}
@@ -170,6 +173,23 @@ func Init(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 
+	return nil
+}
+
+func migrateIngestState(ctx context.Context, conn dbConn) error {
+	hasFileSignature, err := tableHasColumn(ctx, conn, "ingest_state", "file_signature")
+	if err != nil {
+		return fmt.Errorf("inspect ingest state signature schema: %w", err)
+	}
+	if hasFileSignature {
+		return nil
+	}
+	if _, err := conn.ExecContext(ctx, `
+		ALTER TABLE ingest_state
+		ADD COLUMN file_signature TEXT NOT NULL DEFAULT ''
+	`); err != nil {
+		return fmt.Errorf("add ingest state file signature: %w", err)
+	}
 	return nil
 }
 

@@ -3176,12 +3176,9 @@ small.settings-meta,
 }
 
 /* ============================================================
-   Phase 1 analytics: coverage, games, opening hands, deck versions
+   Game analytics, opening hands, deck versions
    ============================================================ */
 
-.match-analytics-heading {
-  align-items: start;
-}
 
 .analytics-coverage-badge,
 .analytics-confidence,
@@ -3220,24 +3217,7 @@ small.settings-meta,
   background: var(--accent-soft);
 }
 
-.analytics-coverage-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 1px;
-  margin: 1rem 0 0;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--line);
-}
 
-.analytics-coverage-grid > div {
-  min-width: 0;
-  padding: 0.72rem 0.78rem;
-  background: var(--surface-faint);
-}
-
-.analytics-coverage-grid dt,
 .match-game-stats dt,
 .deck-version-row dt {
   margin-bottom: 0.22rem;
@@ -3248,7 +3228,6 @@ small.settings-meta,
   text-transform: uppercase;
 }
 
-.analytics-coverage-grid dd,
 .match-game-stats dd,
 .deck-version-row dd {
   min-width: 0;
@@ -3263,7 +3242,6 @@ small.settings-meta,
 .match-game-list {
   display: grid;
   gap: 0.85rem;
-  margin-top: 1rem;
 }
 
 .match-game-card {
@@ -3832,9 +3810,7 @@ small.settings-meta,
 }
 
 @media (max-width: 900px) {
-  .analytics-coverage-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+
 
   .deck-version-row-button,
   .deck-version-row dl {
@@ -3843,20 +3819,17 @@ small.settings-meta,
 }
 
 @media (max-width: 640px) {
-  .match-analytics-heading,
   .match-game-card-head,
   .opening-hand-head {
     align-items: start;
   }
 
-  .match-analytics-heading,
   .match-game-card-head,
   .deck-version-row-button {
     display: grid;
     grid-template-columns: 1fr;
   }
 
-  .analytics-coverage-grid,
   .match-game-stats,
   .deck-version-row dl {
     grid-template-columns: 1fr 1fr;
@@ -3872,7 +3845,6 @@ small.settings-meta,
 }
 
 @media (max-width: 420px) {
-  .analytics-coverage-grid,
   .match-game-stats,
   .deck-version-row dl {
     grid-template-columns: 1fr;

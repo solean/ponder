@@ -63,7 +63,7 @@ function readStoredModePreference(): ModePreference {
 }
 
 function readStoredScheme(): ColorScheme {
-  if (typeof window === "undefined") return "ember";
+  if (typeof window === "undefined") return "bamboo";
   try {
     const stored = window.localStorage.getItem(SCHEME_STORAGE_KEY);
     if ((COLOR_SCHEMES as readonly string[]).includes(stored ?? "")) {
@@ -71,9 +71,9 @@ function readStoredScheme(): ColorScheme {
     }
     const legacy = window.localStorage.getItem(MODE_STORAGE_KEY);
     if (legacy === "dimir" || legacy === "steel") return legacy;
-    return "ember";
+    return "bamboo";
   } catch {
-    return "ember";
+    return "bamboo";
   }
 }
 

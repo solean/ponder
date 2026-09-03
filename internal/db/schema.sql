@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS ingest_state (
   log_path TEXT PRIMARY KEY,
   byte_offset INTEGER NOT NULL DEFAULT 0,
   line_no INTEGER NOT NULL DEFAULT 0,
+  file_signature TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL
 );
 

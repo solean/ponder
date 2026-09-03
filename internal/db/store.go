@@ -15,9 +15,10 @@ type Store struct {
 }
 
 type IngestState struct {
-	Offset int64
-	LineNo int64
-	Found  bool
+	Offset        int64
+	LineNo        int64
+	FileSignature string
+	Found         bool
 }
 
 const sqliteInClauseBatchSize = 900
@@ -87,10 +88,10 @@ func (s *Store) BeginTx(ctx context.Context) (*sql.Tx, error) {
 func (s *Store) GetIngestState(ctx context.Context, logPath string) (IngestState, error) {
 	state := IngestState{}
 	err := s.db.QueryRowContext(ctx, `
-		SELECT byte_offset, line_no
+		SELECT byte_offset, line_no, COALESCE(file_signature, '')
 		FROM ingest_state
 		WHERE log_path = ?
-	`, logPath).Scan(&state.Offset, &state.LineNo)
+	`, logPath).Scan(&state.Offset, &state.LineNo, &state.FileSignature)
 	if errors.Is(err, sql.ErrNoRows) {
 		return state, nil
 	}
@@ -101,15 +102,22 @@ func (s *Store) GetIngestState(ctx context.Context, logPath string) (IngestState
 	return state, nil
 }
 
-func (s *Store) SaveIngestState(ctx context.Context, tx *sql.Tx, logPath string, offset, lineNo int64) error {
+func (s *Store) SaveIngestState(
+	ctx context.Context,
+	tx *sql.Tx,
+	logPath string,
+	offset, lineNo int64,
+	fileSignature string,
+) error {
 	_, err := tx.ExecContext(ctx, `
-		INSERT INTO ingest_state (log_path, byte_offset, line_no, updated_at)
-		VALUES (?, ?, ?, ?)
+		INSERT INTO ingest_state (log_path, byte_offset, line_no, file_signature, updated_at)
+		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(log_path) DO UPDATE SET
 			byte_offset = excluded.byte_offset,
 			line_no = excluded.line_no,
+			file_signature = excluded.file_signature,
 			updated_at = excluded.updated_at
-	`, logPath, offset, lineNo, nowUTC())
+	`, logPath, offset, lineNo, fileSignature, nowUTC())
 	if err != nil {
 		return fmt.Errorf("save ingest_state: %w", err)
 	}

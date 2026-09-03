@@ -216,10 +216,10 @@ const modeOptions: Array<{ value: ModePreference; label: string; icon: () => JSX
 ];
 
 const schemeOptions: Array<{ value: ColorScheme; label: string; icon: () => JSX.Element }> = [
+  { value: "bamboo", label: "Bamboo", icon: LeafIcon },
   { value: "ember", label: "Ember", icon: FlameIcon },
   { value: "dimir", label: "Dimir Ink", icon: DropIcon },
   { value: "steel", label: "Cold Steel", icon: HexIcon },
-  { value: "bamboo", label: "Bamboo", icon: LeafIcon },
 ];
 
 const runtimeStatusKey = ["runtime-status"] as const;

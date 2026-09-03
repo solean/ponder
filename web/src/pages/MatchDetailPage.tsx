@@ -36,7 +36,6 @@ import type {
   GameSideboardChanges,
   GameTurnStat,
   MatchCardPlay,
-  MatchAnalyticsCoverage,
   MatchReplayFrame,
   MatchReplayFrameObject,
   OpeningHandCard,
@@ -3855,9 +3854,6 @@ function confidenceLabel(confidence: string): string {
   }
 }
 
-function coverageFraction(value: number, total: number): string {
-  return total > 0 ? `${value} of ${total}` : "—";
-}
 
 const SHAPE_CHART_LEFT = 30;
 const SHAPE_CHART_TURN_W = 26;
@@ -4106,13 +4102,7 @@ function OpeningHandCardImage({
   );
 }
 
-function MatchAnalyticsPanel({
-  games,
-  coverage,
-}: {
-  games: GameAnalytics[];
-  coverage: MatchAnalyticsCoverage;
-}) {
+function MatchAnalyticsPanel({ games }: { games: GameAnalytics[] }) {
   const openingHandPreviewCards = useMemo<OpeningHandCard[]>(() => {
     const uniqueCards = new Map<number, OpeningHandCard>();
     for (const game of games) {
@@ -4149,56 +4139,6 @@ function MatchAnalyticsPanel({
 
   return (
     <section className="panel match-analytics-panel">
-      <div className="panel-head match-analytics-heading">
-        <div>
-          <h3>Game Analytics</h3>
-          <p>
-            {games.length > 0
-              ? `${games.length} game${games.length === 1 ? "" : "s"} reconstructed from local data`
-              : "No recoverable game records for this match"}
-          </p>
-        </div>
-        <span className={`analytics-coverage-badge is-${coverage.overallConfidence || "unknown"}`}>
-          {coverage.overallConfidence === "complete"
-            ? "Complete coverage"
-            : coverage.overallConfidence === "partial"
-              ? "Partial coverage"
-              : "No coverage"}
-        </span>
-      </div>
-
-      <dl className="analytics-coverage-grid" aria-label="Analytics data coverage">
-        <div>
-          <dt>Replay</dt>
-          <dd>{coverage.replayAvailable ? `${coverage.replayFrameCount.toLocaleString()} frames` : "Unavailable"}</dd>
-        </div>
-        <div>
-          <dt>Results</dt>
-          <dd>{coverageFraction(coverage.gamesWithResult, coverage.gameCount)}</dd>
-        </div>
-        <div>
-          <dt>Opening hands</dt>
-          <dd>{coverageFraction(coverage.gamesWithOpeningHand, coverage.gameCount)}</dd>
-        </div>
-        <div>
-          <dt>Play / draw</dt>
-          <dd>{coverageFraction(coverage.gamesWithPlayDraw, coverage.gameCount)}</dd>
-        </div>
-        <div>
-          <dt>Turn data</dt>
-          <dd>{coverageFraction(coverage.gamesWithTurnStats, coverage.gameCount)}</dd>
-        </div>
-        <div>
-          <dt>Deck snapshot</dt>
-          <dd>
-            {coverage.deckVersionAvailable
-              ? "Versioned"
-              : coverage.deckSnapshotAvailable
-                ? "Current list only"
-                : "Unavailable"}
-          </dd>
-        </div>
-      </dl>
 
       {games.length === 0 ? (
         <StatusMessage>
@@ -4791,7 +4731,7 @@ export function MatchDetailPage() {
           role="tabpanel"
           aria-labelledby={sectionTabID(sectionTabBaseId, "analytics")}
         >
-          <MatchAnalyticsPanel games={query.data.games ?? []} coverage={query.data.coverage} />
+          <MatchAnalyticsPanel games={query.data.games ?? []} />
         </div>
       ) : null}
 

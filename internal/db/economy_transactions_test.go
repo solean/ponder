@@ -178,6 +178,73 @@ func TestDeriveEconomyTransactionsLinksEventRuns(t *testing.T) {
 	}
 }
 
+func TestEconomyTransactionsDeduplicateRotatedLogObservations(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database, store := openEconomyTestDB(t)
+	if _, err := database.ExecContext(ctx, `DROP INDEX idx_economy_transactions_observation`); err != nil {
+		t.Fatalf("drop observation index: %v", err)
+	}
+
+	tx, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+	for index, logPath := range []string{"Player.log", "Player-prev.log"} {
+		snapshotID, inserted, err := store.InsertEconomySnapshot(ctx, tx, logPath, 100, EconomySnapshotRecord{
+			ObservedAt:  "2026-09-02T00:48:48Z",
+			ChangesJSON: testPayChangesJSON,
+		})
+		if err != nil || !inserted {
+			t.Fatalf("insert snapshot %d: id=%d inserted=%v err=%v", index, snapshotID, inserted, err)
+		}
+		if insertedRows, err := store.DeriveEconomyTransactions(
+			ctx, tx, snapshotID, "2026-09-02T00:48:48Z", testPayChangesJSON,
+		); err != nil || insertedRows != 1 {
+			t.Fatalf("derive snapshot %d: inserted=%d err=%v", index, insertedRows, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit duplicate observations: %v", err)
+	}
+
+	if err := ensureUniqueEconomyTransactionObservations(ctx, database); err != nil {
+		t.Fatalf("deduplicate observations: %v", err)
+	}
+	var transactions int64
+	if err := database.QueryRowContext(ctx, `SELECT COUNT(*) FROM economy_transactions`).Scan(&transactions); err != nil {
+		t.Fatalf("count transactions: %v", err)
+	}
+	if transactions != 1 {
+		t.Fatalf("transactions after migration = %d, want 1", transactions)
+	}
+
+	tx, err = store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("begin post-migration tx: %v", err)
+	}
+	snapshotID, inserted, err := store.InsertEconomySnapshot(ctx, tx, "Player-older.log", 100, EconomySnapshotRecord{
+		ObservedAt:  "2026-09-02T00:48:48Z",
+		ChangesJSON: testPayChangesJSON,
+	})
+	if err != nil || !inserted {
+		t.Fatalf("insert third snapshot: id=%d inserted=%v err=%v", snapshotID, inserted, err)
+	}
+	insertedRows, err := store.DeriveEconomyTransactions(
+		ctx, tx, snapshotID, "2026-09-02T00:48:48Z", testPayChangesJSON,
+	)
+	if err != nil {
+		t.Fatalf("derive third snapshot: %v", err)
+	}
+	if insertedRows != 0 {
+		t.Fatalf("third snapshot inserted %d transactions, want 0", insertedRows)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit third snapshot: %v", err)
+	}
+}
+
 func TestEventRunEconomiesFallBackToJoinEntryCost(t *testing.T) {
 	t.Parallel()
 

@@ -23,7 +23,7 @@ export const ThemeContext = createContext<ThemeContextValue>({
   mode: "dark",
   modePreference: "dark",
   setModePreference: () => {},
-  scheme: "ember",
+  scheme: "bamboo",
   setScheme: () => {},
 });
 

@@ -416,7 +416,7 @@ export function MatchesPage() {
   }
 
   return (
-    <section className="panel">
+    <section className="panel matches-page">
       <div className="panel-head">
         <h3>Match History</h3>
         <p>{summary}</p>

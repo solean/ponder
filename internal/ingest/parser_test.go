@@ -142,6 +142,72 @@ func TestTailParsePersistsStateAcrossResumeCalls(t *testing.T) {
 	}
 }
 
+func TestTailParseRewindsWhenLogPathIsReplaced(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	database, err := db.Open(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	logPath := filepath.Join(tmpDir, "Player-prev.log")
+	initialLines := []string{
+		`{"clientId":"self-user","screenName":"Self"}`,
+		`{"timestamp":"1772330782273","matchGameRoomStateChangedEvent":{"gameRoomInfo":{"gameRoomConfig":{"reservedPlayers":[{"userId":"opp-old","playerName":"Old Opponent","systemSeatId":1,"teamId":1,"eventId":"Traditional_Ladder"},{"userId":"self-user","playerName":"Self","systemSeatId":2,"teamId":2,"eventId":"Traditional_Ladder"}],"matchId":"old-match"},"stateType":"MatchGameRoomStateType_Playing"}}}`,
+		strings.Repeat("old padding ", 100),
+	}
+	if err := writeLogLines(logPath, initialLines, false); err != nil {
+		t.Fatalf("write initial log: %v", err)
+	}
+
+	store := db.NewStore(database)
+	if _, err := NewParser(store).ParseFile(ctx, logPath, true); err != nil {
+		t.Fatalf("parse initial log: %v", err)
+	}
+	ingestState, err := store.GetIngestState(ctx, logPath)
+	if err != nil {
+		t.Fatalf("get initial ingest state: %v", err)
+	}
+	if ingestState.Offset <= 0 || ingestState.FileSignature == "" {
+		t.Fatalf("initial ingest state = %+v, want signed non-zero cursor", ingestState)
+	}
+
+	replacementLines := []string{
+		`{"clientId":"self-user","screenName":"Self"}`,
+		`{"timestamp":"1772330783273","matchGameRoomStateChangedEvent":{"gameRoomInfo":{"gameRoomConfig":{"reservedPlayers":[{"userId":"opp-new","playerName":"New Opponent","systemSeatId":1,"teamId":1,"eventId":"Traditional_Ladder"},{"userId":"self-user","playerName":"Self","systemSeatId":2,"teamId":2,"eventId":"Traditional_Ladder"}],"matchId":"replacement-match"},"stateType":"MatchGameRoomStateType_Playing"}}}`,
+		strings.Repeat("new padding ", 300),
+	}
+	if err := writeLogLines(logPath, replacementLines, false); err != nil {
+		t.Fatalf("replace log: %v", err)
+	}
+	replacementInfo, err := os.Stat(logPath)
+	if err != nil {
+		t.Fatalf("stat replacement log: %v", err)
+	}
+	if replacementInfo.Size() <= ingestState.Offset {
+		t.Fatalf("replacement size = %d, want larger than saved offset %d", replacementInfo.Size(), ingestState.Offset)
+	}
+
+	if _, err := NewParser(store).ParseFile(ctx, logPath, true); err != nil {
+		t.Fatalf("parse replacement log: %v", err)
+	}
+	var recovered int64
+	if err := database.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM matches WHERE arena_match_id = 'replacement-match'
+	`).Scan(&recovered); err != nil {
+		t.Fatalf("count replacement match: %v", err)
+	}
+	if recovered != 1 {
+		t.Fatalf("replacement matches = %d, want 1", recovered)
+	}
+}
+
 func TestParserStoresMatchRankSnapshotAcrossFiles(t *testing.T) {
 	t.Parallel()
 

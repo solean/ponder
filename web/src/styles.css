@@ -743,6 +743,43 @@
   --scan-sweep: rgba(39, 133, 11, 0.02);
 }
 
+:root {
+  --page-base-background:
+    radial-gradient(
+      1300px 960px at -15% -10%,
+      var(--bg-orb-a) 0%,
+      transparent 62%
+    ),
+    radial-gradient(
+      980px 620px at 110% 0%,
+      var(--bg-orb-b) 0%,
+      transparent 64%
+    ),
+    linear-gradient(125deg, var(--bg) 0%, var(--bg-mid) 56%, var(--bg-end) 100%);
+  --page-overlay-background:
+    repeating-linear-gradient(
+      0deg,
+      var(--grid-line) 0,
+      var(--grid-line) 1px,
+      transparent 1px,
+      transparent 60px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      var(--grid-line) 0,
+      var(--grid-line) 1px,
+      transparent 1px,
+      transparent 60px
+    ),
+    radial-gradient(circle at 50% -10%, var(--veil-orb) 0%, transparent 56%),
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--veil-line) 50%,
+      transparent 100%
+    );
+}
+
 /* ══════════════════════════════════════════
    RESET & BASE
    ══════════════════════════════════════════ */
@@ -761,24 +798,14 @@ body,
 
 html {
   -webkit-text-size-adjust: 100%;
+  scrollbar-gutter: stable;
 }
 
 body {
   margin: 0;
   color: var(--text);
   font-family: var(--font-sans);
-  background:
-    radial-gradient(
-      1300px 960px at -15% -10%,
-      var(--bg-orb-a) 0%,
-      transparent 62%
-    ),
-    radial-gradient(
-      980px 620px at 110% 0%,
-      var(--bg-orb-b) 0%,
-      transparent 64%
-    ),
-    linear-gradient(125deg, var(--bg) 0%, var(--bg-mid) 56%, var(--bg-end) 100%);
+  background: var(--page-base-background);
   line-height: 1.45;
   position: relative;
   overflow-x: hidden;
@@ -787,8 +814,8 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-:root[data-theme="light"] body {
-  background: var(--bg);
+:root[data-theme="light"] {
+  --page-base-background: var(--bg);
 }
 
 body::before {
@@ -796,28 +823,7 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background:
-    repeating-linear-gradient(
-      0deg,
-      var(--grid-line) 0px,
-      var(--grid-line) 1px,
-      transparent 1px,
-      transparent 60px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      var(--grid-line) 0px,
-      var(--grid-line) 1px,
-      transparent 1px,
-      transparent 60px
-    ),
-    radial-gradient(circle at 50% -10%, var(--veil-orb) 0%, transparent 56%),
-    linear-gradient(
-      90deg,
-      transparent 0%,
-      var(--veil-line) 50%,
-      transparent 100%
-    );
+  background: var(--page-overlay-background);
 }
 
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
@@ -869,10 +875,18 @@ h1 {
 }
 
 .app-shell {
+  --app-shell-margin-top: 1rem;
+  --app-shell-margin-bottom: clamp(1.75rem, 3vw, 3rem);
   width: min(1280px, 94vw);
-  margin: clamp(1.1rem, 3vw, 2.6rem) auto clamp(1.75rem, 3vw, 3rem);
+  margin: var(--app-shell-margin-top) auto var(--app-shell-margin-bottom);
   position: relative;
   z-index: 1;
+}
+
+.app-shell.is-viewport-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--app-shell-margin-top) - var(--app-shell-margin-bottom));
 }
 
 body.has-wide-deck-curve .app-shell {
@@ -923,7 +937,23 @@ body.has-wide-deck-curve .app-shell {
   gap: 0.6rem 1.4rem;
   margin-bottom: 1rem;
   padding: 0.5rem 0.8rem 0.6rem;
-  position: relative;
+  position: sticky;
+  top: var(--app-shell-margin-top);
+  z-index: 20;
+  background: linear-gradient(135deg, var(--bg), var(--bg-mid));
+  box-shadow: 0 8px 6px -6px rgba(0, 0, 0, 0.22);
+}
+
+.topbar::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: var(--app-shell-margin-top);
+  pointer-events: none;
+  background: var(--page-overlay-background), var(--page-base-background);
+  background-attachment: fixed;
 }
 
 .topbar::after {
@@ -1369,6 +1399,12 @@ body.has-wide-deck-curve .app-shell {
 .content {
   display: grid;
   gap: 1.05rem;
+}
+
+.app-shell.is-viewport-page .content {
+  grid-template-rows: auto minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
 }
 
 .page-context-bar {
@@ -3176,12 +3212,9 @@ small.settings-meta,
 }
 
 /* ============================================================
-   Phase 1 analytics: coverage, games, opening hands, deck versions
+   Game analytics, opening hands, deck versions
    ============================================================ */
 
-.match-analytics-heading {
-  align-items: start;
-}
 
 .analytics-coverage-badge,
 .analytics-confidence,
@@ -3220,24 +3253,7 @@ small.settings-meta,
   background: var(--accent-soft);
 }
 
-.analytics-coverage-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 1px;
-  margin: 1rem 0 0;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--line);
-}
 
-.analytics-coverage-grid > div {
-  min-width: 0;
-  padding: 0.72rem 0.78rem;
-  background: var(--surface-faint);
-}
-
-.analytics-coverage-grid dt,
 .match-game-stats dt,
 .deck-version-row dt {
   margin-bottom: 0.22rem;
@@ -3248,7 +3264,6 @@ small.settings-meta,
   text-transform: uppercase;
 }
 
-.analytics-coverage-grid dd,
 .match-game-stats dd,
 .deck-version-row dd {
   min-width: 0;
@@ -3263,7 +3278,6 @@ small.settings-meta,
 .match-game-list {
   display: grid;
   gap: 0.85rem;
-  margin-top: 1rem;
 }
 
 .match-game-card {
@@ -3832,9 +3846,7 @@ small.settings-meta,
 }
 
 @media (max-width: 900px) {
-  .analytics-coverage-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+
 
   .deck-version-row-button,
   .deck-version-row dl {
@@ -3843,20 +3855,17 @@ small.settings-meta,
 }
 
 @media (max-width: 640px) {
-  .match-analytics-heading,
   .match-game-card-head,
   .opening-hand-head {
     align-items: start;
   }
 
-  .match-analytics-heading,
   .match-game-card-head,
   .deck-version-row-button {
     display: grid;
     grid-template-columns: 1fr;
   }
 
-  .analytics-coverage-grid,
   .match-game-stats,
   .deck-version-row dl {
     grid-template-columns: 1fr 1fr;
@@ -3872,7 +3881,6 @@ small.settings-meta,
 }
 
 @media (max-width: 420px) {
-  .analytics-coverage-grid,
   .match-game-stats,
   .deck-version-row dl {
     grid-template-columns: 1fr;
@@ -8116,6 +8124,15 @@ select option {
   .topbar {
     padding-left: 0.3rem;
     padding-right: 0.3rem;
+    position: relative;
+    top: auto;
+    z-index: auto;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .topbar::before {
+    display: none;
   }
 
   .brand {
@@ -8689,6 +8706,22 @@ select option {
  * Scoped to `.is-virtual` so the shared `.data-table` used by other pages keeps
  * its native table layout. Rows are flex so column widths come from the
  * virtualizer/column sizes and stay aligned between header and body. */
+
+.matches-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.matches-page .match-table-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
+.matches-page .match-table-empty {
+  flex: 1;
+}
 
 .match-table-empty {
   padding: 1rem;

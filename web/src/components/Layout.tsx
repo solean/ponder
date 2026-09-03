@@ -144,7 +144,7 @@ export function Layout() {
             />
           </div>
         ) : null}
-        <div className="app-shell">
+        <div className={`app-shell${location.pathname === "/matches" ? " is-viewport-page" : ""}`}>
           <header className="topbar">
           <div className="brand">
             <span className="title-sigil" aria-hidden="true" />

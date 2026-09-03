@@ -870,10 +870,18 @@ h1 {
 }
 
 .app-shell {
+  --app-shell-margin-top: clamp(1.1rem, 3vw, 2.6rem);
+  --app-shell-margin-bottom: clamp(1.75rem, 3vw, 3rem);
   width: min(1280px, 94vw);
-  margin: clamp(1.1rem, 3vw, 2.6rem) auto clamp(1.75rem, 3vw, 3rem);
+  margin: var(--app-shell-margin-top) auto var(--app-shell-margin-bottom);
   position: relative;
   z-index: 1;
+}
+
+.app-shell.is-viewport-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--app-shell-margin-top) - var(--app-shell-margin-bottom));
 }
 
 body.has-wide-deck-curve .app-shell {
@@ -1370,6 +1378,12 @@ body.has-wide-deck-curve .app-shell {
 .content {
   display: grid;
   gap: 1.05rem;
+}
+
+.app-shell.is-viewport-page .content {
+  grid-template-rows: auto minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
 }
 
 .page-context-bar {
@@ -8662,6 +8676,22 @@ select option {
  * Scoped to `.is-virtual` so the shared `.data-table` used by other pages keeps
  * its native table layout. Rows are flex so column widths come from the
  * virtualizer/column sizes and stay aligned between header and body. */
+
+.matches-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.matches-page .match-table-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
+.matches-page .match-table-empty {
+  flex: 1;
+}
 
 .match-table-empty {
   padding: 1rem;

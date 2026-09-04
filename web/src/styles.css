@@ -1969,6 +1969,20 @@ body.has-wide-deck-curve .app-shell {
   justify-items: end;
   gap: 0.55rem;
 }
+.deck-arena-export-button {
+  min-height: 2.25rem;
+  padding: 0.5rem 0.8rem;
+}
+
+.deck-arena-export-button.is-copied {
+  border-color: var(--pill-win-border);
+  color: var(--pill-win-text);
+}
+
+.deck-arena-export-button.is-failed {
+  border-color: var(--pill-loss-border);
+  color: var(--pill-loss-text);
+}
 .deck-detail-summary-panel {
   z-index: 8;
   padding-block: 0.78rem;

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { copyTextToClipboard } from "../lib/clipboard";
 import { APP_NAME } from "../lib/branding";
 import { formatBytes, formatDateTime, formatRelativeTime, shortenHomePath } from "../lib/format";
 import { useThemeControls, type ColorScheme, type ModePreference } from "../lib/theme";
@@ -67,21 +68,10 @@ function CopyButton({ text, label }: { text: string; label: string }) {
     // Stop label-wrapped instances from re-focusing their input.
     event.preventDefault();
     try {
-      await navigator.clipboard.writeText(text);
+      await copyTextToClipboard(text);
       setCopied(true);
     } catch {
-      // Clipboard API can be unavailable in older webviews; fall back.
-      const textarea = document.createElement("textarea");
-      textarea.value = text;
-      document.body.appendChild(textarea);
-      textarea.select();
-      try {
-        if (document.execCommand("copy")) {
-          setCopied(true);
-        }
-      } finally {
-        textarea.remove();
-      }
+      // Leave the button unchanged when both clipboard mechanisms are unavailable.
     }
   };
 

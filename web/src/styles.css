@@ -875,7 +875,7 @@ h1 {
 }
 
 .app-shell {
-  --app-shell-margin-top: 1rem;
+  --app-shell-margin-top: 1.5rem;
   --app-shell-margin-bottom: clamp(1.75rem, 3vw, 3rem);
   width: min(1280px, 94vw);
   margin: var(--app-shell-margin-top) auto var(--app-shell-margin-bottom);
@@ -942,6 +942,13 @@ body.has-wide-deck-curve .app-shell {
   z-index: 20;
   background: linear-gradient(135deg, var(--bg), var(--bg-mid));
   box-shadow: 0 8px 6px -6px rgba(0, 0, 0, 0.22);
+  /* Wails drag region for the hidden native titlebar. */
+  --wails-draggable: drag;
+}
+
+.topbar-controls {
+  /* Keep navigation interactive inside the draggable header. */
+  --wails-draggable: no-drag;
 }
 
 .topbar::before {
@@ -951,7 +958,7 @@ body.has-wide-deck-curve .app-shell {
   right: 0;
   left: 0;
   height: var(--app-shell-margin-top);
-  pointer-events: none;
+  pointer-events: auto;
   background: var(--page-overlay-background), var(--page-base-background);
   background-attachment: fixed;
 }

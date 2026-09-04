@@ -48,6 +48,10 @@ func main() {
 		MinHeight:        760,
 		BackgroundColour: application.NewRGBA(8, 12, 21, 255),
 		URL:              "/",
+		Mac: application.MacWindow{
+			TitleBar:                application.MacTitleBarHidden,
+			InvisibleTitleBarHeight: 32,
+		},
 	})
 	desktop.setDesktopRuntime(wailsApp, mainWindow)
 

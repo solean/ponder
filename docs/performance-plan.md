@@ -140,3 +140,272 @@ picked up the new code and ran the first maintenance pass against
 - Frontend polling is modest (2s live / 5s idle / 30s overview) and pauses in
   background.
 - Replay compaction + VACUUM at startup keeps the freelist at zero.
+
+## Optimization plan — 2026-09-05
+
+This plan follows a read-only review of the current Go/SQLite backend, React
+frontend, and Wails v3 integration. It extends the completed July work above;
+the unchecked items below are recommendations, not implemented changes.
+
+### Goals and scope
+
+- Eliminate unnecessary work while live tracking is idle.
+- Reduce replay loading allocations, payload size, and repeated playback work.
+- Reduce initial frontend JavaScript loading and evaluation.
+- Bound long-running parser memory and history-dependent repair work.
+- Preserve log recovery, replay correctness, and existing SQLite safeguards.
+
+No evidence from this review justifies replacing Wails or the current database
+architecture. Native WKWebView performance still needs direct measurement.
+
+### Evidence and measurement limits
+
+The review exercised the actual parser, replay store, and HTTP handler with
+synthetic data in a disposable SQLite database. The existing production frontend
+build was opened in Chromium. No gameplay database was available at the expected
+local paths. Temporary probes, the server, and synthetic data were removed.
+
+**Idle polling:** 30 unchanged-log polls read zero new bytes, allocated
+**4.002 MiB per call**, and took **0.207 ms median**. At the default two-second
+interval, this corresponds to approximately **7 GiB/hour of cumulative allocation
+churn**, not retained memory. CPU time per call is small; battery impact was not
+measured.
+
+**Replay loading:**
+
+| Synthetic replay | Response JSON before gzip | Gzip API median | Store-load allocations |
+| --- | ---: | ---: | ---: |
+| 100 frames × 40 objects/frame | 1.83 MB | 10.5 ms | 9.1 MiB |
+| 500 frames × 80 objects/frame | 18.36 MB | 105 ms | 89.0 MiB |
+| 1,000 frames × 120 objects/frame | 55.23 MB | 317 ms | 221.4 MiB |
+
+- API timings are medians of five warm measurements through the real handler
+  using an in-process response recorder. They exclude browser/network time.
+- Store allocations are cumulative allocated bytes per load, not peak heap,
+  retained memory, or total HTTP-handler allocations.
+- Synthetic archives were seeded using zstd's fastest level; these measurements
+  do not compare production compression levels or measure completion-time encoding.
+- Chromium took approximately **42 ms median** to `JSON.parse` the largest
+  response, excluding React preprocessing and rendering.
+- These fixtures demonstrate scaling costs, not typical Arena match sizes.
+
+**Replay traversal:** sequentially visiting 1,000 synthetic frames through
+`buildReplayAttachmentState` performed **500,500 annotation parses** and took
+approximately **168 ms total** in Bun. This is cumulative helper execution,
+not a single-frame stall or a full React playback benchmark.
+
+**Frontend bundle:** the existing production build loaded one **2.01 MB**
+JavaScript bundle on Overview, approximately **640 KB** when gzip-compressed.
+No before/after startup improvement was measured.
+
+### Implementation order
+
+| Order | Work | Expected benefit | Scope |
+| --- | --- | --- | --- |
+| 1 | Idle-poll fast path | Less idle allocation and checkpoint writing | Small |
+| 2 | Replay freshness and projection allocation | Fewer repeated loads and intermediate allocations | Small–medium |
+| 3 | Route-level code splitting | Less initial JavaScript work | Small–medium |
+| 4 | Replay attachment indexing | Remove quadratic playback prefix scans | Medium |
+| 5 | Bounded parser state | Bound memory across a long live session | Medium |
+| 6 | Incremental historical repairs | Avoid repeated all-history queries/writes | Medium |
+| 7 | Chunked/keyframe replay format | Reduce full-match expansion and transfer | Large |
+
+Idle polling, route splitting, and replay indexing can be investigated
+independently. Parser eviction and replay-format changes need explicit recovery
+and late-message contracts before implementation.
+
+### 1. Make unchanged log polls nearly free
+
+**Finding.** `Parser.ParseFile` in `internal/ingest/parser.go` allocates a
+4 MiB reader and begins a write transaction before discovering unchanged EOF.
+The final path still saves and commits the ingest checkpoint. Live tracking
+calls this repeatedly through `internal/appstate/service.go`.
+
+**Plan.**
+- [ ] Add a no-change return after cursor, file-size, and signature validation,
+      before reader allocation and transaction creation.
+- [ ] Avoid checkpoint writes when neither the durable cursor nor its recovery
+      state changed, including polls containing only an incomplete trailing line.
+- [ ] Allocate the large reader only for actual parsing; measure whether a
+      smaller buffer is sufficient before changing its size.
+
+**Invariants.** Preserve same-size replacement detection, truncation handling,
+unterminated-tail recovery, pending logical-record checkpoints, and 500-line
+transaction batching. A size-only shortcut is not safe.
+
+**Verification.** Re-run the unchanged-log allocation probe and observe no
+checkpoint UPDATE/commit or 4 MiB reader allocation on ordinary unchanged EOF.
+Exercise appended complete lines, incomplete lines completed on a later poll,
+truncation, same-size replacement, and recovery from a pinned checkpoint.
+Keep regression coverage for any newly introduced recovery boundary.
+
+### 2. Reduce repeated replay loads and projection allocations
+
+**Finding.** `loadReplayArchivePayload` in `internal/db/replay_archive.go`
+decompresses and unmarshals the entire archive. `loadArchivedMatchReplayFrames`
+constructs another API-shaped object graph, and `ListMatchReplayFrames` in
+`internal/db/store_replay.go` derives changes across the frames.
+
+The replay query in `web/src/pages/MatchDetailPage.tsx` has no explicit
+`staleTime`, so default query behavior can refetch a completed replay on
+remount/focus.
+
+**Plan.**
+- [ ] Give completed replay queries an explicit freshness policy.
+- [ ] Define invalidation for reparsing, late frames, and other replay changes;
+      completed does not mean permanently immutable.
+- [ ] Keep query retention bounded so browsing multiple large replays does not
+      retain all decoded object graphs indefinitely.
+- [ ] Preallocate object slices using known archive object counts during
+      archive-to-API conversion.
+
+**Verification.** Observe request counts when leaving/re-entering a completed
+replay and hiding/showing the app. Confirm a changed replay refreshes correctly.
+Repeat store/API allocation measurements and observe heap retention after
+browsing several large replays and leaving the route. Preserve archive/live-row
+merge precedence and replay-change semantics.
+
+### 3. Split the startup JavaScript bundle
+
+**Finding.** `web/src/App.tsx` statically imports every route, including replay,
+chart, and AI Markdown dependencies.
+
+**Plan.**
+- [ ] Lazy-load routes with `React.lazy` and a route-level `Suspense` boundary.
+- [ ] Split optional replay/review panels when route splitting alone still
+      loads heavy code before it is needed.
+- [ ] Use modular ECharts imports for the chart types actually rendered.
+- [ ] Add preloading only if measured first-navigation latency warrants it.
+
+**Tradeoff.** Smaller initial work introduces chunk loading on first navigation.
+Moving code into vendor chunks without deferring imports is not equivalent to
+lazy loading.
+
+**Verification.** Build production assets and compare initial-route requested
+JavaScript bytes and parse/evaluation time. Exercise every route, direct deep
+links, and navigation in the packaged Wails app to verify dynamic chunk URLs
+through the asset server. Record initial-load and first-navigation tradeoffs.
+
+### 4. Index replay attachment state instead of rescanning prefixes
+
+**Finding.** `buildReplayAttachmentState` in `web/src/lib/replay/index.ts`
+walks frames zero through the selected index and reparses annotations.
+`MatchDetailPage` invokes it as the selected frame changes. Sequential traversal
+therefore performs quadratic cumulative prefix work.
+
+**Plan.**
+- [ ] Parse annotations once per loaded replay.
+- [ ] Build attachment state incrementally, using indexed events or checkpoints
+      to support backward/random seeking.
+- [ ] Reuse existing `ReplayRelationshipIndex` and scrubber caching patterns.
+- [ ] Avoid full copied attachment-state snapshots for every frame unless
+      memory measurements justify that representation.
+
+**Verification.** Compare sequential traversal at 250, 500, and 1,000 frames;
+annotation decoding should no longer scale with the sum of all frame prefixes.
+Verify backward seeks, repeated seeks, game switches, attachment replacement,
+and visibility filtering. Profile actual autoplay and scrubbing in the UI;
+the helper benchmark alone does not establish frame-rate improvement.
+
+### 5. Bound long-lived parser state
+
+**Finding.** `rememberReplayState` in `internal/ingest/gre.go` retains object
+maps keyed by match/game. Completion processing in `internal/ingest/match.go`
+archives replay data but does not evict those maps and associated per-match
+metadata. A live-tracking session retains one parser across polls.
+Retention is confirmed from code; retained-byte growth was not measured.
+
+**Plan.**
+- [ ] Define which state is required after a terminal match event.
+- [ ] Bound the recent completed-match window and evict older replay/metadata
+      entries together.
+- [ ] Preserve separately required rank-association and pending-record state.
+- [ ] Define rehydration or bounded retention behavior for late GRE messages
+      and reconnects before choosing an eviction boundary.
+
+**Verification.** Feed increasing numbers of completed matches through one
+persistent parser and measure retained heap after GC. State should remain
+bounded by the active match and chosen recent window. Verify late-message,
+reconnect, and log-rotation behavior without losing stored replay information.
+
+### 6. Make historical repairs incremental
+
+**Finding.** `RepairEventRunInstances` in `internal/db/store_events.go` scans
+historical drafts and performs per-draft queries/updates. It runs in `db.Init`,
+again in `Store.RunMaintenance`, and after draft-relevant ingestion.
+`RepairDraftDataFromRawEvents` also performs global JSON repair after relevant
+ingest activity. Current repair latency was not measured.
+
+**Plan.**
+- [ ] Give legacy repair one versioned owner rather than running the same
+      all-history pass twice at startup.
+- [ ] During normal ingestion, repair only affected drafts/event runs and
+      newly linkable transactions.
+- [ ] Avoid rewriting unchanged derived values and timestamps.
+- [ ] Preserve recovery for out-of-order and incomplete records.
+- [ ] Keep global repair available for explicit recovery or versioned backfills.
+
+**Verification.** Measure startup and one new draft event against increasing
+synthetic history sizes. Observe statement counts and updated rows, not just
+elapsed time. Verify normal ingest work is scoped to affected records and that
+versioned recovery still fixes historical gaps. Do not delete raw repair
+evidence merely to make scans smaller.
+
+### 7. Reduce full-match replay expansion structurally
+
+**Finding.** Compression controls disk size but not full-archive decoding,
+API object construction, response JSON expansion, or browser heap size.
+This carries forward July's unfinished delta-encoding work.
+
+**Plan.**
+- [ ] Define a versioned replay representation with keyframes and deltas.
+- [ ] Make independently loadable chunks align with useful access boundaries,
+      such as games or bounded frame ranges.
+- [ ] Support sequential playback and random seeking without decoding the
+      entire match.
+- [ ] Migrate stored archives and all consumers, including analytics and AI
+      review generation, with explicit archive/live-row merge semantics.
+- [ ] Remove obsolete runtime paths after successful migration; avoid a
+      permanent second replay implementation.
+
+**Tradeoff.** This is a storage/API/client change with migration and seeking
+complexity. Returning a smaller slice only after whole-archive decoding reduces
+browser work but does not solve backend expansion.
+
+**Verification.** Compare response bytes, load time, cumulative allocations,
+peak/retained heap, and seek latency across small and large replays. Verify
+frame equivalence, partial-log recovery, late live-row overrides, interrupted
+migration recovery, analytics output, and AI review inputs. Choose quantitative
+targets after capturing representative real-log baselines.
+
+### Preserve existing optimizations
+
+- Per-connection foreign keys, WAL, busy timeout, NORMAL synchronous mode, and
+  the small database connection pool.
+- 500-line transaction batching during active ingestion.
+- Raw-event allowlisting and removal of repair from draft API read paths.
+- Match-list virtualization and batched card-quantity lookups.
+- Modest frontend polling and disabled background polling for live queries.
+- The disabled WebGL background: Chromium inspection found no running canvas.
+
+### Profile before expanding scope
+
+- **Native hide/show behavior.** Wails hides the window rather than destroying
+  the webview. Measure `document.visibilityState`, request counts, autoplay,
+  and CPU while hidden. Add a native visibility bridge only if browser
+  visibility handling does not pause the relevant work.
+- **Large match history.** The frontend fetches up to 20,000 matches and filters
+  locally. Virtualization already bounds DOM rows. Measure payload size,
+  retained heap, and input latency before adding server-side filtering and
+  pagination; preserve grouped-history behavior and totals if that changes.
+- **Startup contention.** Maintenance overlaps auto-started ingestion and API
+  use. Measure writer waits and first-use latency before changing scheduling.
+  Eliminate duplicate repair first; background work is not automatically free.
+
+### Completion criteria
+
+Each implemented item should include before/after measurements of its affected
+path, correctness checks for its stated invariants, and updated documentation.
+Use disposable probes for straightforward performance comparisons; retain
+tests where they defend plausible behavioral regressions. Do not treat the
+synthetic baselines above as native WKWebView or typical-user latency claims.

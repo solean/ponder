@@ -216,14 +216,14 @@ and late-message contracts before implementation.
 
 ### 1. Make unchanged log polls nearly free
 
-**Finding.** `Parser.ParseFile` in `internal/ingest/parser.go` allocates a
-4 MiB reader and begins a write transaction before discovering unchanged EOF.
-The final path still saves and commits the ingest checkpoint. Live tracking
-calls this repeatedly through `internal/appstate/service.go`.
+**Finding before implementation.** `Parser.ParseFile` in
+`internal/ingest/parser.go` allocated a 4 MiB reader and began a write transaction
+before discovering unchanged EOF. The final path still saved and committed the
+ingest checkpoint on each live-tracking poll.
 
 **Plan.**
-- [ ] Add a no-change return after cursor, file-size, and signature validation,
-      before reader allocation and transaction creation.
+- [x] Add a no-change return after validating a non-zero cursor, file size, and
+      signature, before reader allocation and transaction creation.
 - [ ] Avoid checkpoint writes when neither the durable cursor nor its recovery
       state changed, including polls containing only an incomplete trailing line.
 - [ ] Allocate the large reader only for actual parsing; measure whether a
@@ -238,6 +238,38 @@ checkpoint UPDATE/commit or 4 MiB reader allocation on ordinary unchanged EOF.
 Exercise appended complete lines, incomplete lines completed on a later poll,
 truncation, same-size replacement, and recovery from a pinned checkpoint.
 Keep regression coverage for any newly introduced recovery boundary.
+
+**Implemented — 2026-09-05.** The fast path applies only when a validated,
+non-zero durable cursor equals the file size. It reports a completed idle poll
+without creating a reader or acquiring the SQLite writer lock. Zero/pinned
+checkpoints, empty files, incomplete trailing lines, and explicit full reparses
+retain their existing processing paths. Buffer resizing and incomplete-tail
+write suppression remain unchecked follow-ups above.
+
+Measured with the same disposable Go probe before and after the change, using
+30 unchanged polls per run and GC before each sample:
+
+| Metric | Before | After |
+| --- | ---: | ---: |
+| Allocated bytes per poll | 4,197,116 | 1,422 |
+| Median time per poll | 0.126 ms | 0.026 ms |
+| Polls changing the database | 30 / 30 | 0 / 30 |
+
+A dedicated observer connection checked SQLite `data_version` after each poll.
+These are synthetic parser measurements, not native-window or battery results.
+
+Verification completed:
+- The new writer-contention regression failed before the fix with `SQLITE_BUSY`
+  and passes after it; unchanged polling no longer needs the writer lock.
+- Regression coverage checks same-size replacement and in-memory match-state
+  preservation across an idle poll between appends.
+- The disposable smoke probe passed append-after-idle, incomplete/completed
+  trailing lines, shorter replacement, full reparse, truncation to empty, and
+  append-after-empty-reset scenarios.
+- `go test -race ./...` passed all seven packages with tests, including
+  multiline/pinned-checkpoint restart recovery. The linker emitted macOS
+  deployment-target warnings; they did not prevent the test run.
+- Temporary probe source and its disposable database were removed.
 
 ### 2. Reduce repeated replay loads and projection allocations
 

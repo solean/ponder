@@ -593,6 +593,15 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 			resetState = true
 		}
 	}
+
+	// Only a validated non-zero cursor can skip parsing: zero may be pinned
+	// for logical-record recovery. Check the signature above even at EOF so
+	// same-size replacements are not mistaken for an unchanged log.
+	if startOffset > 0 && startOffset == info.Size() {
+		stats.CompletedAt = time.Now().UTC()
+		return stats, nil
+	}
+
 	// A zero cursor can represent either a first import, a schema backfill, or
 	// recovery of a pending logical record. Keep intermediate batch commits at
 	// zero for this pass so a crash before the deck submission is reconstructed

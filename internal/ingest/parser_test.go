@@ -72,6 +72,102 @@ func TestParserPersistsLatestPlayerName(t *testing.T) {
 	}
 }
 
+func TestTailParseUnchangedLogDoesNotWaitForWriter(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	database, err := db.Open(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	logPath := filepath.Join(tmpDir, "Player.log")
+	if err := writeLogLines(logPath, []string{`{"clientId":"self-user","screenName":"Self"}`}, false); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+	store := db.NewStore(database)
+	if _, err := NewParser(store).ParseFile(ctx, logPath, true); err != nil {
+		t.Fatalf("initial parse: %v", err)
+	}
+	parser := NewParser(store)
+
+	// Reserve the polling connection before taking the writer lock. Disable
+	// its busy wait so an accidental write fails immediately, without timing
+	// assertions or waiting for SQLite's normal five-second timeout.
+	reader, err := database.Conn(ctx)
+	if err != nil {
+		t.Fatalf("reserve reader: %v", err)
+	}
+	defer reader.Close()
+	if _, err := reader.ExecContext(ctx, "PRAGMA busy_timeout = 0"); err != nil {
+		t.Fatalf("disable reader busy wait: %v", err)
+	}
+	writer, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("hold writer lock: %v", err)
+	}
+	defer writer.Rollback()
+	if err := reader.Close(); err != nil {
+		t.Fatalf("release polling connection: %v", err)
+	}
+
+	stats, err := parser.ParseFile(ctx, logPath, true)
+	if err != nil {
+		t.Fatalf("unchanged poll with writer active: %v", err)
+	}
+	if stats.LinesRead != 0 || stats.BytesRead != 0 {
+		t.Fatalf("unchanged poll read %d lines / %d bytes", stats.LinesRead, stats.BytesRead)
+	}
+}
+
+func TestTailParseRewindsSameSizeReplacement(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	database, err := db.Open(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	logPath := filepath.Join(tmpDir, "Player.log")
+	initial := `{"clientId":"self-user","screenName":"Before"}`
+	replacement := `{"clientId":"self-user","screenName":"After!"}`
+	if len(initial) != len(replacement) {
+		t.Fatal("replacement fixture must preserve log size")
+	}
+	store := db.NewStore(database)
+	parser := NewParser(store)
+	if err := writeLogLines(logPath, []string{initial}, false); err != nil {
+		t.Fatalf("write initial log: %v", err)
+	}
+	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
+		t.Fatalf("initial parse: %v", err)
+	}
+	if err := writeLogLines(logPath, []string{replacement}, false); err != nil {
+		t.Fatalf("replace log: %v", err)
+	}
+	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
+		t.Fatalf("parse replacement: %v", err)
+	}
+	name, err := store.PlayerName(ctx)
+	if err != nil {
+		t.Fatalf("read player name: %v", err)
+	}
+	if name != "After!" {
+		t.Fatalf("player name = %q, want replacement name", name)
+	}
+}
+
 func TestTailParsePersistsStateAcrossResumeCalls(t *testing.T) {
 	ctx := context.Background()
 	tmpDir := t.TempDir()
@@ -102,6 +198,9 @@ func TestTailParsePersistsStateAcrossResumeCalls(t *testing.T) {
 
 	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
 		t.Fatalf("first parse: %v", err)
+	}
+	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
+		t.Fatalf("unchanged poll between log appends: %v", err)
 	}
 
 	nextLines := []string{

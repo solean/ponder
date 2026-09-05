@@ -15,6 +15,8 @@ import { ResultPill } from "../components/ResultPill";
 import { SectionTabs, sectionPanelID, sectionTabID } from "../components/SectionTabs";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { formatArenaDeck } from "../lib/arenaDeck";
+import { copyTextToClipboard } from "../lib/clipboard";
 import { parseEventName } from "../lib/events";
 import { formatDateTime, formatDuration, formatGameFormat } from "../lib/format";
 import { fetchCardPreview, type CardPreview, type CardRarity } from "../lib/scryfall";
@@ -1281,6 +1283,7 @@ export function DeckDetailPage() {
   const activeSection: DeckSection = isRequestedSectionValid ? (requestedSection as DeckSection) : "decklist";
   const deckDisplayMode = parseDeckDisplayMode(searchParams.get("view"));
   const sectionTabBaseId = useId();
+  const [arenaCopyStatus, setArenaCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["deck", deckId],
@@ -1354,6 +1357,21 @@ export function DeckDetailPage() {
       quantity: card.quantity,
     }));
   }, [data?.cards, selectedVersion]);
+  const arenaDeckText = useMemo(() => {
+    try {
+      return formatArenaDeck(cards);
+    } catch {
+      return null;
+    }
+  }, [cards]);
+
+  useEffect(() => {
+    if (arenaCopyStatus === "idle") {
+      return;
+    }
+    const timer = window.setTimeout(() => setArenaCopyStatus("idle"), 1800);
+    return () => window.clearTimeout(timer);
+  }, [arenaCopyStatus]);
 
   const mainboardCards = useMemo(() => {
     return cards.filter((card) => card.section === "main");
@@ -1654,6 +1672,19 @@ export function DeckDetailPage() {
       { replace: true, state: location.state },
     );
   };
+  const copyDeckForArena = async () => {
+    if (!arenaDeckText) {
+      return;
+    }
+    try {
+      await copyTextToClipboard(arenaDeckText);
+      setArenaCopyStatus("copied");
+    } catch {
+      setArenaCopyStatus("failed");
+    }
+  };
+  const arenaCopyLabel =
+    arenaCopyStatus === "copied" ? "Copied for Arena" : arenaCopyStatus === "failed" ? "Copy failed" : "Copy to Arena";
 
   return (
     <div
@@ -1726,6 +1757,18 @@ export function DeckDetailPage() {
                   Return to current version
                 </button>
               ) : null}
+              <button
+                type="button"
+                className={`control-button control-button--quiet deck-arena-export-button${
+                  arenaCopyStatus === "copied" ? " is-copied" : arenaCopyStatus === "failed" ? " is-failed" : ""
+                }`}
+                aria-label={arenaCopyLabel}
+                disabled={!arenaDeckText}
+                onClick={() => void copyDeckForArena()}
+                title={arenaDeckText ? "Copy this deck in MTG Arena import format" : "Card names are unavailable for export"}
+              >
+                <span aria-live="polite">{arenaCopyLabel}</span>
+              </button>
               <div className="tabs tabs--sm deck-view-toggle" role="group" aria-label="Deck display mode">
                 <button
                   type="button"

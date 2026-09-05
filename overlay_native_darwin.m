@@ -32,6 +32,11 @@ bool ponderShowOverlayWindowInactive(
     NSWindowCollectionBehavior requiredBehavior =
         NSWindowCollectionBehaviorCanJoinAllSpaces |
         NSWindowCollectionBehaviorFullScreenAuxiliary;
+    // All Spaces and FullScreenAuxiliary alone do not opt into another app's
+    // fullscreen Space (or Stage Manager set).
+    if (@available(macOS 13.0, *)) {
+        requiredBehavior |= NSWindowCollectionBehaviorCanJoinAllApplications;
+    }
     CGWindowLevel maximumLevel = CGWindowLevelForKey(kCGMaximumWindowLevelKey);
     CGWindowLevel shieldingLevel = CGShieldingWindowLevel();
     CGWindowLevel overlayLevel =

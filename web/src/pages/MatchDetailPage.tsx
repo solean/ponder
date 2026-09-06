@@ -30,6 +30,7 @@ import { formatDateTime, formatDuration } from "../lib/format";
 import { arenaTurnToFullTurn } from "../lib/turns";
 import { useEventSets } from "../lib/useEventSets";
 import { fetchCardPreview } from "../lib/scryfall";
+import magicCardbackURL from "../assets/magic-cardback.jpg";
 import type { CardPreview, CardRarity } from "../lib/scryfall";
 import type {
   GameAnalytics,
@@ -1316,7 +1317,9 @@ function MatchReplayFrameSideSummary({
                     className="match-replay-card is-cardback"
                     role="img"
                     aria-label="Face-down card"
-                  />
+                  >
+                    <img src={magicCardbackURL} alt="" aria-hidden="true" />
+                  </div>
                 ))}
               </div>
               <span className="match-replay-compact-hand-count">{zoneCounts.get("hand") ?? 0}</span>

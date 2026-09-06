@@ -1303,9 +1303,26 @@ function MatchReplayFrameSideSummary({
             : undefined
         }
       >
-        <span className="match-replay-zonerail-label">
-          {timelinePlayerLabel(side)}
-        </span>
+        <div className="match-replay-zonerail-player">
+          <span className="match-replay-zonerail-label">
+            {timelinePlayerLabel(side)}
+          </span>
+          {side === "opponent" ? (
+            <div className="match-replay-compact-hand" aria-label={`Opponent's hand, ${zoneCounts.get("hand") ?? 0} cards`}>
+              <div className="match-replay-compact-hand-cards">
+                {sideObjects.filter((object) => boardZoneKind(object.zoneType) === "hand").map((object) => (
+                  <div
+                    key={object.instanceId}
+                    className="match-replay-card is-cardback"
+                    role="img"
+                    aria-label="Face-down card"
+                  />
+                ))}
+              </div>
+              <span className="match-replay-compact-hand-count">{zoneCounts.get("hand") ?? 0}</span>
+            </div>
+          ) : null}
+        </div>
         {attackSummary ? (
           <span
             className="match-replay-zonerail-attack"
@@ -1817,12 +1834,10 @@ function MatchReplayCardStackRow({
 }
 
 function MatchReplayHand({
-  side,
   objects,
   previewByCardID,
   highlightedInstanceIDs,
 }: {
-  side: "self" | "opponent";
   objects: MatchReplayFrameObject[];
   previewByCardID: Map<number, CardPreview | null>;
   highlightedInstanceIDs: Set<number>;
@@ -1832,17 +1847,17 @@ function MatchReplayHand({
       objects
         .filter(
           (object) =>
-            object.playerSide === side && boardZoneKind(object.zoneType) === "hand",
+            object.playerSide === "self" && boardZoneKind(object.zoneType) === "hand",
         )
         .sort(sortReplayObjects),
-    [objects, side],
+    [objects],
   );
 
   return (
-    <section className="match-replay-lane is-hand" aria-label={side === "self" ? "Your hand" : "Opponent's hand"}>
+    <section className="match-replay-lane is-hand" aria-label="Your hand">
       <div className="match-replay-lane-head">
         <div>
-          <p className="match-replay-lane-title">{side === "self" ? "Your Hand" : "Opponent's Hand"}</p>
+          <p className="match-replay-lane-title">Your Hand</p>
           <p className="match-replay-lane-subtitle">
             {handObjects.length} card{handObjects.length === 1 ? "" : "s"} currently in
             hand
@@ -1852,15 +1867,8 @@ function MatchReplayHand({
       {handObjects.length === 0 ? (
         <p className="match-replay-empty">No cards in hand in this step.</p>
       ) : (
-        <div className="match-replay-card-row is-hand" aria-label={side === "self" ? "Current hand" : "Hidden opponent cards"}>
-          {handObjects.map((object) => side === "opponent" ? (
-            <div
-              key={object.instanceId}
-              className="match-replay-card is-hand is-cardback"
-              role="img"
-              aria-label="Face-down card"
-            />
-          ) : (
+        <div className="match-replay-card-row is-hand" aria-label="Current hand">
+          {handObjects.map((object) => (
             <MatchReplayObjectCard
               key={object.instanceId}
               object={object}
@@ -3294,13 +3302,6 @@ function MatchReplayFrameBoard({
             </div>
           </div>
 
-          <MatchReplayHand
-            side="opponent"
-            objects={currentObjects}
-            previewByCardID={previewByCardID}
-            highlightedInstanceIDs={changedInstanceIDs}
-          />
-
           <MatchReplayFrameBattlefield
             side="opponent"
             objects={currentObjects}
@@ -3347,7 +3348,6 @@ function MatchReplayFrameBoard({
           />
 
           <MatchReplayHand
-            side="self"
             objects={currentObjects}
             previewByCardID={previewByCardID}
             highlightedInstanceIDs={changedInstanceIDs}

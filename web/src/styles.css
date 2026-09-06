@@ -5076,6 +5076,42 @@ small.settings-meta,
   text-transform: uppercase;
 }
 
+.match-replay-zonerail-player,
+.match-replay-compact-hand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.match-replay-compact-hand-cards {
+  display: flex;
+  align-items: center;
+  max-width: min(180px, 32vw);
+  overflow-x: auto;
+  padding: 2px;
+}
+
+.match-replay-compact-hand-cards .match-replay-card {
+  width: 28px;
+  height: 39px;
+  flex: 0 0 28px;
+  border-width: 2px;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.match-replay-compact-hand-cards .match-replay-card + .match-replay-card {
+  margin-left: -10px;
+}
+
+.match-replay-compact-hand-count {
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
 .match-replay-zonerail.is-opponent .match-replay-zonerail-label {
   color: var(--metric-negative-text);
 }

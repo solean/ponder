@@ -1337,6 +1337,16 @@ function replayFrameHasNarratableChange(frame: MatchReplayFrame): boolean {
   return (frame.changes ?? []).some(replayChangeIsNarratable);
 }
 
+function opponentHandCount(frame: MatchReplayFrame | null): number {
+  let count = 0;
+  for (const object of frame?.objects ?? []) {
+    if (object.playerSide === "opponent" && boardZoneKind(object.zoneType) === "hand") {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 export function isMeaningfulReplayFrame(
   frame: MatchReplayFrame,
   previousFrame: MatchReplayFrame | null,
@@ -1344,7 +1354,8 @@ export function isMeaningfulReplayFrame(
   return (
     replayFrameHasNarratableChange(frame) ||
     replayFrameHasRelationshipEvent(frame) ||
-    replayFrameHasLifeDelta(previousFrame, frame)
+    replayFrameHasLifeDelta(previousFrame, frame) ||
+    opponentHandCount(frame) !== opponentHandCount(previousFrame)
   );
 }
 

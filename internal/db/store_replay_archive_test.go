@@ -81,6 +81,15 @@ func replayTestObjects(turn int64) []model.MatchReplayFrameObjectRow {
 			Visibility:       "public",
 			IsToken:          true,
 		},
+		{
+			InstanceID:       404,
+			OwnerSeatID:      int64Ptr(2),
+			ControllerSeatID: int64Ptr(2),
+			ZoneID:           int64Ptr(35),
+			ZoneType:         "hand",
+			ZonePosition:     int64Ptr(1),
+			Visibility:       "private",
+		},
 	}
 	if turn >= 2 {
 		objects = append(objects, model.MatchReplayFrameObjectRow{
@@ -163,6 +172,20 @@ func TestArchiveMatchReplayRoundTrip(t *testing.T) {
 	}
 	if len(before) != 4 {
 		t.Fatalf("len(before) = %d, want 4", len(before))
+	}
+	for _, frame := range before {
+		hiddenCards := 0
+		for _, object := range frame.Objects {
+			if object.ZoneType == "hand" && object.PlayerSide == "opponent" {
+				hiddenCards++
+				if object.CardID != 0 || object.CardName != "" || object.DetailsJSON != "" {
+					t.Fatalf("opponent hand exposes card identity: %#v", object)
+				}
+			}
+		}
+		if hiddenCards != 1 {
+			t.Fatalf("opponent hand count = %d, want 1 before archiving", hiddenCards)
+		}
 	}
 
 	archiveTestMatch(t, store, "match-archive")

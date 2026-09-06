@@ -111,7 +111,7 @@ func (s *Store) ReplaceMatchReplayFrame(
 	}
 
 	for _, obj := range objects {
-		if obj.InstanceID <= 0 || obj.CardID <= 0 || strings.TrimSpace(obj.ZoneType) == "" {
+		if obj.InstanceID <= 0 || (obj.CardID <= 0 && obj.ZoneType != "hand") || strings.TrimSpace(obj.ZoneType) == "" {
 			continue
 		}
 		if _, err := tx.ExecContext(ctx, `

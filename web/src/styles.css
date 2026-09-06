@@ -5765,6 +5765,14 @@ button.match-replay-zonechip.is-button {
   flex: 0 0 auto;
 }
 
+.match-replay-card.is-cardback {
+  background:
+    radial-gradient(ellipse at center, transparent 36%, #b58c52 37%, #b58c52 39%, transparent 40%),
+    repeating-linear-gradient(45deg, #23394b 0 4px, #1b2c3d 4px 8px);
+  border: 5px solid #17202b;
+  box-shadow: 0 0 0 1px #8e734e inset, 0 4px 10px rgba(0, 0, 0, 0.24);
+}
+
 .match-replay-card img {
   display: block;
   width: 100%;

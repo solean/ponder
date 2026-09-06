@@ -129,6 +129,7 @@ export const api = {
   checkForUpdate: () => getJSON<UpdateCheck>("/api/runtime/update-check"),
   pickLogFile: () => postJSON<{ path: string }>("/api/runtime/pick-log"),
   revealPath: (path: string) => postJSON<{ status: string }>("/api/runtime/reveal", { path }),
+  openExternalURL: (url: string) => postJSON<{ status: string }>("/api/runtime/open-url", { url }),
   aiStatus: () => getJSON<AiStatus>("/api/ai/status"),
   deckPrimer: async (deckId: number): Promise<DeckPrimer | null> => {
     const res = await fetch(`${API_BASE}/api/decks/${deckId}/primer`);

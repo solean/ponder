@@ -132,6 +132,7 @@ func (s *Server) routes() http.Handler {
 		mux.HandleFunc("/api/runtime/update-check", s.handleRuntimeUpdateCheck)
 		mux.HandleFunc("/api/runtime/pick-log", s.handleRuntimePickLog)
 		mux.HandleFunc("/api/runtime/reveal", s.handleRuntimeReveal)
+		mux.HandleFunc("/api/runtime/open-url", s.handleRuntimeOpenURL)
 	}
 
 	staticAssets := s.staticAssets

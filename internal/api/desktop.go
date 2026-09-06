@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -9,13 +10,16 @@ import (
 )
 
 // Desktop provides native-shell integrations (file dialogs, revealing files in
-// Finder) when the API runs inside the desktop app. Nil in headless serve mode.
+// Finder), and opening external links, when the API runs inside the desktop app.
+// Nil in headless serve mode.
 type Desktop interface {
 	// PickLogFile opens a native file dialog and returns the chosen path, or
 	// "" if the user cancelled.
 	PickLogFile() (string, error)
 	// RevealPath shows the file or directory in the system file manager.
 	RevealPath(path string) error
+	// OpenURL opens a URL in the user's default browser.
+	OpenURL(rawURL string) error
 }
 
 // SetDesktop enables the desktop-only runtime endpoints. Call before Handler.
@@ -73,6 +77,40 @@ func (s *Server) handleRuntimeReveal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.desktop.RevealPath(payload.Path); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleRuntimeOpenURL(w http.ResponseWriter, r *http.Request) {
+	if s.appState == nil {
+		writeError(w, http.StatusNotFound, "runtime controls unavailable")
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.desktop == nil {
+		writeError(w, http.StatusBadRequest, "opening URLs is only available in the desktop app")
+		return
+	}
+
+	payload := struct {
+		URL string `json:"url"`
+	}{}
+	if err := decodeJSONBody(r, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	parsed, err := url.Parse(strings.TrimSpace(payload.URL))
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		writeError(w, http.StatusBadRequest, "URL must be an absolute HTTP(S) URL")
+		return
+	}
+
+	if err := s.desktop.OpenURL(parsed.String()); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

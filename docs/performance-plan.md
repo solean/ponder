@@ -278,17 +278,17 @@ decompresses and unmarshals the entire archive. `loadArchivedMatchReplayFrames`
 constructs another API-shaped object graph, and `ListMatchReplayFrames` in
 `internal/db/store_replay.go` derives changes across the frames.
 
-The replay query in `web/src/pages/MatchDetailPage.tsx` has no explicit
-`staleTime`, so default query behavior can refetch a completed replay on
-remount/focus.
+Before implementation, the replay query in `web/src/pages/MatchDetailPage.tsx`
+had no explicit `staleTime`, so default query behavior could refetch a completed
+replay on remount/focus.
 
 **Plan.**
-- [ ] Give completed replay queries an explicit freshness policy.
-- [ ] Define invalidation for reparsing, late frames, and other replay changes;
+- [x] Give completed replay queries an explicit freshness policy.
+- [x] Define invalidation for reparsing, late frames, and other replay changes;
       completed does not mean permanently immutable.
-- [ ] Keep query retention bounded so browsing multiple large replays does not
+- [x] Keep query retention bounded so browsing multiple large replays does not
       retain all decoded object graphs indefinitely.
-- [ ] Preallocate object slices using known archive object counts during
+- [x] Preallocate object slices using known archive object counts during
       archive-to-API conversion.
 
 **Verification.** Observe request counts when leaving/re-entering a completed
@@ -296,6 +296,68 @@ replay and hiding/showing the app. Confirm a changed replay refreshes correctly.
 Repeat store/API allocation measurements and observe heap retention after
 browsing several large replays and leaving the route. Preserve archive/live-row
 merge precedence and replay-change semantics.
+
+**Implemented — 2026-09-06.**
+
+- Added metadata-only `GET /api/matches/:id/replay-status`, returning an opaque
+  revision and completion flag. One SQL statement reads match/archive update
+  timestamps and live frame count/latest snapshot timestamp; it does not decode
+  archives or load frame objects.
+- Snapshot replacement now refreshes `match_replay_frames.created_at`, including
+  same-ID, same-count replacements with no objects. This timestamp describes the
+  replaced snapshot and is also used by existing analytics freshness checks.
+- Added `useMatchReplay` with one stable payload cache entry per match. It checks
+  status every 2 seconds for unfinished matches and every 10 seconds for completed
+  matches while Replay/AI Game Review is enabled, with background polling disabled.
+- Completed payloads have a five-minute freshness window. Revision changes
+  invalidate replay/detail/timeline data; imports invalidate their cache prefixes
+  explicitly. Payload loads wait for the initial status check, and revisions are
+  captured before fetching so an in-flight obsolete response cannot suppress
+  a subsequent refresh.
+- Inactive replay/status entries expire after 60 seconds. Fetches use abort
+  signals and are cancelled on departure; status failures are surfaced while
+  preserving any available cached replay.
+- Archive projection preallocates each nonempty frame's object slice. Empty-frame
+  behavior, the replay frame-array response, and archive/live merge precedence
+  remain unchanged.
+
+**Allocation results.** Same synthetic fixtures and five warm store loads per
+case, measured before/after slice preallocation:
+
+| Frames × objects/frame | Before | After | Reduction |
+| --- | ---: | ---: | ---: |
+| 100 × 40 | 9.126 MiB | 6.958 MiB | 24% |
+| 500 × 80 | 89.085 MiB | 67.742 MiB | 24% |
+| 1,000 × 120 | 221.360 MiB | 190.396 MiB | 14% |
+
+These are cumulative allocated bytes per store load, not peak or retained heap.
+Response JSON SHA-256 checksums matched before/after for all three fixtures and
+an additional empty-object replay. Full-archive expansion remains; keyframe/delta
+storage is still separate work.
+
+**Verification completed.**
+- `go test -race ./...`: all seven packages with tests passed.
+- `bun run build` and `bun test`: production build passed; 178 frontend tests
+  passed. Build warnings remain for large frontend chunks and stale Browserslist
+  data; the Go test linker also reported macOS deployment-target warnings.
+- Browser navigation away/back within the retention window reused the completed
+  payload; returning after more than 60 seconds inactive fetched it again.
+  No replay-status polling occurred while the match page was unmounted.
+- Same-ID corrections became visible on the next completed-match status check.
+  During live playback, unchanged two-second status polls caused no payload
+  reload, while a changed frame refreshed the displayed replay.
+- A delayed payload spanning another correction settled and triggered one
+  follow-up payload request; the latest corrected life total appeared.
+- Importing through Settings invalidated a warm replay even when the metadata
+  revision remained unchanged.
+- Simulated status failures produced visible errors for both cached and cold
+  replays, without a stuck loading state; recovery restored the replay.
+- Leaving during a delayed payload request aborted its fetch.
+- A simulated hidden-document visibility event paused status polling; refocus
+  did not reload an unchanged fresh payload. This does not verify native Wails
+  hide/show behavior. Actual retained-heap and native energy measurements remain
+  unmeasured; the cache-expiry check verifies lifecycle, not immediate GC.
+- Disposable probe source, binary, server, and synthetic database were removed.
 
 ### 3. Split the startup JavaScript bundle
 

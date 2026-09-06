@@ -513,6 +513,9 @@ func (s *Store) loadArchivedMatchReplayFrames(ctx context.Context, matchID int64
 			parseReplayPlayerLifeTotalsJSON(src.PlayerLifeTotalsJSON),
 			selfSeatID,
 		)
+		if len(src.Objects) > 0 {
+			frame.Objects = make([]model.MatchReplayFrameObjectRow, 0, len(src.Objects))
+		}
 		for j := range src.Objects {
 			obj := &src.Objects[j]
 			frame.Objects = append(frame.Objects, model.MatchReplayFrameObjectRow{

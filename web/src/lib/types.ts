@@ -107,6 +107,11 @@ export type MatchReplayFrameObject = {
   hasSummoningSickness: boolean;
 };
 
+export type MatchReplayStatus = {
+  revision: string;
+  complete: boolean;
+};
+
 export type MatchReplayFrame = {
   id: number;
   gameNumber?: number;

@@ -142,3 +142,72 @@ func TestMatchesEndpointTotalRespectsResultFilter(t *testing.T) {
 		}
 	}
 }
+
+func TestMatchReplayStatusEndpoint(t *testing.T) {
+	t.Parallel()
+
+	store := seedMatchListStore(t, 1)
+	matches := getMatchList(t, store, "/api/matches").Matches
+	matchID := matches[0].ID
+	handler := NewServer(store, "", nil).Handler()
+	readStatus := func() model.MatchReplayStatus {
+		t.Helper()
+		target := fmt.Sprintf("/api/matches/%d/replay-status", matchID)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET replay-status: status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var status model.MatchReplayStatus
+		if err := json.NewDecoder(rec.Body).Decode(&status); err != nil {
+			t.Fatalf("decode replay status: %v", err)
+		}
+		return status
+	}
+	before := readStatus()
+	if !before.Complete {
+		t.Fatal("ended match reported incomplete")
+	}
+	if repeated := readStatus(); repeated != before {
+		t.Fatalf("unchanged status was not stable: before=%+v repeated=%+v", before, repeated)
+	}
+
+	tx, err := store.BeginTx(context.Background())
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+	defer tx.Rollback()
+	if _, err := store.ReplaceMatchReplayFrame(
+		context.Background(), tx, "match-0000", 1, 10, 0, 1,
+		"full", "playing", "main1", "", "", "", "gre",
+		nil, nil, nil, nil,
+	); err != nil {
+		t.Fatalf("ReplaceMatchReplayFrame: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit late frame: %v", err)
+	}
+	after := readStatus()
+	if after.Revision == before.Revision || !after.Complete {
+		t.Fatalf("late frame status=%+v, want changed revision and complete", after)
+	}
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/matches/%d/replay", matchID), nil))
+	var frames []model.MatchReplayFrameRow
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET replay: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&frames); err != nil {
+		t.Fatalf("replay response is not a frame array: %v", err)
+	}
+	if len(frames) != 1 || frames[0].GameStateID == nil || *frames[0].GameStateID != 10 {
+		t.Fatalf("replay frames=%+v, want late state 10", frames)
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/matches/%d/replay-status", matchID+1), nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("missing match status=%d, want 404; body=%s", rec.Code, rec.Body.String())
+	}
+}

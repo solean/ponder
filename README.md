@@ -97,6 +97,8 @@ API endpoints:
 - `GET /api/matches?limit=500` → `{ "matches": [...], "total": N }`; `limit` defaults to 200 and is clamped to 20000, `total` ignores it so the UI can say "showing N of M"
 - `GET /api/matches/:id`
 - `GET /api/matches/:id/timeline`
+- `GET /api/matches/:id/replay` → replay frame array
+- `GET /api/matches/:id/replay-status` → `{ "revision": "...", "complete": true }`; metadata-only freshness check, or 404 for an unknown match
 - `GET /api/decks` (constructed decks only)
 - `GET /api/decks?scope=draft`
 - `GET /api/decks?scope=all`
@@ -112,6 +114,15 @@ Matchup summaries carry a `matchCount` per row but omit the per-match
 `matchRefs` list, which grows with the match count; the `/refs` endpoints serve
 one row's matches for the expanded drill-down. Omitting `group` selects the
 set-level rows, while an empty `group=` selects the unknown-own-colors bucket.
+
+While Replay or AI Game Review is open, the frontend checks replay status every
+2 seconds for unfinished matches and every 10 seconds for completed matches.
+Revision changes refresh the replay, match detail, and timeline without decoding
+the archive on unchanged status checks. Completed payloads have a five-minute
+freshness window; inactive replay cache entries expire after 60 seconds.
+Imports invalidate replay caches, and late frames or same-ID snapshot replacements
+change the status revision. The revision is an opaque comparison token, not a
+client-parsed timestamp.
 
 ## Replay Storage Compaction
 

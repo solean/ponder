@@ -29,6 +29,7 @@ import { api } from "../lib/api";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { arenaTurnToFullTurn } from "../lib/turns";
 import { useEventSets } from "../lib/useEventSets";
+import { useMatchReplay } from "../lib/replay/useMatchReplay";
 import { fetchCardPreview } from "../lib/scryfall";
 import magicCardbackURL from "../assets/magic-cardback.jpg";
 import type { CardPreview, CardRarity } from "../lib/scryfall";
@@ -4361,11 +4362,10 @@ export function MatchDetailPage() {
     queryFn: () => api.matchTimeline(matchId),
     enabled: isValidMatchID,
   });
-  const replayQuery = useQuery({
-    queryKey: ["match-replay", matchId],
-    queryFn: () => api.matchReplay(matchId),
-    enabled: isValidMatchID && (activeSection === "replay" || activeSection === "review"),
-  });
+  const replayQuery = useMatchReplay(
+    matchId,
+    isValidMatchID && (activeSection === "replay" || activeSection === "review"),
+  );
   const { lookup: setLookup } = useEventSets([query.data?.match.eventName]);
   useBreadcrumbLabel(
     query.data
@@ -4711,6 +4711,11 @@ export function MatchDetailPage() {
           aria-labelledby={sectionTabID(sectionTabBaseId, "review")}
           className="stack-lg"
         >
+          {replayQuery.error ? (
+            <StatusMessage tone="error">
+              {replayQuery.error.message}
+            </StatusMessage>
+          ) : null}
           {replayQuery.isPending ? (
             <StatusMessage>Loading replay frames for review…</StatusMessage>
           ) : activeTimelineGameNumber !== null ? (
@@ -4844,9 +4849,9 @@ export function MatchDetailPage() {
                 </StatusMessage>
               )
             )}
-            {replayQuery.error && !hasReplayFrames ? (
+            {replayQuery.error ? (
               <StatusMessage tone="error">
-                {(replayQuery.error as Error).message}
+                {replayQuery.error.message}
               </StatusMessage>
             ) : null}
             {isBoardCardPreviewLoading ? (

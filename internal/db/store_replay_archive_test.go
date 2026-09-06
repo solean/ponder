@@ -301,3 +301,125 @@ func TestCompactMatchReplaysOnlyTouchesFinishedMatches(t *testing.T) {
 		t.Fatalf("second pass archived = %d, want 0", archived)
 	}
 }
+
+func TestMatchReplayStatusDetectsEmptyFrameReplacement(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := newReplayArchiveTestStore(t)
+	const arenaID = "match-status-replacement"
+	tx := mustBeginTx(t, store)
+	if _, err := store.UpsertMatchStart(ctx, tx, arenaID, "Ladder", 1, "2026-03-12T19:06:52Z"); err != nil {
+		t.Fatalf("UpsertMatchStart: %v", err)
+	}
+	insertReplayTestFrame(t, store, tx, arenaID, 1, 10, 1, `{"1":20,"2":20}`, nil)
+	mustCommit(t, tx)
+	matchID := matchRowID(t, store, arenaID)
+	// Establish an older snapshot without depending on clock resolution.
+	if _, err := store.db.ExecContext(ctx, `UPDATE match_replay_frames SET created_at = ? WHERE match_id = ?`, "2026-01-01T00:00:00Z", matchID); err != nil {
+		t.Fatalf("age replay snapshot: %v", err)
+	}
+	before, err := store.GetMatchReplayStatus(ctx, matchID)
+	if err != nil {
+		t.Fatalf("GetMatchReplayStatus before replacement: %v", err)
+	}
+	framesBefore, err := store.ListMatchReplayFrames(ctx, matchID)
+	if err != nil {
+		t.Fatalf("ListMatchReplayFrames before replacement: %v", err)
+	}
+
+	tx = mustBeginTx(t, store)
+	insertReplayTestFrame(t, store, tx, arenaID, 1, 10, 1, `{"1":15,"2":20}`, nil)
+	mustCommit(t, tx)
+	after, err := store.GetMatchReplayStatus(ctx, matchID)
+	if err != nil {
+		t.Fatalf("GetMatchReplayStatus after replacement: %v", err)
+	}
+	if after.Revision == before.Revision {
+		t.Fatal("replacing an empty-object snapshot did not change its revision")
+	}
+	framesAfter, err := store.ListMatchReplayFrames(ctx, matchID)
+	if err != nil {
+		t.Fatalf("ListMatchReplayFrames after replacement: %v", err)
+	}
+	if len(framesBefore) != 1 || len(framesAfter) != 1 || framesBefore[0].ID != framesAfter[0].ID {
+		t.Fatalf("replacement changed frame identity: before=%+v after=%+v", framesBefore, framesAfter)
+	}
+	if framesAfter[0].SelfLifeTotal == nil || *framesAfter[0].SelfLifeTotal != 15 || len(framesAfter[0].Objects) != 0 {
+		t.Fatalf("replacement snapshot = %+v, want 15 life and no objects", framesAfter[0])
+	}
+}
+
+func TestMatchReplayStatusTracksArchiveAndLateRows(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := newReplayArchiveTestStore(t)
+	const arenaID = "match-status-archive"
+	setupReplayTestMatch(t, store, arenaID, "2026-03-12T19:06:52Z")
+	matchID := matchRowID(t, store, arenaID)
+	readStatus := func() model.MatchReplayStatus {
+		t.Helper()
+		status, err := store.GetMatchReplayStatus(ctx, matchID)
+		if err != nil {
+			t.Fatalf("GetMatchReplayStatus: %v", err)
+		}
+		return status
+	}
+	before := readStatus()
+	if before.Complete {
+		t.Fatal("unfinished match reported complete")
+	}
+	if repeated := readStatus(); repeated != before {
+		t.Fatalf("unchanged status was not stable: before=%+v repeated=%+v", before, repeated)
+	}
+	requireChanged := func(stage string) {
+		t.Helper()
+		after := readStatus()
+		if after.Revision == before.Revision {
+			t.Fatalf("%s did not change replay revision", stage)
+		}
+		before = after
+	}
+	tx := mustBeginTx(t, store)
+	if _, _, _, err := store.UpdateMatchEnd(ctx, tx, arenaID, 1, 1, 9, 420, "Concede", "2026-03-12T19:13:52Z"); err != nil {
+		t.Fatalf("UpdateMatchEnd: %v", err)
+	}
+	mustCommit(t, tx)
+	requireChanged("completion")
+	if !before.Complete {
+		t.Fatal("ended match reported incomplete")
+	}
+
+	archiveTestMatch(t, store, arenaID)
+	requireChanged("archiving")
+	tx = mustBeginTx(t, store)
+	insertReplayTestFrame(t, store, tx, arenaID, 2, 6, 2, `{"1":20,"2":15}`, nil)
+	mustCommit(t, tx)
+	requireChanged("late frame")
+
+	// An older late row must be observable even when MAX(created_at) is unchanged.
+	tx = mustBeginTx(t, store)
+	insertReplayTestFrame(t, store, tx, arenaID, 2, 7, 3, `{"1":20,"2":10}`, nil)
+	if _, err := tx.ExecContext(ctx, `UPDATE match_replay_frames SET created_at = ? WHERE match_id = ? AND game_state_id = 7`, "2026-01-01T00:00:00Z", matchID); err != nil {
+		t.Fatalf("age late row: %v", err)
+	}
+	mustCommit(t, tx)
+	requireChanged("older late frame")
+	if _, err := store.db.ExecContext(ctx, `DELETE FROM match_replay_frames WHERE match_id = ? AND game_state_id = 7`, matchID); err != nil {
+		t.Fatalf("delete older late row: %v", err)
+	}
+	requireChanged("older row deletion")
+	archiveTestMatch(t, store, arenaID)
+	requireChanged("re-archiving")
+
+	// Status must remain available without decoding even a damaged archive,
+	// and an archive-only correction must invalidate an otherwise idle match.
+	if _, err := store.db.ExecContext(ctx, `UPDATE match_replay_archives SET payload_zstd = ?, updated_at = ? WHERE match_id = ?`, []byte("invalid archive"), "2026-02-01T00:00:00Z", matchID); err != nil {
+		t.Fatalf("replace archive: %v", err)
+	}
+	requireChanged("archive-only correction")
+	if repeated := readStatus(); repeated != before {
+		t.Fatalf("archive status was not stable: before=%+v repeated=%+v", before, repeated)
+	}
+}

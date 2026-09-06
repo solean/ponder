@@ -15,6 +15,7 @@ import type {
   MatchDetail,
   MatchList,
   MatchReplayFrame,
+  MatchReplayStatus,
   MatchupMatchRef,
   DeckMatchupsResponse,
   LimitedMatchupsResponse,
@@ -30,8 +31,8 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
-async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
+async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, { signal });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Request failed (${res.status}): ${text}`);
@@ -61,7 +62,10 @@ export const api = {
   matches: (limit = 500) => getJSON<MatchList>(`/api/matches?limit=${limit}`),
   matchDetail: (matchId: number) => getJSON<MatchDetail>(`/api/matches/${matchId}`),
   matchTimeline: (matchId: number) => getJSON<MatchCardPlay[]>(`/api/matches/${matchId}/timeline`),
-  matchReplay: (matchId: number) => getJSON<MatchReplayFrame[]>(`/api/matches/${matchId}/replay`),
+  matchReplay: (matchId: number, signal?: AbortSignal) =>
+    getJSON<MatchReplayFrame[]>(`/api/matches/${matchId}/replay`, signal),
+  matchReplayStatus: (matchId: number, signal?: AbortSignal) =>
+    getJSON<MatchReplayStatus>(`/api/matches/${matchId}/replay-status`, signal),
   gameReview: async (matchId: number, gameNumber: number): Promise<GameReview | null> => {
     const res = await fetch(`${API_BASE}/api/matches/${matchId}/review?game=${gameNumber}`);
     if (res.status === 404) {

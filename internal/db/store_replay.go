@@ -13,6 +13,32 @@ import (
 	"github.com/solean/ponder/internal/model"
 )
 
+// GetMatchReplayStatus reads only metadata in one SQLite snapshot. Live row
+// count also detects deletion/compaction, even when the newest row is unchanged.
+func (s *Store) GetMatchReplayStatus(ctx context.Context, matchID int64) (model.MatchReplayStatus, error) {
+	var out model.MatchReplayStatus
+	var matchUpdatedAt, archiveUpdatedAt, frameUpdatedAt string
+	var frameCount int64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT
+			m.updated_at,
+			COALESCE(a.updated_at, ''),
+			COUNT(f.id),
+			COALESCE(MAX(f.created_at), ''),
+			m.result IS NOT NULL OR m.ended_at IS NOT NULL
+		FROM matches m
+		LEFT JOIN match_replay_archives a ON a.match_id = m.id
+		LEFT JOIN match_replay_frames f ON f.match_id = m.id
+		WHERE m.id = ?
+		GROUP BY m.id
+	`, matchID).Scan(&matchUpdatedAt, &archiveUpdatedAt, &frameCount, &frameUpdatedAt, &out.Complete)
+	if err != nil {
+		return out, fmt.Errorf("get match replay status: %w", err)
+	}
+	out.Revision = fmt.Sprintf("%s|%s|%d|%s|%t", matchUpdatedAt, archiveUpdatedAt, frameCount, frameUpdatedAt, out.Complete)
+	return out, nil
+}
+
 func (s *Store) ReplaceMatchReplayFrame(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -69,7 +95,8 @@ func (s *Store) ReplaceMatchReplayFrame(
 			source = COALESCE(excluded.source, match_replay_frames.source),
 			recorded_at = COALESCE(excluded.recorded_at, match_replay_frames.recorded_at),
 			actions_json = COALESCE(excluded.actions_json, match_replay_frames.actions_json),
-			annotations_json = COALESCE(excluded.annotations_json, match_replay_frames.annotations_json)
+			annotations_json = COALESCE(excluded.annotations_json, match_replay_frames.annotations_json),
+			created_at = excluded.created_at
 	`,
 		gameNumber,
 		gameStateID,

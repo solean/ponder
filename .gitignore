@@ -16,6 +16,10 @@ web/*.tsbuildinfo
 web/vite.config.js
 web/vite.config.d.ts
 build/darwin/icons.icns
+build/darwin/Assets.car
+build/darwin/temp.plist
 build/windows/icon.ico
 research/
 .claude/
+.DS_Store
+

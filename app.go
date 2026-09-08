@@ -171,6 +171,14 @@ func (a *App) RevealPath(path string) error {
 	}
 }
 
+// OpenURL satisfies api.Desktop by opening a link in the user's default browser.
+func (a *App) OpenURL(rawURL string) error {
+	if a.wailsApp == nil {
+		return fmt.Errorf("desktop runtime not ready")
+	}
+	return a.wailsApp.Browser.OpenURL(rawURL)
+}
+
 func (a *App) startup() {
 	supportDir, err := appstate.DefaultSupportDir()
 	if err != nil {

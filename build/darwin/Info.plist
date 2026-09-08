@@ -8,6 +8,8 @@
 		<string>Ponder desktop application</string>
 		<key>CFBundleIconFile</key>
 		<string>icons</string>
+		<key>CFBundleIconName</key>
+		<string>Ponder</string>
 		<key>CFBundleIdentifier</key>
 		<string>dev.ixianlabs.ponder</string>
 		<key>CFBundleName</key>

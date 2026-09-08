@@ -132,6 +132,7 @@ func (s *Server) routes() http.Handler {
 		mux.HandleFunc("/api/runtime/update-check", s.handleRuntimeUpdateCheck)
 		mux.HandleFunc("/api/runtime/pick-log", s.handleRuntimePickLog)
 		mux.HandleFunc("/api/runtime/reveal", s.handleRuntimeReveal)
+		mux.HandleFunc("/api/runtime/open-url", s.handleRuntimeOpenURL)
 	}
 
 	staticAssets := s.staticAssets
@@ -708,6 +709,18 @@ func (s *Server) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
 			return
 		case "review":
 			s.handleGameReview(w, r, id)
+			return
+		case "replay-status":
+			status, err := s.store.GetMatchReplayStatus(r.Context(), id)
+			if errors.Is(err, sql.ErrNoRows) {
+				writeError(w, http.StatusNotFound, "match not found")
+				return
+			}
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, status)
 			return
 		case "replay":
 			frames, err := s.store.ListMatchReplayFrames(r.Context(), id)

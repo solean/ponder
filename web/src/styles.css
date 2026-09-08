@@ -5076,6 +5076,42 @@ small.settings-meta,
   text-transform: uppercase;
 }
 
+.match-replay-zonerail-player,
+.match-replay-compact-hand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.match-replay-compact-hand-cards {
+  display: flex;
+  align-items: center;
+  max-width: min(180px, 32vw);
+  overflow-x: auto;
+  padding: 2px;
+}
+
+.match-replay-compact-hand-cards .match-replay-card {
+  width: 28px;
+  height: 39px;
+  flex: 0 0 28px;
+  border-width: 2px;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.match-replay-compact-hand-cards .match-replay-card + .match-replay-card {
+  margin-left: -10px;
+}
+
+.match-replay-compact-hand-count {
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
 .match-replay-zonerail.is-opponent .match-replay-zonerail-label {
   color: var(--metric-negative-text);
 }
@@ -5763,6 +5799,13 @@ button.match-replay-zonechip.is-button {
   width: clamp(82px, 12cqw, 138px);
   height: auto;
   flex: 0 0 auto;
+}
+
+.match-replay-card.is-cardback {
+  padding: 0;
+  border: 1px solid #17202b;
+  background: #17202b;
+  box-shadow: 0 0 0 1px #8e734e inset, 0 4px 10px rgba(0, 0, 0, 0.24);
 }
 
 .match-replay-card img {

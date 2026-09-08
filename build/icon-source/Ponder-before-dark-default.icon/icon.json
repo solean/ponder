@@ -1,0 +1,62 @@
+{
+  "features" : [
+    "refractivity",
+    "specular-location"
+  ],
+  "fill-specializations" : [
+    {
+      "value" : {
+        "solid" : "srgb:0.87692,0.87843,0.81824,1.00000"
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "solid" : "srgb:0.00232,0.17504,0.10655,1.00000"
+      }
+    }
+  ],
+  "groups" : [
+    {
+      "blur-material" : 0.5,
+      "layers" : [
+        {
+          "blend-mode-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : "normal"
+            }
+          ],
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : "none"
+            }
+          ],
+          "image-name" : "orbs.svg",
+          "name" : "orbs"
+        }
+      ],
+      "refractivity" : {
+        "depth" : 0.35,
+        "enabled" : true,
+        "strength" : 0.75
+      },
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "specular" : "inside",
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.65
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

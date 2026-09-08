@@ -338,16 +338,6 @@ func replayZoneVisibility(matchID string, zoneID int64, state *parseState) strin
 	return normalizeGREVisibility(state.zoneVisibility(matchID, zoneID))
 }
 
-func isReplaySelfHandZone(matchID string, zoneID, selfSeat int64, state *parseState) bool {
-	if state == nil || zoneID <= 0 || selfSeat <= 0 {
-		return false
-	}
-	if strings.TrimSpace(state.zoneType(matchID, zoneID)) != "hand" {
-		return false
-	}
-	return state.zoneOwnerSeat(matchID, zoneID) == selfSeat
-}
-
 func isTimelinePlayableZone(zoneType string) bool {
 	zoneType = strings.TrimSpace(strings.ToLower(zoneType))
 	return zoneType == "stack" || zoneType == "battlefield"
@@ -590,7 +580,10 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 			replayState.Objects[obj.InstanceID] = current
 
 			if current.ZoneID > 0 && isReplayTrackedZone(matchID, current.ZoneID, replayState, state, selfSeat) {
-				zoneType := state.zoneType(matchID, current.ZoneID)
+				zoneType := replayState.PublicZoneTypes[current.ZoneID]
+				if zoneType == "" {
+					zoneType = state.zoneType(matchID, current.ZoneID)
+				}
 				if zoneType == "" {
 					zoneType = fallbackGREZoneType(current.ZoneID)
 				}
@@ -607,6 +600,8 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 					}
 					replayState.Objects[obj.InstanceID] = current
 				}
+			} else if current.ZoneID > 0 {
+				removeReplayInstanceFromAllZones(replayState, obj.InstanceID)
 			}
 		}
 		applyReplayAnnotations(replayState, msg.GameStateMessage.Annotations)
@@ -626,9 +621,16 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 
 			members := make([]int64, 0, len(zone.ObjectInstanceIDs))
 			for _, instanceID := range zone.ObjectInstanceIDs {
+				if instanceID <= 0 {
+					continue
+				}
 				current := replayState.Objects[instanceID]
 				current.InstanceID = instanceID
 				current.ZoneID = zone.ZoneID
+				if zoneType == "hand" && state.zoneOwnerSeat(matchID, zone.ZoneID) > 0 {
+					current.OwnerSeatID = state.zoneOwnerSeat(matchID, zone.ZoneID)
+					current.ControllerSeatID = current.OwnerSeatID
+				}
 				if current.Visibility == "" {
 					current.Visibility = replayZoneVisibility(matchID, zone.ZoneID, state)
 				}
@@ -677,7 +679,10 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 		}
 
 		for instanceID, current := range currentPublicByInstance {
-			if _, alreadyPublic := previousPublicByInstance[instanceID]; alreadyPublic {
+			if current.CardID <= 0 {
+				continue
+			}
+			if previous, alreadyPublic := previousPublicByInstance[instanceID]; alreadyPublic && previous.CardID > 0 {
 				continue
 			}
 			ownerSeatID := int64(0)
@@ -735,6 +740,15 @@ func (p *Parser) replayStateForGame(
 	}
 	replay.LastGameStateID = lastGameStateID
 	hydrateReplayStateFromFrameObjects(replay, latestTurnNumber, objects, playerLifeTotals)
+	for _, object := range objects {
+		zoneID := replayIntValue(object.ZoneID)
+		if state.zoneType(matchID, zoneID) == "" {
+			state.rememberZoneType(matchID, zoneID, object.ZoneType)
+		}
+		if object.ZoneType == "hand" && state.zoneOwnerSeat(matchID, zoneID) <= 0 {
+			state.rememberZoneOwnerSeat(matchID, zoneID, replayIntValue(object.OwnerSeatID))
+		}
+	}
 	state.rememberReplayState(matchID, gameNumber, replay)
 	return replay, nil
 }
@@ -750,7 +764,7 @@ func hydrateReplayStateFromFrameObjects(replay *replayPublicState, latestTurnNum
 		replay.PlayerLifeTotals[seatID] = lifeTotal
 	}
 	for _, obj := range objects {
-		if obj.InstanceID <= 0 || obj.CardID <= 0 {
+		if obj.InstanceID <= 0 || (obj.CardID <= 0 && obj.ZoneType != "hand") {
 			continue
 		}
 
@@ -824,10 +838,18 @@ func buildReplayPublicSnapshot(
 		members := replay.PublicZoneMembers[zoneID]
 		for idx, instanceID := range members {
 			current, ok := replay.Objects[instanceID]
-			if !ok || current.CardID <= 0 || !isReplayVisibleObject(matchID, current, zoneType, state, selfSeat) {
+			if !ok || !isReplayVisibleObject(matchID, current, zoneType, state, selfSeat) {
 				continue
 			}
 			if _, duplicate := byInstance[instanceID]; duplicate {
+				continue
+			}
+			ownerSeatID := current.OwnerSeatID
+			if zoneType == "hand" && state.zoneOwnerSeat(matchID, zoneID) > 0 {
+				ownerSeatID = state.zoneOwnerSeat(matchID, zoneID)
+			}
+			hiddenHand := zoneType == "hand" && (selfSeat <= 0 || ownerSeatID != selfSeat)
+			if current.CardID <= 0 && !hiddenHand {
 				continue
 			}
 
@@ -862,6 +884,19 @@ func buildReplayPublicSnapshot(
 			if current.AttackTargetID > 0 {
 				attackTargetID := current.AttackTargetID
 				row.AttackTargetID = &attackTargetID
+			}
+			if hiddenHand {
+				// Hand membership is observable; even previously revealed card
+				// identities and their raw gameObject metadata stay private.
+				row = model.MatchReplayFrameObjectRow{
+					InstanceID:       instanceID,
+					OwnerSeatID:      replayIntPtr(ownerSeatID),
+					ControllerSeatID: replayIntPtr(ownerSeatID),
+					ZoneID:           &zoneIDCopy,
+					ZoneType:         zoneType,
+					ZonePosition:     &zonePosition,
+					Visibility:       "private",
+				}
 			}
 
 			out = append(out, row)
@@ -936,7 +971,7 @@ func isReplayTrackedZone(matchID string, zoneID int64, replay *replayPublicState
 	if zoneType == "" {
 		zoneType = fallbackGREZoneType(zoneID)
 	}
-	if zoneType == "hand" && isReplaySelfHandZone(matchID, zoneID, selfSeat, state) {
+	if zoneType == "hand" && state.zoneOwnerSeat(matchID, zoneID) > 0 {
 		return true
 	}
 	switch zoneType {
@@ -964,7 +999,7 @@ func isReplayVisibleObject(
 	if ownerSeatID <= 0 && current.ZoneID > 0 {
 		ownerSeatID = state.zoneOwnerSeat(matchID, current.ZoneID)
 	}
-	return selfSeat > 0 && ownerSeatID > 0 && ownerSeatID == selfSeat
+	return ownerSeatID > 0
 }
 
 func appendReplayInstance(values []int64, target int64) []int64 {

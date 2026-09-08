@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <path id="orb" fill-rule="evenodd" d="M 0,-174 A 174,174 0 1,1 0,174 A 174,174 0 1,1 0,-174 Z M 0,-148 C -184,-138 -184,138 0,148 C -128,89 -128,-89 0,-148 Z"/>
+  </defs>
+  <g fill="#69B49D">
+    <use href="#orb" transform="translate(512 328)"/>
+    <use href="#orb" transform="translate(316 667.5)"/>
+    <use href="#orb" transform="translate(708 667.5)"/>
+  </g>
+</svg>

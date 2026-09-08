@@ -117,6 +117,10 @@ func Init(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 
+	if err := prepareOpponentHandReplayBackfill(ctx, conn); err != nil {
+		return err
+	}
+
 	if err := migrateMatchObservationTables(ctx, conn); err != nil {
 		return err
 	}
@@ -200,6 +204,10 @@ const economyBackfillMetadataKey = "economy_backfill_v1"
 // snapshots can be recovered from retained Arena logs.
 const sideboardSnapshotsBackfillMetadataKey = "sideboard_snapshots_backfill_v1"
 
+// Older replay rows omitted opponent hands. Only retained Arena logs contain
+// their membership, so replay those logs once rather than inventing counts.
+const opponentHandReplayBackfillMetadataKey = "opponent_hand_replay_backfill_v1"
+
 // v2: replay logs once more after the transaction ledger and DTO_InventoryInfo
 // envelope support were introduced — resumed imports sit at EOF and would
 // never revisit the lines that carry Changes payloads and card-pool grants.
@@ -247,6 +255,39 @@ func prepareSideboardSnapshotsBackfill(ctx context.Context, db dbConn) error {
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit sideboard snapshots backfill migration: %w", err)
+	}
+	return nil
+}
+
+func prepareOpponentHandReplayBackfill(ctx context.Context, db dbConn) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin opponent hand replay backfill migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var markerCount int64
+	if err := tx.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM app_metadata WHERE key = ?
+	`, opponentHandReplayBackfillMetadataKey).Scan(&markerCount); err != nil {
+		return fmt.Errorf("check opponent hand replay backfill marker: %w", err)
+	}
+	if markerCount > 0 {
+		return tx.Commit()
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE ingest_state SET byte_offset = 0, line_no = 0
+	`); err != nil {
+		return fmt.Errorf("reset ingest state for opponent hand replay backfill: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO app_metadata (key, value, updated_at)
+		VALUES (?, 'complete', ?)
+	`, opponentHandReplayBackfillMetadataKey, nowUTC()); err != nil {
+		return fmt.Errorf("save opponent hand replay backfill marker: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit opponent hand replay backfill migration: %w", err)
 	}
 	return nil
 }

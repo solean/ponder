@@ -72,6 +72,102 @@ func TestParserPersistsLatestPlayerName(t *testing.T) {
 	}
 }
 
+func TestTailParseUnchangedLogDoesNotWaitForWriter(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	database, err := db.Open(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	logPath := filepath.Join(tmpDir, "Player.log")
+	if err := writeLogLines(logPath, []string{`{"clientId":"self-user","screenName":"Self"}`}, false); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+	store := db.NewStore(database)
+	if _, err := NewParser(store).ParseFile(ctx, logPath, true); err != nil {
+		t.Fatalf("initial parse: %v", err)
+	}
+	parser := NewParser(store)
+
+	// Reserve the polling connection before taking the writer lock. Disable
+	// its busy wait so an accidental write fails immediately, without timing
+	// assertions or waiting for SQLite's normal five-second timeout.
+	reader, err := database.Conn(ctx)
+	if err != nil {
+		t.Fatalf("reserve reader: %v", err)
+	}
+	defer reader.Close()
+	if _, err := reader.ExecContext(ctx, "PRAGMA busy_timeout = 0"); err != nil {
+		t.Fatalf("disable reader busy wait: %v", err)
+	}
+	writer, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("hold writer lock: %v", err)
+	}
+	defer writer.Rollback()
+	if err := reader.Close(); err != nil {
+		t.Fatalf("release polling connection: %v", err)
+	}
+
+	stats, err := parser.ParseFile(ctx, logPath, true)
+	if err != nil {
+		t.Fatalf("unchanged poll with writer active: %v", err)
+	}
+	if stats.LinesRead != 0 || stats.BytesRead != 0 {
+		t.Fatalf("unchanged poll read %d lines / %d bytes", stats.LinesRead, stats.BytesRead)
+	}
+}
+
+func TestTailParseRewindsSameSizeReplacement(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	database, err := db.Open(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	logPath := filepath.Join(tmpDir, "Player.log")
+	initial := `{"clientId":"self-user","screenName":"Before"}`
+	replacement := `{"clientId":"self-user","screenName":"After!"}`
+	if len(initial) != len(replacement) {
+		t.Fatal("replacement fixture must preserve log size")
+	}
+	store := db.NewStore(database)
+	parser := NewParser(store)
+	if err := writeLogLines(logPath, []string{initial}, false); err != nil {
+		t.Fatalf("write initial log: %v", err)
+	}
+	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
+		t.Fatalf("initial parse: %v", err)
+	}
+	if err := writeLogLines(logPath, []string{replacement}, false); err != nil {
+		t.Fatalf("replace log: %v", err)
+	}
+	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
+		t.Fatalf("parse replacement: %v", err)
+	}
+	name, err := store.PlayerName(ctx)
+	if err != nil {
+		t.Fatalf("read player name: %v", err)
+	}
+	if name != "After!" {
+		t.Fatalf("player name = %q, want replacement name", name)
+	}
+}
+
 func TestTailParsePersistsStateAcrossResumeCalls(t *testing.T) {
 	ctx := context.Background()
 	tmpDir := t.TempDir()
@@ -102,6 +198,9 @@ func TestTailParsePersistsStateAcrossResumeCalls(t *testing.T) {
 
 	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
 		t.Fatalf("first parse: %v", err)
+	}
+	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
+		t.Fatalf("unchanged poll between log appends: %v", err)
 	}
 
 	nextLines := []string{
@@ -971,7 +1070,7 @@ func TestReplayFramesCaptureGameResultMetadata(t *testing.T) {
 	}
 }
 
-func TestReplayFramesTrackSelfHandOnly(t *testing.T) {
+func TestReplayFramesTrackHandCountsWithoutOpponentIdentity(t *testing.T) {
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test-replay-hand.db")
@@ -1011,34 +1110,94 @@ func TestReplayFramesTrackSelfHandOnly(t *testing.T) {
 		t.Fatalf("expected 2 replay frames, got %d", len(frames))
 	}
 
-	firstHand := replayObjectsInZone(frames[0], "hand")
-	if len(firstHand) != 2 {
-		t.Fatalf("expected 2 self hand cards in first frame, got %#v", firstHand)
+	// Subsequent diffs resume with a new parser, so both persisted membership
+	// and zone-only members must survive hydration.
+	diffs := []struct {
+		zones   string
+		objects string
+		deleted []int64
+	}{
+		{`[{"zoneId":35,"type":"ZoneType_Hand","ownerSeatId":2,"objectInstanceIds":[201,202,203]}]`,
+			`[{"instanceId":201,"grpId":90189,"type":"GameObjectType_Card","zoneId":35,"visibility":"Visibility_Public","ownerSeatId":2,"controllerSeatId":2,"power":{"value":5},"toughness":{"value":6},"isTapped":true,"cardTypes":["CardType_Creature"]}]`, nil},
+		{`[]`, `[{"instanceId":201,"grpId":90189,"type":"GameObjectType_Card","zoneId":28,"visibility":"Visibility_Public","ownerSeatId":2,"controllerSeatId":2}]`, nil},
+		{`[]`, `[]`, []int64{202}},
+		{`[{"zoneId":35,"type":"ZoneType_Hand","ownerSeatId":2,"objectInstanceIds":[]}]`, `[]`, nil},
+		{`[{"zoneId":35,"type":"ZoneType_Hand","ownerSeatId":2,"objectInstanceIds":[201]}]`,
+			`[{"instanceId":201,"grpId":90189,"type":"GameObjectType_Card","zoneId":35,"visibility":"Visibility_Private","ownerSeatId":2,"controllerSeatId":2}]`, nil},
+		{`[]`, `[{"instanceId":201,"type":"GameObjectType_Card","zoneId":36,"visibility":"Visibility_Private","ownerSeatId":2}]`, nil},
 	}
-	for _, object := range firstHand {
-		if object.PlayerSide != "self" {
-			t.Fatalf("expected self hand object, got %#v", object)
+	for index, diff := range diffs {
+		payload, err := json.Marshal(map[string]any{
+			"greToClientEvent": map[string]any{"greToClientMessages": []any{map[string]any{
+				"type": "GREMessageType_GameStateMessage", "systemSeatIds": []int64{1},
+				"gameStateMessage": map[string]any{
+					"type": "GameStateType_Diff", "gameStateId": index + 3, "prevGameStateId": index + 2,
+					"gameInfo": map[string]any{"matchID": "match-replay-hand", "gameNumber": 1},
+					"zones":    json.RawMessage(diff.zones), "gameObjects": json.RawMessage(diff.objects),
+					"diffDeletedInstanceIds": diff.deleted,
+				},
+			}}},
+		})
+		if err != nil {
+			t.Fatalf("marshal diff: %v", err)
 		}
-		if object.Visibility != "private" {
-			t.Fatalf("expected private hand visibility, got %#v", object)
+		if err := writeLogLines(logPath, []string{string(payload)}, true); err != nil {
+			t.Fatalf("append diff: %v", err)
+		}
+		if _, err := NewParser(store).ParseFile(ctx, logPath, true); err != nil {
+			t.Fatalf("resume diff %d: %v", index, err)
 		}
 	}
-
-	secondHand := replayObjectsInZone(frames[1], "hand")
-	if len(secondHand) != 1 || secondHand[0].InstanceID != 101 {
-		t.Fatalf("expected only remaining hand card 101, got %#v", secondHand)
+	frames, err = store.ListMatchReplayFrames(ctx, 1)
+	if err != nil {
+		t.Fatalf("list resumed replay frames: %v", err)
 	}
-	secondStack := replayObjectsInZone(frames[1], "stack")
-	if len(secondStack) != 1 || secondStack[0].InstanceID != 102 {
-		t.Fatalf("expected 102 on the stack, got %#v", secondStack)
+	wantOpponentHands := [][]int64{{201, 202}, {201, 202}, {201, 202, 203}, {202, 203}, {203}, {}, {201}, {}}
+	if len(frames) != len(wantOpponentHands) {
+		t.Fatalf("got %d frames, want %d", len(frames), len(wantOpponentHands))
 	}
-
-	for _, frame := range frames {
-		for _, object := range frame.Objects {
-			if object.ZoneType == "hand" && object.PlayerSide != "self" {
-				t.Fatalf("unexpected opponent hand object in replay frame: %#v", object)
+	for index, frame := range frames {
+		var selfHand, opponentHand []model.MatchReplayFrameObjectRow
+		for _, object := range replayObjectsInZone(frame, "hand") {
+			switch object.PlayerSide {
+			case "self":
+				selfHand = append(selfHand, object)
+			case "opponent":
+				opponentHand = append(opponentHand, object)
+				if object.CardID != 0 || object.CardName != "" || object.DetailsJSON != "" ||
+					object.Power != nil || object.Toughness != nil || object.AttackTargetID != nil ||
+					object.AttackState != "" || object.BlockState != "" || object.BlockAttackerIDsJSON != "" ||
+					object.CounterSummaryJSON != "" || object.IsToken || object.IsTapped || object.HasSummoningSickness ||
+					object.Visibility != "private" {
+					t.Fatalf("frame %d leaks opponent hand identity or metadata: %#v", index, object)
+				}
+			default:
+				t.Fatalf("frame %d has unattributed hand object: %#v", index, object)
 			}
 		}
+		if len(opponentHand) != len(wantOpponentHands[index]) {
+			t.Fatalf("frame %d opponent hand = %#v, want IDs %v", index, opponentHand, wantOpponentHands[index])
+		}
+		for position, instanceID := range wantOpponentHands[index] {
+			if opponentHand[position].InstanceID != instanceID {
+				t.Fatalf("frame %d opponent hand = %#v, want IDs %v", index, opponentHand, wantOpponentHands[index])
+			}
+		}
+		wantSelfCount := 1
+		if index == 0 {
+			wantSelfCount = 2
+		}
+		if len(selfHand) != wantSelfCount || selfHand[0].InstanceID != 101 || selfHand[0].CardID != 90189 {
+			t.Fatalf("frame %d self hand changed unexpectedly: %#v", index, selfHand)
+		}
+	}
+	secondStack := replayObjectsInZone(frames[1], "stack")
+	if len(secondStack) != 1 || secondStack[0].InstanceID != 102 || secondStack[0].CardID != 87246 {
+		t.Fatalf("expected identified self card 102 on stack, got %#v", secondStack)
+	}
+	played := replayObjectsInZone(frames[3], "battlefield")
+	if len(played) != 1 || played[0].InstanceID != 201 || played[0].CardID != 90189 || played[0].PlayerSide != "opponent" {
+		t.Fatalf("expected identified opponent card 201 on battlefield, got %#v", played)
 	}
 }
 

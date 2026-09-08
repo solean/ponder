@@ -109,6 +109,11 @@ type MatchReplayFrameObjectRow struct {
 	HasSummoningSickness bool   `json:"hasSummoningSickness"`
 }
 
+type MatchReplayStatus struct {
+	Revision string `json:"revision"`
+	Complete bool   `json:"complete"`
+}
+
 type MatchReplayFrameRow struct {
 	ID                int64                       `json:"id"`
 	GameNumber        *int64                      `json:"gameNumber,omitempty"`

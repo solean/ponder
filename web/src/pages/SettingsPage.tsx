@@ -302,6 +302,10 @@ async function refreshDataQueries(queryClient: ReturnType<typeof useQueryClient>
     queryClient.invalidateQueries({ queryKey: ["overview"] }),
     queryClient.invalidateQueries({ queryKey: ["rank-history"] }),
     queryClient.invalidateQueries({ queryKey: ["matches"] }),
+    queryClient.invalidateQueries({ queryKey: ["match-detail"] }),
+    queryClient.invalidateQueries({ queryKey: ["match-timeline"] }),
+    queryClient.invalidateQueries({ queryKey: ["match-replay"] }),
+    queryClient.invalidateQueries({ queryKey: ["match-replay-status"] }),
     queryClient.invalidateQueries({ queryKey: ["decks"] }),
     queryClient.invalidateQueries({ queryKey: ["drafts"] }),
   ]);

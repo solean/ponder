@@ -40,6 +40,8 @@ const RECENT_MATCH_COUNT = 8;
 const FORM_WINDOW = 10;
 const MATCH_WINDOW = 500;
 const ACTIVITY_DAYS = 365;
+const MTGA_DETAILED_LOGS_HELP_URL =
+  "https://mtgarena-support.wizards.com/hc/en-us/articles/360000726823-Creating-Log-Files-on-PC-Mac-Steam";
 
 function SplitRow({
   label,
@@ -549,12 +551,26 @@ export function OverviewPage() {
         <section className="panel empty-panel">
           <h3>No matches tracked yet</h3>
           <p>
-            Point the tracker at your Arena log and run an import — matches, decks, drafts, and
-            rank history will light this page up.
+            Start playing games while Ponder is tracking. Your matches, decks, drafts, and rank history will appear
+            here automatically.
           </p>
-          <Link to="/settings" className="control-button">
-            Open Settings
-          </Link>
+          <a
+            className="text-link"
+            href={MTGA_DETAILED_LOGS_HELP_URL}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(event) => {
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                return;
+              }
+              event.preventDefault();
+              void api.openExternalURL(MTGA_DETAILED_LOGS_HELP_URL).catch(() => {
+                window.open(MTGA_DETAILED_LOGS_HELP_URL, "_blank", "noopener,noreferrer");
+              });
+            }}
+          >
+            How to enable Detailed Logs in MTGA
+          </a>
         </section>
       </div>
     );

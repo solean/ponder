@@ -1,0 +1,40 @@
+{
+  "features": [
+    "refractivity",
+    "specular-location"
+  ],
+  "fill": {
+    "solid": "srgb:0.02353,0.05882,0.04706,1.00000"
+  },
+  "groups": [
+    {
+      "blur-material": 0.5,
+      "layers": [
+        {
+          "image-name": "orbs.svg",
+          "name": "orbs"
+        }
+      ],
+      "refractivity": {
+        "depth": 0.35,
+        "enabled": true,
+        "strength": 0.75
+      },
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "specular": "inside",
+      "translucency": {
+        "enabled": true,
+        "value": 0.65
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}

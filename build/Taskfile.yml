@@ -156,16 +156,29 @@ tasks:
       - wails3 generate bindings -d web/bindings -f '{{.BUILD_FLAGS}}' -clean=true{{if eq .OBFUSCATED "true"}} -obfuscated{{end}} -ts -i
 
   generate:icons:
-    summary: Generates Windows `.ico` and Mac `.icns` from the Ponder app icon.
+    summary: Generates platform icons, using the layered Ponder icon when Xcode is available.
     run: once
     dir: build
-    sources:
-      - "appicon.png"
-    generates:
-      - "darwin/icons.icns"
-      - "windows/icon.ico"
     cmds:
-      - wails3 generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico
+      - wails3 generate icons -input "{{.ROOT_DIR}}/build/appicon.png" -macfilename "" -windowsfilename "{{.ROOT_DIR}}/build/windows/icon.ico"
+      - |
+        if command -v xcrun >/dev/null 2>&1 && xcrun --find actool >/dev/null 2>&1; then
+          xcrun actool "{{.ROOT_DIR}}/build/icon-source/Ponder.icon" \
+            --compile "{{.ROOT_DIR}}/build/darwin" \
+            --notices --warnings --errors \
+            --output-partial-info-plist "{{.ROOT_DIR}}/build/darwin/temp.plist" \
+            --app-icon Ponder \
+            --enable-on-demand-resources NO \
+            --development-region en \
+            --target-device mac \
+            --minimum-deployment-target 26.0 \
+            --platform macosx
+          cp "{{.ROOT_DIR}}/build/darwin/Ponder.icns" "{{.ROOT_DIR}}/build/darwin/icons.icns"
+          rm -f "{{.ROOT_DIR}}/build/darwin/Ponder.icns" "{{.ROOT_DIR}}/build/darwin/temp.plist"
+        else
+          rm -f "{{.ROOT_DIR}}/build/darwin/Assets.car"
+          wails3 generate icons -input "{{.ROOT_DIR}}/build/appicon-macos.png" -macfilename "{{.ROOT_DIR}}/build/darwin/icons.icns" -windowsfilename ""
+        fi
 
   dev:frontend:
     summary: Runs the frontend in development mode

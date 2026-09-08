@@ -8,6 +8,38 @@ import (
 	"testing"
 )
 
+func TestPrepareOpponentHandReplayBackfillResetsIngestStateOnce(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	database := openTempSQLiteDB(t)
+	if err := Init(ctx, database); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	mustExec(t, database, `DELETE FROM app_metadata WHERE key = 'opponent_hand_replay_backfill_v1'`)
+	mustExec(t, database, `INSERT INTO ingest_state (log_path, byte_offset, line_no, updated_at)
+		VALUES ('Player.log', 1234, 56, '2026-07-26T08:00:00Z')`)
+	if err := prepareOpponentHandReplayBackfill(ctx, database); err != nil {
+		t.Fatalf("prepare backfill: %v", err)
+	}
+	var offset, line int64
+	if err := database.QueryRowContext(ctx, `SELECT byte_offset, line_no FROM ingest_state WHERE log_path = 'Player.log'`).Scan(&offset, &line); err != nil {
+		t.Fatalf("read reset cursor: %v", err)
+	}
+	if offset != 0 || line != 0 {
+		t.Fatalf("cursor = %d/%d, want 0/0", offset, line)
+	}
+	mustExec(t, database, `UPDATE ingest_state SET byte_offset = 999, line_no = 77 WHERE log_path = 'Player.log'`)
+	if err := prepareOpponentHandReplayBackfill(ctx, database); err != nil {
+		t.Fatalf("prepare backfill again: %v", err)
+	}
+	if err := database.QueryRowContext(ctx, `SELECT byte_offset, line_no FROM ingest_state WHERE log_path = 'Player.log'`).Scan(&offset, &line); err != nil {
+		t.Fatalf("read retained cursor: %v", err)
+	}
+	if offset != 999 || line != 77 {
+		t.Fatalf("cursor = %d/%d, want 999/77 after one-time backfill", offset, line)
+	}
+}
+
 func TestMigrateRankSnapshotsAddsAndBackfillsMythicStanding(t *testing.T) {
 	t.Parallel()
 

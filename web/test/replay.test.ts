@@ -334,6 +334,18 @@ describe("turn boundaries", () => {
 });
 
 describe("meaningful frame filtering", () => {
+  test("keeps opponent hand count changes but drops hidden ID churn", () => {
+    const hidden = (instanceId: number) =>
+      object({ instanceId, cardId: 0, playerSide: "opponent", zoneType: "hand" });
+    const opening = frame({ id: 1, objects: [hidden(1)] });
+    const draw = frame({ id: 2, objects: [hidden(1), hidden(2)] });
+    const churn = frame({ id: 3, objects: [hidden(3), hidden(4)] });
+    const empty = frame({ id: 4, objects: [] });
+    expect(filterMeaningfulReplayFrames([opening, draw, churn, empty])).toEqual([
+      opening, draw, empty,
+    ]);
+  });
+
   test("keeps frames with changes and drops inert ones", () => {
     const f0 = frame({ id: 1 });
     const f1 = frame({ id: 2, changes: [change({ action: "tap" })] });

@@ -56,6 +56,7 @@ export function CardPreviewName({
   label,
   resolveName = false,
   inline = false,
+  passiveHover,
 }: {
   cardId: number;
   cardName?: string;
@@ -64,10 +65,13 @@ export function CardPreviewName({
   resolveName?: boolean;
   /** Render a phrasing-content wrapper when the name appears inside prose. */
   inline?: boolean;
+  /** Display-only preview driven by the overlay's passive native cursor feed. */
+  passiveHover?: boolean;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [localOpen, setIsOpen] = useState(false);
+  const isOpen = passiveHover ?? localOpen;
   const [position, setPosition] = useState<FloatingPosition | null>(null);
-  const anchorRef = useRef<HTMLAnchorElement | null>(null);
+  const anchorRef = useRef<HTMLElement | null>(null);
   const wrapperRef = useRef<HTMLElement | null>(null);
   const knownName = cardName?.trim() ?? "";
 
@@ -97,39 +101,42 @@ export function CardPreviewName({
       if (!anchor) {
         return;
       }
-      if (!anchor.matches(":hover") && document.activeElement !== anchor) {
+      if (passiveHover === undefined && !anchor.matches(":hover") && document.activeElement !== anchor) {
         setIsOpen(false);
         return;
       }
       setPosition(floatingPosition(anchor));
     };
+    if (passiveHover !== undefined) reposition();
     window.addEventListener("resize", reposition);
     window.addEventListener("scroll", reposition, true);
     return () => {
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);
     };
-  }, [isOpen]);
+  }, [isOpen, passiveHover]);
+
+  const Trigger = passiveHover === undefined ? "a" : "span";
 
   const content = (
     <>
-      <a
+      <Trigger
         className="card-preview-trigger"
-        ref={anchorRef}
-        href={previewQuery.data?.scryfallUrl ?? scryfallHref(cardId, cardName)}
-        target="_blank"
-        rel="noreferrer"
-        onFocus={openPopover}
+        ref={(element) => { anchorRef.current = element; }}
+        href={passiveHover === undefined ? previewQuery.data?.scryfallUrl ?? scryfallHref(cardId, cardName) : undefined}
+        target={passiveHover === undefined ? "_blank" : undefined}
+        rel={passiveHover === undefined ? "noreferrer" : undefined}
+        onFocus={passiveHover === undefined ? openPopover : undefined}
         onBlur={(event) => {
           if (wrapperRef.current && event.relatedTarget instanceof Node && wrapperRef.current.contains(event.relatedTarget)) {
             return;
           }
           setIsOpen(false);
         }}
-        aria-label={`Open ${name} on Scryfall`}
+        aria-label={passiveHover === undefined ? `Open ${name} on Scryfall` : name}
       >
         {label ?? <code>{name}</code>}
-      </a>
+      </Trigger>
 
       {isOpen && position
         ? createPortal(
@@ -153,8 +160,8 @@ export function CardPreviewName({
   );
   const anchorProps = {
     className: "card-preview-anchor",
-    onMouseEnter: openPopover,
-    onMouseLeave: () => setIsOpen(false),
+    onMouseEnter: passiveHover === undefined ? openPopover : undefined,
+    onMouseLeave: passiveHover === undefined ? () => setIsOpen(false) : undefined,
   };
 
   return inline ? (

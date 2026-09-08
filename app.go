@@ -32,10 +32,8 @@ const (
 	// Installed apps use the application-support database when it is unset.
 	desktopDBEnvVar = "PONDER_DB_PATH"
 
-	// The transparent center must pass mouse input through to Arena. Only the
-	// edge strips containing the two HUD panels become interactive.
-	overlayInteractiveEdgeWidth = 430
-	overlayPointerPollInterval  = time.Second / 30
+	// Cursor polling drives previews only; the native window never captures input.
+	overlayPointerPollInterval = time.Second / 30
 )
 
 type App struct {
@@ -271,15 +269,18 @@ func (a *App) startup() {
 		}
 	}()
 }
-func overlayPointInHUD(bounds application.Rect, x, y float64) bool {
-	if bounds.Width <= 0 || bounds.Height <= 0 ||
-		x < float64(bounds.X) || x >= float64(bounds.X+bounds.Width) ||
-		y < float64(bounds.Y) || y >= float64(bounds.Y+bounds.Height) {
-		return false
+func overlayPointerScript(bounds application.Rect, x, y float64, supported bool) string {
+	detail := "null"
+	if supported && bounds.Width > 0 && bounds.Height > 0 &&
+		x >= float64(bounds.X) && x < float64(bounds.X+bounds.Width) &&
+		y >= float64(bounds.Y) && y < float64(bounds.Y+bounds.Height) {
+		// Normalize screen points so the webview can map them into CSS pixels,
+		// including when its zoom or display scale differs.
+		detail = fmt.Sprintf("{x:%f,y:%f}",
+			(x-float64(bounds.X))/float64(bounds.Width),
+			(y-float64(bounds.Y))/float64(bounds.Height))
 	}
-	relativeX := x - float64(bounds.X)
-	return relativeX <= overlayInteractiveEdgeWidth ||
-		relativeX >= float64(bounds.Width-overlayInteractiveEdgeWidth)
+	return "window.dispatchEvent(new CustomEvent('ponder:overlay-pointer',{detail:" + detail + "}))"
 }
 
 func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
@@ -294,16 +295,7 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 		defer pointerTicker.Stop()
 
 		visible := false
-		mouseInteractive := false
 		hadReadError := false
-		var overlayBounds application.Rect
-		setMouseInteractive := func(interactive bool) {
-			if interactive == mouseInteractive {
-				return
-			}
-			mouseInteractive = interactive
-			a.overlayWindow.SetIgnoreMouseEvents(!interactive)
-		}
 		updateVisibility := func() {
 			_, isLive, err := store.GetLiveMatchID(ctx)
 			if err != nil {
@@ -319,21 +311,17 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 			}
 			visible = isLive
 			if !isLive {
-				setMouseInteractive(false)
 				hideOverlayWindow(a.overlayWindow)
 				return
 			}
 
 			if screen := a.wailsApp.Screen.GetPrimary(); screen != nil &&
 				screen.Bounds.Width > 0 && screen.Bounds.Height > 0 {
-				overlayBounds = screen.Bounds
-				a.overlayWindow.SetBounds(overlayBounds)
-			} else {
-				overlayBounds = a.overlayWindow.Bounds()
+				a.overlayWindow.SetBounds(screen.Bounds)
 			}
 			// Hidden webviews may suspend timers. Reload on the hidden-to-live
 			// transition so the first visible frame hydrates current match data.
-			setMouseInteractive(false)
+			a.overlayWindow.SetIgnoreMouseEvents(true)
 			a.overlayWindow.Reload()
 			configured, level, behavior := showOverlayWindow(a.overlayWindow)
 			if !configured {
@@ -342,18 +330,12 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 				log.Printf("overlay window configured for fullscreen (level=%d behavior=%#x)", level, behavior)
 			}
 		}
-		updatePointerMode := func() {
+		updatePointer := func() {
 			if !visible {
 				return
 			}
 			x, y, supported := overlayPointerPosition()
-			if !supported {
-				// Wails has no portable cursor API. Keep hover behavior on other
-				// platforms until they gain the native edge-hit-test bridge.
-				setMouseInteractive(true)
-				return
-			}
-			setMouseInteractive(overlayPointInHUD(overlayBounds, x, y))
+			a.overlayWindow.ExecJS(overlayPointerScript(a.overlayWindow.Bounds(), x, y, supported))
 		}
 
 		updateVisibility()
@@ -364,7 +346,7 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 			case <-visibilityTicker.C:
 				updateVisibility()
 			case <-pointerTicker.C:
-				updatePointerMode()
+				updatePointer()
 			}
 		}
 	}()

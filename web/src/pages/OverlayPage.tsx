@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { CardPreviewName } from "../components/CardPreviewName";
@@ -17,7 +17,7 @@ function compareCardNames(
   return byName || left.cardId - right.cardId;
 }
 
-function DeckPanel({ live }: { live: LiveMatch }) {
+function DeckPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: string | null }) {
   const cards = useMemo(
     () =>
       [...live.deck].sort((left, right) => {
@@ -61,10 +61,10 @@ function DeckPanel({ live }: { live: LiveMatch }) {
             const name = cardName(card);
             const remainingLabel = card.remaining == null ? "Unknown" : `${card.remaining} of ${card.quantity}`;
             return (
-              <li className={card.remaining === 0 ? "is-empty" : undefined} key={card.cardId}>
+              <li className={card.remaining === 0 ? "is-empty" : undefined} key={card.cardId} data-overlay-card={`deck:${card.cardId}`}>
                 <span className="overlay-card-mark" aria-hidden="true" />
                 <div className="overlay-card-name">
-                  <CardPreviewName cardId={card.cardId} cardName={card.cardName} label={<span>{name}</span>} />
+                  <CardPreviewName cardId={card.cardId} cardName={card.cardName} label={<span>{name}</span>} passiveHover={hoveredCard === `deck:${card.cardId}`} />
                 </div>
                 <span className="overlay-card-count" aria-label={`${remainingLabel} copies left`}>
                   <strong>{card.remaining ?? "—"}</strong>
@@ -85,7 +85,7 @@ function DeckPanel({ live }: { live: LiveMatch }) {
   );
 }
 
-function OpponentPanel({ live }: { live: LiveMatch }) {
+function OpponentPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: string | null }) {
   const cards = useMemo(
     () => [...live.opponentObservedCards].sort(compareCardNames),
     [live.opponentObservedCards],
@@ -115,10 +115,10 @@ function OpponentPanel({ live }: { live: LiveMatch }) {
           {cards.map((card: OpponentObservedCard) => {
             const name = cardName(card);
             return (
-              <li key={card.cardId}>
+              <li key={card.cardId} data-overlay-card={`opponent:${card.cardId}`}>
                 <span className="overlay-card-mark" aria-hidden="true" />
                 <div className="overlay-card-name">
-                  <CardPreviewName cardId={card.cardId} cardName={card.cardName} label={<span>{name}</span>} />
+                  <CardPreviewName cardId={card.cardId} cardName={card.cardName} label={<span>{name}</span>} passiveHover={hoveredCard === `opponent:${card.cardId}`} />
                 </div>
                 <span className="overlay-card-count" aria-label={`${card.quantity} copies seen`}>
                   <strong>{card.quantity}</strong>
@@ -139,6 +139,37 @@ function OpponentPanel({ live }: { live: LiveMatch }) {
 }
 
 export function OverlayPage() {
+  const hudRef = useRef<HTMLElement | null>(null);
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+
+  useEffect(() => {
+    const updateHover = (event: Event) => {
+      const point = (event as CustomEvent<{ x: number; y: number } | null>).detail;
+      let next: string | null = null;
+      if (point && hudRef.current) {
+        const x = point.x * window.innerWidth;
+        const y = point.y * window.innerHeight;
+        // DOM hit-testing ignores pointer-events:none. Inspect the visible
+        // name bounds instead, clipped to the non-scrolling card list.
+        for (const row of hudRef.current.querySelectorAll<HTMLElement>("[data-overlay-card]")) {
+          const anchor = row.querySelector<HTMLElement>(".card-preview-trigger");
+          const list = row.parentElement;
+          if (!anchor || !list) continue;
+          const rect = anchor.getBoundingClientRect();
+          const clip = list.getBoundingClientRect();
+          if (x >= Math.max(rect.left, clip.left) && x < Math.min(rect.right, clip.right) &&
+              y >= Math.max(rect.top, clip.top) && y < Math.min(rect.bottom, clip.bottom)) {
+            next = row.dataset.overlayCard ?? null;
+            break;
+          }
+        }
+      }
+      setHoveredCard((current) => current === next ? current : next);
+    };
+    window.addEventListener("ponder:overlay-pointer", updateHover);
+    return () => window.removeEventListener("ponder:overlay-pointer", updateHover);
+  }, []);
+
   useEffect(() => {
     const root = document.documentElement;
     const previousTitle = document.title;
@@ -170,9 +201,9 @@ export function OverlayPage() {
   }
 
   return (
-    <main className="overlay-hud" aria-label="Ponder game overlay">
-      <DeckPanel live={live} />
-      <OpponentPanel live={live} />
+    <main className="overlay-hud" aria-label="Ponder game overlay" ref={hudRef}>
+      <DeckPanel live={live} hoveredCard={hoveredCard} />
+      <OpponentPanel live={live} hoveredCard={hoveredCard} />
     </main>
   );
 }

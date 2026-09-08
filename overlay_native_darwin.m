@@ -47,6 +47,8 @@ bool ponderShowOverlayWindowInactive(
         NSWindowCollectionBehaviorIgnoresCycle];
     [window setLevel:overlayLevel];
     [window setHidesOnDeactivate:NO];
+    // Display-only even while passive cursor updates show card previews.
+    [window setIgnoresMouseEvents:YES];
     [window orderFrontRegardless];
 
     if (windowLevel != NULL) {

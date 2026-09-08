@@ -11306,7 +11306,7 @@ html.overlay-document body::before {
   width: clamp(19rem, 23vw, 22rem);
   max-height: calc(100vh - clamp(2rem, 4vw, 4rem));
   overflow: hidden;
-  pointer-events: auto;
+  pointer-events: none;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-top-color: color-mix(in srgb, var(--overlay-accent) 66%, transparent);
   border-radius: 10px;
@@ -11428,11 +11428,8 @@ html.overlay-document body::before {
   min-height: 0;
   margin: 0;
   padding: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   list-style: none;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-  scrollbar-width: thin;
 }
 
 .overlay-card-list li {
@@ -11453,18 +11450,8 @@ html.overlay-document body::before {
   border-top: 0;
 }
 
-.overlay-card-list li:hover,
-.overlay-card-list li:focus-within {
-  background: color-mix(in srgb, var(--overlay-accent) 11%, rgba(10, 12, 17, 0.94));
-}
-
 .overlay-card-list li.is-empty {
   opacity: 0.46;
-}
-
-.overlay-card-list li.is-empty:hover,
-.overlay-card-list li.is-empty:focus-within {
-  opacity: 0.82;
 }
 
 .overlay-card-mark {
@@ -11493,11 +11480,6 @@ html.overlay-document body::before {
   font-size: 0.75rem;
   font-weight: 500;
   line-height: 1.2;
-}
-
-.overlay-card-name .card-preview-trigger:hover,
-.overlay-card-name .card-preview-trigger:focus-visible {
-  color: #fff;
 }
 
 .overlay-card-count {
@@ -11559,7 +11541,7 @@ html.overlay-document body::before {
 .overlay-hud-status p {
   margin: 0;
   padding: 0.48rem 0.7rem;
-  pointer-events: auto;
+  pointer-events: none;
   border: 1px solid rgba(255, 138, 128, 0.4);
   border-radius: 6px;
   color: #ffd1cc;

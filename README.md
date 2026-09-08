@@ -28,6 +28,12 @@ This MVP includes:
 
 Each script forwards additional arguments to its underlying command.
 
+The desktop in-game overlay is display-only: clicks and scrolling pass through
+to Arena everywhere, including beneath its panels and card previews. On macOS,
+hovering a visible card name still shows its image using passive cursor tracking;
+the overlay never enables mouse capture. Other platforms remain click-through
+without hover previews until passive cursor tracking is available.
+
 ## Backend Setup
 
 Requirements:

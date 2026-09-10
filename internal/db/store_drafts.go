@@ -409,12 +409,15 @@ func (s *Store) ListDraftSessions(ctx context.Context) ([]model.DraftSessionRow,
 			COALESCE(ds.started_at, ''),
 			COALESCE(ds.completed_at, ''),
 			er.id,
+			ec.wins,
+			ec.losses,
 			COUNT(dp.id) AS picks
 		FROM draft_sessions ds
 		LEFT JOIN draft_picks dp ON dp.draft_session_id = ds.id
 		LEFT JOIN event_runs er ON er.draft_session_id = ds.id
+		LEFT JOIN event_courses ec ON ec.course_id = er.pay_source_id
 		GROUP BY ds.id, ds.event_name, ds.draft_id, ds.is_bot_draft, ds.started_at, ds.completed_at, er.id
-		ORDER BY ds.id DESC
+		ORDER BY CASE WHEN COALESCE(ds.started_at, '') = '' THEN 1 ELSE 0 END, ds.started_at DESC, ds.id DESC
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("list draft sessions: %w", err)
@@ -426,14 +429,17 @@ func (s *Store) ListDraftSessions(ctx context.Context) ([]model.DraftSessionRow,
 		var row model.DraftSessionRow
 		var isBotInt int64
 		var eventRunID sql.NullInt64
+		var courseWins, courseLosses sql.NullInt64
 		if err := rows.Scan(
 			&row.ID, &row.EventName, &row.DraftID, &isBotInt, &row.StartedAt, &row.CompletedAt,
-			&eventRunID, &row.Picks,
+			&eventRunID, &courseWins, &courseLosses, &row.Picks,
 		); err != nil {
 			return nil, fmt.Errorf("scan draft session row: %w", err)
 		}
 		row.IsBotDraft = isBotInt == 1
 		row.EventRunID = nullInt64Ptr(eventRunID)
+		row.Wins = nullInt64Ptr(courseWins)
+		row.Losses = nullInt64Ptr(courseLosses)
 		out = append(out, row)
 	}
 	if err := rows.Err(); err != nil {
@@ -460,6 +466,9 @@ type draftDeckCandidate struct {
 
 func (s *Store) enrichDraftSessionsWithDeckResults(ctx context.Context, sessions []model.DraftSessionRow) error {
 	for idx := range sessions {
+		if sessions[idx].Wins != nil && sessions[idx].Losses != nil {
+			continue
+		}
 		wins, losses, ok, err := s.resolveDraftSessionDeckResults(ctx, sessions[idx].EventName, sessions[idx].StartedAt, sessions[idx].CompletedAt)
 		if err != nil {
 			return err

@@ -25,14 +25,28 @@ type inventoryInfoPayload struct {
 	Vouchers              json.RawMessage `json:"Vouchers"`
 }
 
+type eventCoursePayload struct {
+	CourseID          string `json:"CourseId"`
+	InternalEventName string `json:"InternalEventName"`
+	CurrentModule     string `json:"CurrentModule"`
+	CurrentWins       int64  `json:"CurrentWins"`
+	CurrentLosses     int64  `json:"CurrentLosses"`
+	CourseDeckSummary struct {
+		DeckID string `json:"DeckId"`
+	} `json:"CourseDeckSummary"`
+}
+
 // Arena reports inventory either nested under "InventoryInfo" or, for module
 // responses like draft card-pool grants, as a top-level "DTO_InventoryInfo".
 type economyEnvelope struct {
+	eventCoursePayload
+	Course           *eventCoursePayload   `json:"Course"`
+	Courses          []eventCoursePayload  `json:"Courses"`
 	InventoryInfo    *inventoryInfoPayload `json:"InventoryInfo"`
 	DTOInventoryInfo *inventoryInfoPayload `json:"DTO_InventoryInfo"`
 }
 
-func (p *Parser) handleEconomyJSON(
+func (p *Parser) handleCourseAndEconomyJSON(
 	ctx context.Context,
 	tx *sql.Tx,
 	stats *model.ParseStats,
@@ -44,6 +58,21 @@ func (p *Parser) handleEconomyJSON(
 	var envelope economyEnvelope
 	if err := json.Unmarshal([]byte(line), &envelope); err != nil {
 		return nil
+	}
+	// CourseId is the pay/reward source identity. Persist it before deriving
+	// inventory changes, including when the response carries no inventory.
+	if err := p.upsertEventCourse(ctx, tx, envelope.eventCoursePayload, state.lastUnityLogTimestamp); err != nil {
+		return err
+	}
+	if envelope.Course != nil {
+		if err := p.upsertEventCourse(ctx, tx, *envelope.Course, state.lastUnityLogTimestamp); err != nil {
+			return err
+		}
+	}
+	for _, course := range envelope.Courses {
+		if err := p.upsertEventCourse(ctx, tx, course, state.lastUnityLogTimestamp); err != nil {
+			return err
+		}
 	}
 	inventory := envelope.InventoryInfo
 	if inventory == nil {
@@ -80,4 +109,18 @@ func (p *Parser) handleEconomyJSON(
 		}
 	}
 	return nil
+}
+
+func (p *Parser) upsertEventCourse(ctx context.Context, tx *sql.Tx, course eventCoursePayload, observedAt string) error {
+	if course.CourseID == "" {
+		return nil
+	}
+	return p.store.UpsertEventCourse(ctx, tx, db.EventCourseRecord{
+		CourseID:      course.CourseID,
+		EventName:     course.InternalEventName,
+		DeckID:        course.CourseDeckSummary.DeckID,
+		CurrentModule: course.CurrentModule,
+		Wins:          course.CurrentWins,
+		Losses:        course.CurrentLosses,
+	}, observedAt)
 }

@@ -50,6 +50,22 @@ CREATE TABLE IF NOT EXISTS event_runs (
 
 CREATE INDEX IF NOT EXISTS idx_event_runs_name_started ON event_runs(event_name, started_at);
 
+-- Arena CourseId is the paid run identity; records remain authoritative when
+-- match logs are incomplete or retained logs are replayed out of order.
+CREATE TABLE IF NOT EXISTS event_courses (
+  course_id TEXT PRIMARY KEY,
+  event_name TEXT NOT NULL,
+  deck_id TEXT,
+  current_module TEXT,
+  wins INTEGER NOT NULL DEFAULT 0,
+  losses INTEGER NOT NULL DEFAULT 0,
+  first_observed_at TEXT,
+  observed_at TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_courses_event ON event_courses(event_name);
+
 CREATE TABLE IF NOT EXISTS decks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   arena_deck_id TEXT NOT NULL UNIQUE,
@@ -502,11 +518,12 @@ CREATE TABLE IF NOT EXISTS economy_snapshots (
   boosters_json TEXT NOT NULL DEFAULT '[]',
   vouchers_json TEXT NOT NULL DEFAULT '{}',
   changes_json TEXT NOT NULL DEFAULT '[]',
-  created_at TEXT NOT NULL,
-  UNIQUE(log_path, line_no)
+  created_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_economy_snapshots_observed_at ON economy_snapshots(observed_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_economy_snapshots_log_observation
+ON economy_snapshots(log_path, line_no, COALESCE(observed_at, ''));
 
 -- Normalized inventory deltas: one row per entry in an InventoryInfo
 -- snapshot's Changes array. event_name attributes the change to an event run

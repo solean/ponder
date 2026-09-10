@@ -60,6 +60,104 @@ func openEconomyTestDB(t *testing.T) (*sql.DB, *Store) {
 	}
 	return database, NewStore(database)
 }
+func TestMigrateEconomySnapshotIdentityRecoversReusedLogLines(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database, err := Open(filepath.Join(t.TempDir(), "legacy.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+
+	if _, err := database.ExecContext(ctx, `
+		CREATE TABLE ingest_state (
+			log_path TEXT PRIMARY KEY,
+			byte_offset INTEGER NOT NULL DEFAULT 0,
+			line_no INTEGER NOT NULL DEFAULT 0,
+			file_signature TEXT NOT NULL DEFAULT '',
+			updated_at TEXT NOT NULL
+		);
+		INSERT INTO ingest_state (log_path, byte_offset, line_no, file_signature, updated_at)
+		VALUES ('Player.log', 9000, 200, 'old-signature', '2026-09-09T00:00:00Z');
+
+		CREATE TABLE economy_snapshots (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			log_path TEXT NOT NULL,
+			line_no INTEGER NOT NULL,
+			observed_at TEXT,
+			sequence_id INTEGER NOT NULL DEFAULT 0,
+			gold INTEGER NOT NULL DEFAULT 0,
+			gems INTEGER NOT NULL DEFAULT 0,
+			vault_progress INTEGER NOT NULL DEFAULT 0,
+			wildcard_track_position INTEGER NOT NULL DEFAULT 0,
+			wildcard_commons INTEGER NOT NULL DEFAULT 0,
+			wildcard_uncommons INTEGER NOT NULL DEFAULT 0,
+			wildcard_rares INTEGER NOT NULL DEFAULT 0,
+			wildcard_mythics INTEGER NOT NULL DEFAULT 0,
+			custom_tokens_json TEXT NOT NULL DEFAULT '{}',
+			boosters_json TEXT NOT NULL DEFAULT '[]',
+			vouchers_json TEXT NOT NULL DEFAULT '{}',
+			changes_json TEXT NOT NULL DEFAULT '[]',
+			created_at TEXT NOT NULL,
+			UNIQUE(log_path, line_no)
+		);
+		INSERT INTO economy_snapshots (
+			log_path, line_no, observed_at, sequence_id, gems, changes_json, created_at
+		) VALUES (
+			'Player.log', 100, '2026-08-22T20:59:49Z', 34, 4340, '[]',
+			'2026-08-22T20:59:50Z'
+		);
+	`); err != nil {
+		t.Fatalf("seed legacy economy schema: %v", err)
+	}
+
+	if err := migrateEconomySnapshotIdentity(ctx, database); err != nil {
+		t.Fatalf("migrate economy snapshot identity: %v", err)
+	}
+	var offset, lineNo int64
+	if err := database.QueryRowContext(ctx, `
+		SELECT byte_offset, line_no FROM ingest_state WHERE log_path = 'Player.log'
+	`).Scan(&offset, &lineNo); err != nil {
+		t.Fatalf("read reset ingest state: %v", err)
+	}
+	if offset != 0 || lineNo != 0 {
+		t.Fatalf("ingest state = %d/%d, want replay from 0/0", offset, lineNo)
+	}
+
+	store := NewStore(database)
+	tx, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+	reward := EconomySnapshotRecord{
+		ObservedAt:  "2026-09-08T23:27:39Z",
+		SequenceID:  6,
+		Gems:        4970,
+		ChangesJSON: `[{"Source":"EventReward","SourceId":"draft-run","InventoryGems":1400}]`,
+	}
+	rewardID, inserted, err := store.InsertEconomySnapshot(ctx, tx, "Player.log", 100, reward)
+	if err != nil || !inserted {
+		t.Fatalf("insert replacement-log reward: id=%d inserted=%v err=%v", rewardID, inserted, err)
+	}
+	repeatedID, inserted, err := store.InsertEconomySnapshot(ctx, tx, "Player.log", 100, reward)
+	if err != nil || inserted || repeatedID != rewardID {
+		t.Fatalf("repeat reward: id=%d inserted=%v err=%v, want existing id %d", repeatedID, inserted, err, rewardID)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit replacement-log reward: %v", err)
+	}
+
+	var snapshots int64
+	if err := database.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM economy_snapshots WHERE log_path = 'Player.log' AND line_no = 100
+	`).Scan(&snapshots); err != nil {
+		t.Fatalf("count reused-line snapshots: %v", err)
+	}
+	if snapshots != 2 {
+		t.Fatalf("snapshots at reused line = %d, want 2", snapshots)
+	}
+}
 
 func TestDeriveEconomyTransactionsLinksEventRuns(t *testing.T) {
 	t.Parallel()

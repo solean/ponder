@@ -789,11 +789,11 @@ func (p *Parser) processLine(ctx context.Context, tx *sql.Tx, stats *model.Parse
 	}
 
 	if strings.HasPrefix(line, "{") &&
-		(strings.Contains(line, "\"InventoryInfo\"") || strings.Contains(line, "\"DTO_InventoryInfo\"")) {
-		if err := p.handleEconomyJSON(ctx, tx, stats, state, logPath, lineNo, line); err != nil {
+		(strings.Contains(line, "\"InventoryInfo\"") || strings.Contains(line, "\"DTO_InventoryInfo\"") ||
+			strings.Contains(line, "\"Course\"") || strings.Contains(line, "\"Courses\"") || strings.Contains(line, "\"CourseId\"")) {
+		if err := p.handleCourseAndEconomyJSON(ctx, tx, stats, state, logPath, lineNo, line); err != nil {
 			return err
 		}
-		return nil
 	}
 
 	if state.pendingResponseMethod != "" && strings.HasPrefix(line, "{") {

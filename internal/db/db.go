@@ -161,6 +161,10 @@ func Init(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 
+	if err := prepareEventCoursesBackfill(ctx, conn); err != nil {
+		return err
+	}
+
 	if err := dropRedundantIndexes(ctx, conn); err != nil {
 		return err
 	}
@@ -212,6 +216,35 @@ const opponentHandReplayBackfillMetadataKey = "opponent_hand_replay_backfill_v1"
 // envelope support were introduced — resumed imports sit at EOF and would
 // never revisit the lines that carry Changes payloads and card-pool grants.
 const economyTransactionsBackfillMetadataKey = "economy_backfill_v2"
+
+// Retained Arena responses carry CourseId and complete records even where
+// individual match logs are missing. Replay once without resetting history.
+const eventCoursesBackfillMetadataKey = "event_courses_backfill_v1"
+
+func prepareEventCoursesBackfill(ctx context.Context, db dbConn) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin event courses backfill: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	var markerCount int64
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM app_metadata WHERE key = ?`, eventCoursesBackfillMetadataKey).Scan(&markerCount); err != nil {
+		return fmt.Errorf("check event courses backfill marker: %w", err)
+	}
+	if markerCount > 0 {
+		return tx.Commit()
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE ingest_state SET byte_offset = 0, line_no = 0`); err != nil {
+		return fmt.Errorf("reset ingest cursors for event courses backfill: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO app_metadata (key, value, updated_at) VALUES (?, 'complete', ?)`, eventCoursesBackfillMetadataKey, nowUTC()); err != nil {
+		return fmt.Errorf("save event courses backfill marker: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit event courses backfill: %w", err)
+	}
+	return nil
+}
 
 func prepareSideboardSnapshotsBackfill(ctx context.Context, db dbConn) error {
 	tx, err := db.BeginTx(ctx, nil)

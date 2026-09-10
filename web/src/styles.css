@@ -1597,6 +1597,14 @@ body.has-wide-deck-curve .app-shell {
   gap: 0.82rem;
 }
 
+.overview-metrics-grid {
+  grid-template-columns:
+    minmax(0, 1.5fr)
+    minmax(0, 1fr)
+    minmax(0, 1fr)
+    minmax(0, 0.8fr);
+}
+
 /* ══════════════════════════════════════════
    METRIC CARDS — INSTRUMENT READOUTS
    ══════════════════════════════════════════ */
@@ -1683,6 +1691,10 @@ body.has-wide-deck-curve .app-shell {
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--text);
+}
+
+.metric-card--record .metric-value {
+  white-space: nowrap;
 }
 
 .metric-card--toned {
@@ -8061,6 +8073,12 @@ select option {
 /* ══════════════════════════════════════════
    RESPONSIVE — TACTICAL BREAKPOINTS
    ══════════════════════════════════════════ */
+
+@media (min-width: 641px) and (max-width: 1240px) {
+  .metrics-grid.overview-metrics-grid {
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.85fr);
+  }
+}
 
 @media (max-width: 1120px) {
   body.has-wide-deck-curve .app-shell {

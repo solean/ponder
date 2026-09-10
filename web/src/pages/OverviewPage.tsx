@@ -612,8 +612,8 @@ export function OverviewPage() {
     <div className="stack-lg">
       {header}
 
-      <section className="metrics-grid">
-        <article className="metric-card">
+      <section className="metrics-grid overview-metrics-grid">
+        <article className="metric-card metric-card--record">
           <p>Record</p>
           <div className="metric-value">
             {data.wins}W – {data.losses}L

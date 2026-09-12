@@ -619,12 +619,26 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 
 	reader := bufio.NewReaderSize(file, 4*1024*1024)
 
+	// Hold the store's write slot for the whole pass: the batch transactions
+	// below plus the trailing repair passes are one long write workload, and
+	// racing maintenance for the write lock outlasts SQLite's busy timeout.
+	releaseWriter, writerErr := p.store.AcquireWriter(ctx)
+	if writerErr != nil {
+		return stats, fmt.Errorf("await write slot: %w", writerErr)
+	}
+	defer releaseWriter()
+
 	tx, err := p.store.BeginTx(ctx)
 	if err != nil {
 		return stats, fmt.Errorf("begin tx: %w", err)
 	}
 	defer func() {
-		_ = tx.Rollback()
+		// commit() clears tx when it cannot open the next batch transaction, so
+		// the rollback must tolerate a nil handle: calling Rollback on it panics
+		// and would mask the begin error that actually failed the parse.
+		if tx != nil {
+			_ = tx.Rollback()
+		}
 	}()
 
 	const batchSize = int64(500)
@@ -647,10 +661,12 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("commit tx: %w", err)
 		}
-		tx, err = p.store.BeginTx(ctx)
-		if err != nil {
-			return fmt.Errorf("begin new tx: %w", err)
+		newTx, beginErr := p.store.BeginTx(ctx)
+		if beginErr != nil {
+			tx = nil
+			return fmt.Errorf("begin new tx: %w", beginErr)
 		}
+		tx = newTx
 		linesSinceCommit = 0
 		return nil
 	}

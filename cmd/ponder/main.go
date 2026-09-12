@@ -87,7 +87,8 @@ func runParse(ctx context.Context, args []string) error {
 		return err
 	}
 
-	parser := ingest.NewParser(db.NewStore(database))
+	store := db.NewStore(database)
+	parser := ingest.NewParser(store)
 
 	logPaths, err := appstate.ResolveParseLogPaths(*logPath, *includePrev)
 	if err != nil {
@@ -147,7 +148,7 @@ func runParse(ctx context.Context, args []string) error {
 		time.Since(startedAt),
 	)
 
-	compactReplays(ctx, db.NewStore(database))
+	compactReplays(ctx, store)
 	return nil
 }
 
@@ -205,7 +206,10 @@ func runTail(ctx context.Context, args []string) error {
 		return err
 	}
 
-	parser := ingest.NewParser(db.NewStore(database))
+	// One Store for both writers: its write gate is what keeps the tail parser
+	// and the maintenance pass from racing each other for SQLite's write lock.
+	store := db.NewStore(database)
+	parser := ingest.NewParser(store)
 	activeLogPath := strings.TrimSpace(*logPath)
 	previousLogPath := ""
 	if activeLogPath == "" {
@@ -241,7 +245,7 @@ func runTail(ctx context.Context, args []string) error {
 			log.Printf("tail retained-log catch-up stat error: %v", err)
 		}
 	}
-	go compactReplays(ctx, db.NewStore(database))
+	go compactReplays(ctx, store)
 
 	ticker := time.NewTicker(*interval)
 	defer ticker.Stop()

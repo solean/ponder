@@ -162,22 +162,29 @@ tasks:
     cmds:
       - wails3 generate icons -input "{{.ROOT_DIR}}/build/appicon.png" -macfilename "" -windowsfilename "{{.ROOT_DIR}}/build/windows/icon.ico"
       - |
-        if command -v xcrun >/dev/null 2>&1 && xcrun --find actool >/dev/null 2>&1; then
-          xcrun actool "{{.ROOT_DIR}}/build/icon-source/Ponder.icon" \
-            --compile "{{.ROOT_DIR}}/build/darwin" \
+        ICON_SRC="{{.ROOT_DIR}}/build/icon-source/Ponder.icon"
+        OUT_DIR="{{.ROOT_DIR}}/build/darwin"
+        # actool can be present but non-functional (e.g. after an Xcode upgrade
+        # before `xcodebuild -runFirstLaunch` reinstalls its plug-ins), so probe
+        # the real compile and fall back to the flat PNG icon on any failure
+        # instead of aborting the whole build.
+        if [ -d "$ICON_SRC" ] && command -v xcrun >/dev/null 2>&1 && xcrun --find actool >/dev/null 2>&1 &&
+          xcrun actool "$ICON_SRC" \
+            --compile "$OUT_DIR" \
             --notices --warnings --errors \
-            --output-partial-info-plist "{{.ROOT_DIR}}/build/darwin/temp.plist" \
+            --output-partial-info-plist "$OUT_DIR/temp.plist" \
             --app-icon Ponder \
             --enable-on-demand-resources NO \
             --development-region en \
             --target-device mac \
             --minimum-deployment-target 26.0 \
-            --platform macosx
-          cp "{{.ROOT_DIR}}/build/darwin/Ponder.icns" "{{.ROOT_DIR}}/build/darwin/icons.icns"
-          rm -f "{{.ROOT_DIR}}/build/darwin/Ponder.icns" "{{.ROOT_DIR}}/build/darwin/temp.plist"
+            --platform macosx; then
+          cp "$OUT_DIR/Ponder.icns" "$OUT_DIR/icons.icns"
+          rm -f "$OUT_DIR/Ponder.icns" "$OUT_DIR/temp.plist"
         else
-          rm -f "{{.ROOT_DIR}}/build/darwin/Assets.car"
-          wails3 generate icons -input "{{.ROOT_DIR}}/build/appicon-macos.png" -macfilename "{{.ROOT_DIR}}/build/darwin/icons.icns" -windowsfilename ""
+          echo "generate:icons: actool unavailable or failed; using flat PNG icon (run 'xcodebuild -runFirstLaunch' to restore the layered icon)" >&2
+          rm -f "$OUT_DIR/Assets.car" "$OUT_DIR/Ponder.icns" "$OUT_DIR/temp.plist"
+          wails3 generate icons -input "{{.ROOT_DIR}}/build/appicon-macos.png" -macfilename "$OUT_DIR/icons.icns" -windowsfilename ""
         fi
 
   dev:frontend:

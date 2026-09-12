@@ -12,6 +12,12 @@ import (
 
 type Store struct {
 	db *sql.DB
+	// SQLite admits one writer at a time, and this app has two long write
+	// workloads: log ingest (batched transactions) and maintenance (draft
+	// repair, replay compaction, VACUUM). Run concurrently they outlast the
+	// DSN's busy_timeout and abort each other with SQLITE_BUSY, so they take
+	// turns through this gate instead of racing the busy handler.
+	writeGate chan struct{}
 }
 
 type IngestState struct {
@@ -25,7 +31,19 @@ const sqliteInClauseBatchSize = 900
 const appMetadataPlayerNameKey = "player_name"
 
 func NewStore(db *sql.DB) *Store {
-	return &Store{db: db}
+	return &Store{db: db, writeGate: make(chan struct{}, 1)}
+}
+
+// AcquireWriter reserves the single long-write-workload slot, blocking until
+// the current owner releases it or ctx is done. The returned release function
+// must be called exactly once when the workload finishes.
+func (s *Store) AcquireWriter(ctx context.Context) (func(), error) {
+	select {
+	case s.writeGate <- struct{}{}:
+		return func() { <-s.writeGate }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func nowUTC() string {

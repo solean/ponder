@@ -30,6 +30,14 @@ func (r MaintenanceResult) reclaimedAnything() bool {
 func (s *Store) RunMaintenance(ctx context.Context) (MaintenanceResult, error) {
 	result := MaintenanceResult{}
 
+	// Maintenance and log ingest are the two long write workloads; serialize
+	// against ingest so neither aborts the other with SQLITE_BUSY.
+	release, err := s.AcquireWriter(ctx)
+	if err != nil {
+		return result, err
+	}
+	defer release()
+
 	archived, err := s.CompactMatchReplays(ctx)
 	result.ReplaysArchived = archived
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/solean/ponder/internal/db"
 	"github.com/solean/ponder/internal/model"
@@ -122,6 +123,66 @@ func TestTailParseUnchangedLogDoesNotWaitForWriter(t *testing.T) {
 	}
 	if stats.LinesRead != 0 || stats.BytesRead != 0 {
 		t.Fatalf("unchanged poll read %d lines / %d bytes", stats.LinesRead, stats.BytesRead)
+	}
+}
+
+func TestTailParseWaitsForWriterSlot(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	database, err := db.Open(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	logPath := filepath.Join(tmpDir, "Player.log")
+	if err := writeLogLines(logPath, []string{`{"clientId":"self-user","screenName":"Self"}`}, false); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+	store := db.NewStore(database)
+	parser := NewParser(store)
+
+	// Maintenance owns the write slot: ingest must queue behind it instead of
+	// opening a competing write transaction and losing to SQLITE_BUSY.
+	release, err := store.AcquireWriter(ctx)
+	if err != nil {
+		t.Fatalf("acquire writer slot: %v", err)
+	}
+
+	parsed := make(chan error, 1)
+	go func() {
+		_, err := parser.ParseFile(ctx, logPath, true)
+		parsed <- err
+	}()
+
+	select {
+	case err := <-parsed:
+		t.Fatalf("parse completed while another writer held the slot (err=%v)", err)
+	case <-time.After(250 * time.Millisecond):
+	}
+
+	release()
+
+	select {
+	case err := <-parsed:
+		if err != nil {
+			t.Fatalf("parse after writer slot released: %v", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("parse did not resume after the writer slot was released")
+	}
+
+	name, err := store.PlayerName(ctx)
+	if err != nil {
+		t.Fatalf("read player name: %v", err)
+	}
+	if name != "Self" {
+		t.Fatalf("player name = %q, want Self", name)
 	}
 }
 

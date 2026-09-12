@@ -10,6 +10,6 @@ bool ponderShowOverlayWindowInactive(
     uint64_t *collectionBehavior
 );
 void ponderHideOverlayWindow(void *window);
-bool ponderOverlayPointerPosition(double *x, double *y);
+bool ponderOverlayPointerPosition(void *window, double *x, double *y);
 
 #endif

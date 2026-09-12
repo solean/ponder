@@ -29,6 +29,14 @@ bool ponderShowOverlayWindowInactive(
         ponderOverlayUsesAccessoryPolicy = true;
     }
     NSWindow *window = (__bridge NSWindow *)rawWindow;
+    // Wails SetBounds positions using the old height before resizing. Set the
+    // complete AppKit frame at once so the first show cannot start off-screen.
+    NSScreen *screen = [[NSScreen screens] firstObject];
+    if (screen == nil) {
+        ponderRestoreActivationPolicy();
+        return false;
+    }
+    [window setFrame:[screen frame] display:YES animate:NO];
     NSWindowCollectionBehavior requiredBehavior =
         NSWindowCollectionBehaviorCanJoinAllSpaces |
         NSWindowCollectionBehaviorFullScreenAuxiliary;
@@ -77,17 +85,25 @@ void ponderHideOverlayWindow(void *rawWindow) {
     ponderRestoreActivationPolicy();
 }
 
-bool ponderOverlayPointerPosition(double *x, double *y) {
-    if (x == NULL || y == NULL) {
+bool ponderOverlayPointerPosition(void *rawWindow, double *x, double *y) {
+    if (rawWindow == NULL || x == NULL || y == NULL) {
         return false;
     }
-    CGEventRef event = CGEventCreate(NULL);
-    if (event == NULL) {
+    NSWindow *window = (__bridge NSWindow *)rawWindow;
+    NSView *view = [window contentView];
+    NSRect bounds = [view bounds];
+    if (![window isVisible] || NSIsEmptyRect(bounds)) {
         return false;
     }
-    CGPoint location = CGEventGetLocation(event);
-    CFRelease(event);
-    *x = location.x;
-    *y = location.y;
+    // Stay in AppKit points throughout; mixing global CG coordinates with a
+    // separately sampled window frame can misalign passive hover hit-testing.
+    NSPoint point = [view convertPoint:
+        [window convertPointFromScreen:[NSEvent mouseLocation]] fromView:nil];
+    if (!NSPointInRect(point, bounds)) {
+        return false;
+    }
+    *x = (point.x - NSMinX(bounds)) / NSWidth(bounds);
+    double relativeY = (point.y - NSMinY(bounds)) / NSHeight(bounds);
+    *y = [view isFlipped] ? relativeY : 1.0 - relativeY;
     return true;
 }

@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log"
 
+	"github.com/solean/ponder/internal/api"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -26,7 +27,7 @@ func main() {
 		Name:        appDisplayName,
 		Description: "Private, local-first MTG Arena match tracking and analytics.",
 		Assets: application.AssetOptions{
-			Handler:    application.AssetFileServerFS(assets),
+			Handler:    api.SPAFileServer(assets),
 			Middleware: desktop.APIMiddleware,
 		},
 		Mac: application.MacOptions{
@@ -92,7 +93,7 @@ func main() {
 		event.Cancel()
 	})
 	overlayWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
-		hideOverlayWindow(overlayWindow)
+		desktop.hideOverlay()
 		event.Cancel()
 	})
 	wailsApp.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
@@ -102,6 +103,19 @@ func main() {
 	wailsApp.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		desktop.startup()
 		desktop.showStartupError()
+		application.InvokeSync(func() {
+			menu := wailsApp.Menu.GetApplicationMenu()
+			if menu == nil {
+				menu = application.DefaultApplicationMenu()
+			}
+			menu.AddSubmenu("Overlay").Add("Show / Hide Game Overlay").
+				SetTooltip("⌘⇧O on macOS; Ctrl+Shift+O on Windows/Linux").
+				OnClick(func(*application.Context) { desktop.toggleOverlay() })
+			wailsApp.Menu.Set(menu)
+		})
+		if err := wailsApp.GlobalShortcut.Register("CmdOrCtrl+Shift+O", desktop.toggleOverlay); err != nil {
+			log.Printf("overlay shortcut unavailable: %v; use the Overlay menu", err)
+		}
 	})
 
 	if err := wailsApp.Run(); err != nil {

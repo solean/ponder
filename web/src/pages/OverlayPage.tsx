@@ -81,6 +81,9 @@ function DeckPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: string
         <span className={`overlay-state-dot ${hasLibraryCount ? "is-ready" : ""}`} aria-hidden="true" />
         {hasLibraryCount ? `${live.deckTotal - libraryCount} known outside the library` : "Waiting for full game state"}
       </footer>
+      <div className="overlay-panel-foot">
+        {navigator.platform.startsWith("Mac") ? "⌘⇧O" : "Ctrl+Shift+O"} · hide/show overlay
+      </div>
     </aside>
   );
 }
@@ -149,13 +152,12 @@ export function OverlayPage() {
       if (point && hudRef.current) {
         const x = point.x * window.innerWidth;
         const y = point.y * window.innerHeight;
-        // DOM hit-testing ignores pointer-events:none. Inspect the visible
-        // name bounds instead, clipped to the non-scrolling card list.
+        // The native overlay remains click-through. Hit-test whole visible rows
+        // so names, counts, and row padding all reveal the same card preview.
         for (const row of hudRef.current.querySelectorAll<HTMLElement>("[data-overlay-card]")) {
-          const anchor = row.querySelector<HTMLElement>(".card-preview-trigger");
           const list = row.parentElement;
-          if (!anchor || !list) continue;
-          const rect = anchor.getBoundingClientRect();
+          if (!list) continue;
+          const rect = row.getBoundingClientRect();
           const clip = list.getBoundingClientRect();
           if (x >= Math.max(rect.left, clip.left) && x < Math.min(rect.right, clip.right) &&
               y >= Math.max(rect.top, clip.top) && y < Math.min(rect.bottom, clip.bottom)) {

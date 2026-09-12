@@ -28,11 +28,19 @@ This MVP includes:
 
 Each script forwards additional arguments to its underlying command.
 
-The desktop in-game overlay is display-only: clicks and scrolling pass through
-to Arena everywhere, including beneath its panels and card previews. On macOS,
-hovering a visible card name still shows its image using passive cursor tracking;
-the overlay never enables mouse capture. Other platforms remain click-through
-without hover previews until passive cursor tracking is available.
+The desktop in-game overlay places your deck and the opponent's revealed cards
+flush with the top screen edges. It is display-only: clicks and scrolling pass
+through to Arena everywhere, including beneath its panels and card previews.
+On macOS, hovering anywhere on a visible card row shows its image using passive
+cursor tracking; the overlay never enables mouse capture. Other platforms remain
+click-through without hover previews until passive cursor tracking is available.
+
+Press **Cmd+Shift+O** on macOS (**Ctrl+Shift+O** on Windows/Linux) to hide or show
+both panels, even while Arena has focus. Ponder also has an **Overlay → Show / Hide
+Game Overlay** menu item. Hiding clears the entire overlay, including previews;
+the same shortcut restores it. The choice lasts until toggled again or Ponder
+restarts, including across games. Enabling it outside a live match waits for the
+next match rather than displaying stale game data.
 
 ## Backend Setup
 

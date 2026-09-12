@@ -40,10 +40,13 @@ func hideOverlayWindow(window application.Window) {
 	})
 }
 
-func overlayPointerPosition() (x, y float64, supported bool) {
-	var nativeX, nativeY C.double
-	if !bool(C.ponderOverlayPointerPosition(&nativeX, &nativeY)) {
+func overlayPointerPosition(window application.Window) (x, y float64, supported bool) {
+	if window == nil {
 		return 0, 0, false
 	}
-	return float64(nativeX), float64(nativeY), true
+	var nativeX, nativeY C.double
+	application.InvokeSync(func() {
+		supported = bool(C.ponderOverlayPointerPosition(window.NativeWindow(), &nativeX, &nativeY))
+	})
+	return float64(nativeX), float64(nativeY), supported
 }

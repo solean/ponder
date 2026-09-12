@@ -142,7 +142,7 @@ func (s *Server) routes() http.Handler {
 		}
 	}
 	if staticAssets != nil {
-		mux.Handle("/", spaFileServer(staticAssets))
+		mux.Handle("/", SPAFileServer(staticAssets))
 	} else if s.staticDir != "" {
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -159,10 +159,10 @@ func (s *Server) SetStaticAssets(assets fs.FS) {
 	s.staticAssets = assets
 }
 
-// spaFileServer serves the built frontend. The React app uses client-side
+// SPAFileServer serves the built frontend. The React app uses client-side
 // routing (BrowserRouter), so paths that don't match a real file — deep links
 // like /matches/675 — fall back to index.html.
-func spaFileServer(assets fs.FS) http.Handler {
+func SPAFileServer(assets fs.FS) http.Handler {
 	fileServer := http.FileServer(http.FS(assets))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")

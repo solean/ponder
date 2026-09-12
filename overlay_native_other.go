@@ -8,6 +8,9 @@ func showOverlayWindow(window application.Window) (configured bool, level int64,
 	if window == nil {
 		return false, 0, 0
 	}
+	if screen := application.Get().Screen.GetPrimary(); screen != nil {
+		window.SetBounds(screen.Bounds)
+	}
 	window.Show()
 	return true, 0, 0
 }
@@ -17,6 +20,6 @@ func hideOverlayWindow(window application.Window) {
 	}
 }
 
-func overlayPointerPosition() (x, y float64, supported bool) {
+func overlayPointerPosition(window application.Window) (x, y float64, supported bool) {
 	return 0, 0, false
 }

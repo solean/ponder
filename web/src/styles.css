@@ -11342,6 +11342,10 @@ html.overlay-document #root {
   color-scheme: dark;
 }
 
+html.overlay-document {
+  scrollbar-gutter: auto;
+}
+
 html.overlay-document body {
   padding: 0;
 }
@@ -11357,7 +11361,7 @@ html.overlay-document body::before {
   align-items: flex-start;
   justify-content: space-between;
   gap: 2rem;
-  padding: clamp(1rem, 2vw, 2rem);
+  padding: 0;
   pointer-events: none;
   color: #f5f7fa;
   font-family: var(--font-sans);
@@ -11369,12 +11373,12 @@ html.overlay-document body::before {
   display: flex;
   flex-direction: column;
   width: clamp(19rem, 23vw, 22rem);
-  max-height: calc(100vh - clamp(2rem, 4vw, 4rem));
+  max-height: 100vh;
   overflow: hidden;
   pointer-events: none;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-top-color: color-mix(in srgb, var(--overlay-accent) 66%, transparent);
-  border-radius: 10px;
+  border-radius: 0 0 10px 0;
   background:
     linear-gradient(180deg, var(--overlay-accent-soft) 0, transparent 4.5rem),
     rgba(8, 10, 14, 0.9);
@@ -11388,6 +11392,7 @@ html.overlay-document body::before {
 .overlay-panel-opponent {
   --overlay-accent: #83c8e8;
   --overlay-accent-soft: rgba(94, 177, 216, 0.14);
+  border-radius: 0 0 0 10px;
   animation-delay: 45ms;
 }
 
@@ -11631,12 +11636,10 @@ html.overlay-document body::before {
 @media (max-width: 840px) {
   .overlay-hud {
     gap: 0.65rem;
-    padding: 0.65rem;
   }
 
   .overlay-panel {
-    width: calc(50vw - 0.975rem);
-    max-height: calc(100vh - 1.3rem);
+    width: calc(50vw - 0.325rem);
   }
 }
 

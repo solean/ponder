@@ -47,10 +47,13 @@ type App struct {
 	mu         sync.RWMutex
 	apiHandler http.Handler
 	startupErr string
+
+	overlayHidden bool
+	overlayWake   chan struct{}
 }
 
 func NewApp(staticAssets fs.FS) *App {
-	return &App{staticAssets: staticAssets}
+	return &App{staticAssets: staticAssets, overlayWake: make(chan struct{}, 1)}
 }
 
 func (a *App) setDesktopRuntime(
@@ -277,18 +280,33 @@ func (a *App) startup() {
 		}
 	}()
 }
-func overlayPointerScript(bounds application.Rect, x, y float64, supported bool) string {
+func overlayPointerScript(x, y float64, supported bool) string {
 	detail := "null"
-	if supported && bounds.Width > 0 && bounds.Height > 0 &&
-		x >= float64(bounds.X) && x < float64(bounds.X+bounds.Width) &&
-		y >= float64(bounds.Y) && y < float64(bounds.Y+bounds.Height) {
-		// Normalize screen points so the webview can map them into CSS pixels,
-		// including when its zoom or display scale differs.
-		detail = fmt.Sprintf("{x:%f,y:%f}",
-			(x-float64(bounds.X))/float64(bounds.Width),
-			(y-float64(bounds.Y))/float64(bounds.Height))
+	if supported && x >= 0 && x < 1 && y >= 0 && y < 1 {
+		detail = fmt.Sprintf("{x:%f,y:%f}", x, y)
 	}
 	return "window.dispatchEvent(new CustomEvent('ponder:overlay-pointer',{detail:" + detail + "}))"
+}
+
+func (a *App) toggleOverlay() {
+	a.mu.Lock()
+	a.overlayHidden = !a.overlayHidden
+	a.mu.Unlock()
+	a.wakeOverlayMonitor()
+}
+
+func (a *App) hideOverlay() {
+	a.mu.Lock()
+	a.overlayHidden = true
+	a.mu.Unlock()
+	a.wakeOverlayMonitor()
+}
+
+func (a *App) wakeOverlayMonitor() {
+	select {
+	case a.overlayWake <- struct{}{}:
+	default:
+	}
 }
 
 func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
@@ -314,24 +332,24 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 				return
 			}
 			hadReadError = false
+			a.mu.RLock()
+			isLive = isLive && !a.overlayHidden
+			a.mu.RUnlock()
 			if isLive == visible {
 				return
 			}
-			visible = isLive
 			if !isLive {
 				hideOverlayWindow(a.overlayWindow)
+				visible = false
 				return
 			}
 
-			if screen := a.wailsApp.Screen.GetPrimary(); screen != nil &&
-				screen.Bounds.Width > 0 && screen.Bounds.Height > 0 {
-				a.overlayWindow.SetBounds(screen.Bounds)
-			}
-			// Hidden webviews may suspend timers. Reload on the hidden-to-live
-			// transition so the first visible frame hydrates current match data.
+			// Hidden webviews may suspend timers. Navigate explicitly: Reload
+			// can cancel the first pending navigation before any URL commits.
 			a.overlayWindow.SetIgnoreMouseEvents(true)
-			a.overlayWindow.Reload()
+			a.overlayWindow.SetURL("/overlay")
 			configured, level, behavior := showOverlayWindow(a.overlayWindow)
+			visible = configured
 			if !configured {
 				log.Printf("overlay window did not accept the required fullscreen configuration (level=%d behavior=%#x)", level, behavior)
 			} else {
@@ -342,8 +360,8 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 			if !visible {
 				return
 			}
-			x, y, supported := overlayPointerPosition()
-			a.overlayWindow.ExecJS(overlayPointerScript(a.overlayWindow.Bounds(), x, y, supported))
+			x, y, supported := overlayPointerPosition(a.overlayWindow)
+			a.overlayWindow.ExecJS(overlayPointerScript(x, y, supported))
 		}
 
 		updateVisibility()
@@ -351,6 +369,8 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 			select {
 			case <-ctx.Done():
 				return
+			case <-a.overlayWake:
+				updateVisibility()
 			case <-visibilityTicker.C:
 				updateVisibility()
 			case <-pointerTicker.C:

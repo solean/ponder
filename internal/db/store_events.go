@@ -104,7 +104,6 @@ func (s *Store) UpsertEventRunJoin(ctx context.Context, tx *sql.Tx, eventName, c
 			)
 		  )
 		ORDER BY
-			CASE WHEN status = 'active' THEN 0 ELSE 1 END,
 			ABS(julianday(?) - julianday(started_at)),
 			id DESC
 		LIMIT 1
@@ -147,7 +146,9 @@ func (s *Store) MarkEventRunClaimed(ctx context.Context, tx *sql.Tx, eventName, 
 	_, err := tx.ExecContext(ctx, `
 		UPDATE event_runs
 		SET status = 'claimed',
-			ended_at = COALESCE(ended_at, ?),
+			ended_at = CASE
+				WHEN ? IS NOT NULL AND (started_at IS NULL OR julianday(?) >= julianday(started_at))
+				THEN ? ELSE ended_at END,
 			updated_at = ?
 		WHERE id = (
 			SELECT id
@@ -155,12 +156,12 @@ func (s *Store) MarkEventRunClaimed(ctx context.Context, tx *sql.Tx, eventName, 
 			WHERE event_name = ?
 			  AND (? = '' OR started_at IS NULL OR started_at <= ?)
 			ORDER BY
-				CASE WHEN status = 'active' THEN 0 ELSE 1 END,
-				COALESCE(started_at, updated_at) DESC,
+				CASE WHEN COALESCE(started_at, '') = '' THEN 1 ELSE 0 END,
+				started_at DESC,
 				id DESC
 			LIMIT 1
 		)
-	`, nullIfEmpty(ts), nowUTC(), eventName, ts, ts)
+	`, nullIfEmpty(ts), ts, nullIfEmpty(ts), nowUTC(), eventName, ts, ts)
 	if err != nil {
 		return fmt.Errorf("mark event run claimed: %w", err)
 	}
@@ -186,11 +187,12 @@ func (s *Store) BumpEventRunRecord(ctx context.Context, tx *sql.Tx, eventName, r
 			WHERE event_name = ?
 			  AND (? = '' OR started_at IS NULL OR started_at <= ?)
 			ORDER BY
-				CASE WHEN status = 'active' THEN 0 ELSE 1 END,
-				COALESCE(started_at, updated_at) DESC,
+				CASE WHEN COALESCE(started_at, '') = '' THEN 1 ELSE 0 END,
+				started_at DESC,
 				id DESC
 			LIMIT 1
 		)
+		  AND NOT EXISTS (SELECT 1 FROM event_courses ec WHERE ec.course_id = event_runs.pay_source_id)
 	`, col), nowUTC(), eventName, ts, ts)
 	if err != nil {
 		return fmt.Errorf("bump event run record: %w", err)
@@ -226,16 +228,9 @@ func (s *Store) attachDraftSessionToEventRun(
 		FROM event_runs
 		WHERE event_name = ?
 		  AND draft_session_id IS NULL
-		  AND (
-			started_at IS NULL
-			OR started_at = ''
-			OR (
-				? != ''
-				AND ABS(julianday(?) - julianday(started_at)) * 1440.0 <= ?
-			)
-		  )
+		  AND ? != ''
+		  AND ABS(julianday(?) - julianday(started_at)) * 1440.0 <= ?
 		ORDER BY
-			CASE WHEN started_at IS NULL OR started_at = '' THEN 1 ELSE 0 END,
 			ABS(julianday(?) - julianday(started_at)),
 			id DESC
 		LIMIT 1
@@ -281,7 +276,7 @@ func (s *Store) RepairEventRunInstances(ctx context.Context) error {
 		SELECT id, COALESCE(event_name, ''), COALESCE(started_at, ''), COALESCE(completed_at, '')
 		FROM draft_sessions
 		WHERE COALESCE(event_name, '') != ''
-		ORDER BY COALESCE(started_at, created_at), id
+		ORDER BY CASE WHEN COALESCE(started_at, '') = '' THEN 1 ELSE 0 END, started_at, id
 	`)
 	if err != nil {
 		return fmt.Errorf("list draft sessions for event run repair: %w", err)
@@ -312,16 +307,37 @@ func (s *Store) RepairEventRunInstances(ctx context.Context) error {
 		return fmt.Errorf("begin event run repair: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE event_runs SET ended_at = NULL
+		WHERE julianday(ended_at) < julianday(started_at)
+	`); err != nil {
+		return fmt.Errorf("repair invalid event run end: %w", err)
+	}
 	for _, draft := range drafts {
 		if _, _, err := s.attachDraftSessionToEventRun(ctx, tx, draft.sessionID, draft.eventName, draft.startedAt); err != nil {
 			return err
 		}
+	}
+	if err := s.repairEventCoursesTx(ctx, tx); err != nil {
+		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit draft event run repair: %w", err)
 	}
 
 	for _, draft := range drafts {
+		var hasCourse bool
+		if err := s.db.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM event_runs er JOIN event_courses ec ON ec.course_id = er.pay_source_id
+				WHERE er.draft_session_id = ?
+			)
+		`, draft.sessionID).Scan(&hasCourse); err != nil {
+			return fmt.Errorf("check authoritative draft record: %w", err)
+		}
+		if hasCourse {
+			continue
+		}
 		candidate, ok, err := s.resolveDraftSessionDeckCandidate(ctx, draft.eventName, draft.startedAt, draft.completedAt)
 		if err != nil {
 			return err
@@ -342,10 +358,11 @@ func (s *Store) RepairEventRunInstances(ctx context.Context) error {
 			SET wins = ?,
 				losses = ?,
 				status = CASE WHEN ? = 'claimed' THEN 'claimed' ELSE status END,
-				ended_at = COALESCE(ended_at, ?),
+				ended_at = CASE WHEN julianday(?) >= julianday(started_at) THEN COALESCE(ended_at, ?) ELSE ended_at END,
 				updated_at = ?
 			WHERE draft_session_id = ?
-		`, candidate.Wins, candidate.Losses, status, nullIfEmpty(endedAt), nowUTC(), draft.sessionID); err != nil {
+			  AND NOT EXISTS (SELECT 1 FROM event_courses ec WHERE ec.course_id = event_runs.pay_source_id)
+		`, candidate.Wins, candidate.Losses, status, endedAt, nullIfEmpty(endedAt), nowUTC(), draft.sessionID); err != nil {
 			return fmt.Errorf("restore draft event run record: %w", err)
 		}
 	}
@@ -355,6 +372,9 @@ func (s *Store) RepairEventRunInstances(ctx context.Context) error {
 		return fmt.Errorf("begin event transaction link repair: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := s.repairDuplicateDraftRunsTx(ctx, tx); err != nil {
+		return err
+	}
 	if err := s.repairUnlinkedEconomyTransactionsTx(ctx, tx); err != nil {
 		return err
 	}

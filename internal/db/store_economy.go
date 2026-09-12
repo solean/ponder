@@ -59,7 +59,7 @@ func (s *Store) InsertEconomySnapshot(
 			changes_json,
 			created_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(log_path, line_no) DO NOTHING
+		ON CONFLICT DO NOTHING
 	`, logPath, lineNo, nullIfEmpty(snapshot.ObservedAt), snapshot.SequenceID,
 		snapshot.Gold, snapshot.Gems, snapshot.VaultProgress, snapshot.WildcardTrackPosition,
 		snapshot.WildcardCommons, snapshot.WildcardUncommons, snapshot.WildcardRares,
@@ -83,8 +83,10 @@ func (s *Store) InsertEconomySnapshot(
 
 	var id int64
 	if err := tx.QueryRowContext(ctx, `
-		SELECT id FROM economy_snapshots WHERE log_path = ? AND line_no = ?
-	`, logPath, lineNo).Scan(&id); err != nil {
+		SELECT id
+		FROM economy_snapshots
+		WHERE log_path = ? AND line_no = ? AND COALESCE(observed_at, '') = ?
+	`, logPath, lineNo, snapshot.ObservedAt).Scan(&id); err != nil {
 		return 0, false, fmt.Errorf("lookup existing economy snapshot: %w", err)
 	}
 	return id, false, nil
@@ -234,7 +236,7 @@ func (s *Store) ListEventRunEconomies(ctx context.Context) ([]model.EventRunEcon
 			wins,
 			losses
 		FROM event_runs
-		ORDER BY COALESCE(started_at, updated_at) DESC, id DESC
+		ORDER BY CASE WHEN COALESCE(started_at, '') = '' THEN 1 ELSE 0 END, started_at DESC, id DESC
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("list event runs: %w", err)

@@ -206,7 +206,7 @@ func (s *Store) linkEconomyChangeToEvent(
 				OR ABS(julianday(?) - julianday(started_at)) * 1440.0 <= ?
 			  )
 			ORDER BY
-				CASE WHEN status = 'active' THEN 0 ELSE 1 END,
+				CASE WHEN COALESCE(started_at, '') = '' THEN 1 ELSE 0 END,
 				ABS(julianday(?) - julianday(started_at)),
 				id DESC
 			LIMIT 1
@@ -403,6 +403,9 @@ func backfillEconomyTransactions(ctx context.Context, conn dbConn, store *Store)
 // migrateEconomyTables gives each repeated event name a distinct run identity
 // and adds that identity to the transaction ledger.
 func migrateEconomyTables(ctx context.Context, conn dbConn) error {
+	if err := migrateEconomySnapshotIdentity(ctx, conn); err != nil {
+		return err
+	}
 	hasDraftSessionID, err := tableHasColumn(ctx, conn, "event_runs", "draft_session_id")
 	if err != nil {
 		return fmt.Errorf("inspect event_runs instance schema: %w", err)
@@ -442,6 +445,93 @@ func migrateEconomyTables(ctx context.Context, conn dbConn) error {
 		if _, err := conn.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("create economy run index: %w", err)
 		}
+	}
+	return nil
+}
+
+// migrateEconomySnapshotIdentity removes the path/line-only uniqueness
+// constraint. Arena reuses line numbers whenever Player.log is replaced, so
+// that constraint silently discarded new inventory snapshots at old line
+// positions. Including the observation timestamp preserves reparse
+// idempotency without conflating separate log generations. Existing logs are
+// replayed once so snapshots lost to prior collisions can be recovered.
+func migrateEconomySnapshotIdentity(ctx context.Context, conn dbConn) error {
+	var tableSQL string
+	if err := conn.QueryRowContext(ctx, `
+		SELECT COALESCE(sql, '')
+		FROM sqlite_master
+		WHERE type = 'table' AND name = 'economy_snapshots'
+	`).Scan(&tableSQL); err != nil {
+		return fmt.Errorf("inspect economy snapshot identity schema: %w", err)
+	}
+	normalizedSQL := strings.NewReplacer(
+		" ", "",
+		"\n", "",
+		"\r", "",
+		"\t", "",
+	).Replace(strings.ToLower(tableSQL))
+	if !strings.Contains(normalizedSQL, "unique(log_path,line_no)") {
+		return nil
+	}
+
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin economy snapshot identity migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	steps := []string{
+		`DROP INDEX IF EXISTS idx_economy_snapshots_observed_at`,
+		`DROP INDEX IF EXISTS idx_economy_snapshots_log_observation`,
+		`CREATE TABLE economy_snapshots_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			log_path TEXT NOT NULL,
+			line_no INTEGER NOT NULL,
+			observed_at TEXT,
+			sequence_id INTEGER NOT NULL DEFAULT 0,
+			gold INTEGER NOT NULL DEFAULT 0,
+			gems INTEGER NOT NULL DEFAULT 0,
+			vault_progress INTEGER NOT NULL DEFAULT 0,
+			wildcard_track_position INTEGER NOT NULL DEFAULT 0,
+			wildcard_commons INTEGER NOT NULL DEFAULT 0,
+			wildcard_uncommons INTEGER NOT NULL DEFAULT 0,
+			wildcard_rares INTEGER NOT NULL DEFAULT 0,
+			wildcard_mythics INTEGER NOT NULL DEFAULT 0,
+			custom_tokens_json TEXT NOT NULL DEFAULT '{}',
+			boosters_json TEXT NOT NULL DEFAULT '[]',
+			vouchers_json TEXT NOT NULL DEFAULT '{}',
+			changes_json TEXT NOT NULL DEFAULT '[]',
+			created_at TEXT NOT NULL
+		)`,
+		`INSERT INTO economy_snapshots_new (
+			id, log_path, line_no, observed_at, sequence_id, gold, gems,
+			vault_progress, wildcard_track_position, wildcard_commons,
+			wildcard_uncommons, wildcard_rares, wildcard_mythics,
+			custom_tokens_json, boosters_json, vouchers_json, changes_json,
+			created_at
+		)
+		SELECT
+			id, log_path, line_no, observed_at, sequence_id, gold, gems,
+			vault_progress, wildcard_track_position, wildcard_commons,
+			wildcard_uncommons, wildcard_rares, wildcard_mythics,
+			custom_tokens_json, boosters_json, vouchers_json, changes_json,
+			created_at
+		FROM economy_snapshots`,
+		`DROP TABLE economy_snapshots`,
+		`ALTER TABLE economy_snapshots_new RENAME TO economy_snapshots`,
+		`CREATE INDEX idx_economy_snapshots_observed_at
+			ON economy_snapshots(observed_at)`,
+		`CREATE UNIQUE INDEX idx_economy_snapshots_log_observation
+			ON economy_snapshots(log_path, line_no, COALESCE(observed_at, ''))`,
+		`UPDATE ingest_state SET byte_offset = 0, line_no = 0`,
+	}
+	for _, step := range steps {
+		if _, err := tx.ExecContext(ctx, step); err != nil {
+			return fmt.Errorf("migrate economy snapshot identity: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit economy snapshot identity migration: %w", err)
 	}
 	return nil
 }

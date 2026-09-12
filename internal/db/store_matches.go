@@ -164,9 +164,8 @@ func (s *Store) UpsertMatchStart(ctx context.Context, tx *sql.Tx, arenaMatchID, 
 			SELECT id
 			FROM event_runs
 			WHERE event_name = ?
-			  AND status = 'active'
 			  AND (? = '' OR started_at IS NULL OR started_at <= ?)
-			ORDER BY COALESCE(started_at, updated_at) DESC, id DESC
+			ORDER BY CASE WHEN COALESCE(started_at, '') = '' THEN 1 ELSE 0 END, started_at DESC, id DESC
 			LIMIT 1
 		`, resolvedEventName, startedAt, startedAt).Scan(&runID)
 		if errors.Is(findErr, sql.ErrNoRows) {

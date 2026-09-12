@@ -108,6 +108,8 @@
 
   --corner-mark: rgba(255, 160, 82, 0.34);
   --card-inner-border: rgba(255, 255, 255, 0.02);
+  --deck-curve-card-border: rgba(255, 255, 255, 0.14);
+  --deck-curve-card-inner-border: var(--card-inner-border);
   --card-accent-glow: rgba(255, 138, 36, 0.12);
 
   --metric-positive-corner: rgba(0, 230, 118, 0.46);
@@ -239,6 +241,8 @@
 
   --corner-mark: rgba(197, 90, 17, 0.3);
   --card-inner-border: rgba(255, 255, 255, 0.5);
+  --deck-curve-card-border: #000;
+  --deck-curve-card-inner-border: rgba(0, 0, 0, 0.28);
   --card-accent-glow: rgba(197, 90, 17, 0.08);
 
   --metric-positive-corner: rgba(46, 125, 50, 0.35);
@@ -1597,6 +1601,14 @@ body.has-wide-deck-curve .app-shell {
   gap: 0.82rem;
 }
 
+.overview-metrics-grid {
+  grid-template-columns:
+    minmax(0, 1.5fr)
+    minmax(0, 1fr)
+    minmax(0, 1fr)
+    minmax(0, 0.8fr);
+}
+
 /* ══════════════════════════════════════════
    METRIC CARDS — INSTRUMENT READOUTS
    ══════════════════════════════════════════ */
@@ -1683,6 +1695,10 @@ body.has-wide-deck-curve .app-shell {
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--text);
+}
+
+.metric-card--record .metric-value {
+  white-space: nowrap;
 }
 
 .metric-card--toned {
@@ -7076,10 +7092,10 @@ button.match-replay-zonechip.is-button {
     var(--surface-strong) 0%,
     var(--surface-faint) 100%
   );
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--deck-curve-card-border);
   box-shadow:
     0 12px 22px rgba(0, 0, 0, 0.32),
-    0 0 0 1px var(--card-inner-border) inset;
+    0 0 0 1px var(--deck-curve-card-inner-border) inset;
   transition:
     transform 160ms ease,
     box-shadow 160ms ease,
@@ -8061,6 +8077,12 @@ select option {
 /* ══════════════════════════════════════════
    RESPONSIVE — TACTICAL BREAKPOINTS
    ══════════════════════════════════════════ */
+
+@media (min-width: 641px) and (max-width: 1240px) {
+  .metrics-grid.overview-metrics-grid {
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.85fr);
+  }
+}
 
 @media (max-width: 1120px) {
   body.has-wide-deck-curve .app-shell {

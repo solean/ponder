@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { CardPreviewName } from "../components/CardPreviewName";
 import { api } from "../lib/api";
+import { fetchCardPreview } from "../lib/scryfall";
 import type { LiveDeckCard, LiveMatch, OpponentObservedCard } from "../lib/types";
 
 function cardName(card: { cardId: number; cardName?: string }): string {
@@ -17,17 +18,41 @@ function compareCardNames(
   return byName || left.cardId - right.cardId;
 }
 
+function useOrderedCards<T extends { cardId: number; cardName?: string }>(cards: T[]): T[] {
+  // Reuse the deck page's batched metadata requests and the hover preview cache.
+  const previews = useQueries({
+    queries: cards.map((card) => ({
+      queryKey: ["card-preview", card.cardId, cardName(card)],
+      queryFn: () => fetchCardPreview(card.cardId, card.cardName),
+      enabled: card.cardId > 0,
+      staleTime: 1000 * 60 * 60 * 24,
+      gcTime: 1000 * 60 * 60 * 24,
+      retry: 1,
+    })),
+  });
+
+  return useMemo(() => {
+    const ranked = cards.map((card, index) => {
+      const metadata = previews[index]?.data;
+      return {
+        card,
+        isLand: metadata?.typeLine?.toLowerCase().includes("land") ?? false,
+        manaValue: metadata?.manaValue ?? Number.POSITIVE_INFINITY,
+      };
+    });
+    ranked.sort((left, right) => {
+      if (left.isLand !== right.isLand) return left.isLand ? 1 : -1;
+      if (!left.isLand && left.manaValue !== right.manaValue) {
+        return left.manaValue - right.manaValue;
+      }
+      return compareCardNames(left.card, right.card);
+    });
+    return ranked.map(({ card }) => card);
+  }, [cards, previews]);
+}
+
 function DeckPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: string | null }) {
-  const cards = useMemo(
-    () =>
-      [...live.deck].sort((left, right) => {
-        const leftEmpty = left.remaining === 0;
-        const rightEmpty = right.remaining === 0;
-        if (leftEmpty !== rightEmpty) return leftEmpty ? 1 : -1;
-        return compareCardNames(left, right);
-      }),
-    [live.deck],
-  );
+  const cards = useOrderedCards(live.deck);
   const libraryCount = live.libraryCount;
   const hasLibraryCount = libraryCount != null;
   const sourceLabel =
@@ -89,10 +114,7 @@ function DeckPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: string
 }
 
 function OpponentPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: string | null }) {
-  const cards = useMemo(
-    () => [...live.opponentObservedCards].sort(compareCardNames),
-    [live.opponentObservedCards],
-  );
+  const cards = useOrderedCards(live.opponentObservedCards);
   const observedCopies = cards.reduce((total, card) => total + card.quantity, 0);
 
   return (

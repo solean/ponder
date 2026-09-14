@@ -34,6 +34,10 @@ through to Arena everywhere, including beneath its panels and card previews.
 On macOS, hovering anywhere on a visible card row shows its image using passive
 cursor tracking; the overlay never enables mouse capture. Other platforms remain
 click-through without hover previews until passive cursor tracking is available.
+Both panels list nonlands by ascending mana value, with lands at the bottom and
+alphabetical ties. Cards with no copies remaining stay in their mana-order
+position and are dimmed. Ordering uses the shared card-preview metadata cache;
+cards with unknown mana values follow known-cost nonlands while metadata loads.
 
 Press **Cmd+Shift+O** on macOS (**Ctrl+Shift+O** on Windows/Linux) to hide or show
 both panels, even while Arena has focus. Ponder also has an **Overlay → Show / Hide

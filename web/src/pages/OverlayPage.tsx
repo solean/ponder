@@ -211,6 +211,16 @@ export function OverlayPage() {
     refetchInterval: (query) => (query.state.data?.live ? 2000 : 5000),
     refetchIntervalInBackground: true,
   });
+
+  // The native window is ordered out whenever Arena is not frontmost, which
+  // can throttle or suspend this webview's timers; refetch on the way back in.
+  // The listener needs a stable identity to be removable.
+  const refetchLive = liveQuery.refetch;
+  useEffect(() => {
+    const onShown = () => void refetchLive();
+    window.addEventListener("ponder:overlay-shown", onShown);
+    return () => window.removeEventListener("ponder:overlay-shown", onShown);
+  }, [refetchLive]);
   const live = liveQuery.data?.live ?? null;
 
   if (liveQuery.isError) {

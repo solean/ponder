@@ -4,7 +4,14 @@ package main
 
 import "github.com/wailsapp/wails/v3/pkg/application"
 
-func showOverlayWindow(window application.Window) (configured bool, level int64, behavior uint64) {
+// Only the macOS build can bind the overlay to the game's window: there it
+// follows Arena's frontmost state and window frame. Elsewhere the overlay
+// covers the primary screen for as long as a match is live.
+var overlayAttached bool
+
+func overlayTargetRunning(string) bool { return true }
+
+func attachOverlayWindow(window application.Window, _ string) (configured bool, level int64, behavior uint64) {
 	if window == nil {
 		return false, 0, 0
 	}
@@ -12,9 +19,16 @@ func showOverlayWindow(window application.Window) (configured bool, level int64,
 		window.SetBounds(screen.Bounds)
 	}
 	window.Show()
+	overlayAttached = true
 	return true, 0, 0
 }
-func hideOverlayWindow(window application.Window) {
+
+func syncOverlayWindow(window application.Window) bool {
+	return window != nil && overlayAttached
+}
+
+func detachOverlayWindow(window application.Window) {
+	overlayAttached = false
 	if window != nil {
 		window.Hide()
 	}

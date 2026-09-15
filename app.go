@@ -34,6 +34,17 @@ const (
 
 	// Cursor polling drives previews only; the native window never captures input.
 	overlayPointerPollInterval = time.Second / 30
+
+	// mtgaBundleID identifies the MTG Arena client the overlay belongs to. The
+	// overlay is bound to that application: it is only ever on screen while
+	// Arena is frontmost, and never floats above other apps.
+	mtgaBundleID = "com.wizards.mtga"
+
+	// A live match with no observed game activity for this long is treated as
+	// abandoned (Arena quit mid-match leaves the row in progress forever), so
+	// the overlay stops following it. Well above any in-game stall: every GRE
+	// message, including mulligans and sideboard submissions, counts.
+	overlayLiveActivityWindow = 10 * time.Minute
 )
 
 type App struct {
@@ -280,6 +291,12 @@ func (a *App) startup() {
 		}
 	}()
 }
+
+// overlayShownScript forces the overlay's live query to refetch. A window that
+// was ordered out can have its webview timers throttled or suspended, so the
+// HUD would otherwise come back carrying whatever it last managed to poll.
+const overlayShownScript = "window.dispatchEvent(new Event('ponder:overlay-shown'))"
+
 func overlayPointerScript(x, y float64, supported bool) string {
 	detail := "null"
 	if supported && x >= 0 && x < 1 && y >= 0 && y < 1 {
@@ -315,15 +332,35 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 	}
 
 	go func() {
-		visibilityTicker := time.NewTicker(time.Second)
+		stateTicker := time.NewTicker(time.Second)
 		pointerTicker := time.NewTicker(overlayPointerPollInterval)
-		defer visibilityTicker.Stop()
+		defer stateTicker.Stop()
 		defer pointerTicker.Stop()
 
+		attached := false
 		visible := false
 		hadReadError := false
-		updateVisibility := func() {
-			_, isLive, err := store.GetLiveMatchID(ctx)
+
+		setVisible := func(next bool) {
+			if next == visible {
+				return
+			}
+			visible = next
+			if next {
+				a.overlayWindow.ExecJS(overlayShownScript)
+			}
+		}
+		detach := func() {
+			if !attached {
+				return
+			}
+			detachOverlayWindow(a.overlayWindow)
+			attached = false
+			setVisible(false)
+			log.Printf("overlay window detached")
+		}
+		updateState := func() {
+			_, isLive, err := store.GetLiveMatchIDActiveSince(ctx, time.Now().Add(-overlayLiveActivityWindow))
 			if err != nil {
 				if !hadReadError {
 					log.Printf("overlay live-state check failed: %v", err)
@@ -333,14 +370,17 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 			}
 			hadReadError = false
 			a.mu.RLock()
-			isLive = isLive && !a.overlayHidden
+			hidden := a.overlayHidden
 			a.mu.RUnlock()
-			if isLive == visible {
+
+			// Detaching whenever Arena is gone keeps the accessory activation
+			// policy (and the missing Dock icon) scoped to an actual game.
+			if !isLive || hidden || !overlayTargetRunning(mtgaBundleID) {
+				detach()
 				return
 			}
-			if !isLive {
-				hideOverlayWindow(a.overlayWindow)
-				visible = false
+			if attached {
+				setVisible(syncOverlayWindow(a.overlayWindow))
 				return
 			}
 
@@ -348,13 +388,15 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 			// can cancel the first pending navigation before any URL commits.
 			a.overlayWindow.SetIgnoreMouseEvents(true)
 			a.overlayWindow.SetURL("/overlay")
-			configured, level, behavior := showOverlayWindow(a.overlayWindow)
-			visible = configured
+			configured, level, behavior := attachOverlayWindow(a.overlayWindow, mtgaBundleID)
 			if !configured {
-				log.Printf("overlay window did not accept the required fullscreen configuration (level=%d behavior=%#x)", level, behavior)
-			} else {
-				log.Printf("overlay window configured for fullscreen (level=%d behavior=%#x)", level, behavior)
+				log.Printf("overlay window did not accept the required overlay configuration (level=%d behavior=%#x)", level, behavior)
+				setVisible(false)
+				return
 			}
+			attached = true
+			log.Printf("overlay window attached to %s (level=%d behavior=%#x)", mtgaBundleID, level, behavior)
+			setVisible(syncOverlayWindow(a.overlayWindow))
 		}
 		updatePointer := func() {
 			if !visible {
@@ -364,15 +406,15 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 			a.overlayWindow.ExecJS(overlayPointerScript(x, y, supported))
 		}
 
-		updateVisibility()
+		updateState()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-a.overlayWake:
-				updateVisibility()
-			case <-visibilityTicker.C:
-				updateVisibility()
+				updateState()
+			case <-stateTicker.C:
+				updateState()
 			case <-pointerTicker.C:
 				updatePointer()
 			}

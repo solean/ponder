@@ -29,7 +29,13 @@ This MVP includes:
 Each script forwards additional arguments to its underlying command.
 
 The desktop in-game overlay places your deck and the opponent's revealed cards
-flush with the top screen edges. It is display-only: clicks and scrolling pass
+flush with the top screen edges of Arena's window, on whichever display and
+Space Arena occupies. On macOS it is bound to the Arena client: it appears only
+while Arena is the frontmost application and disappears the moment you switch
+away, so it never floats over other apps. It also requires a live match that is
+still producing game events — a match left in progress by quitting Arena stops
+driving the overlay after ten idle minutes, and the overlay never returns while
+Arena is closed. It is display-only: clicks and scrolling pass
 through to Arena everywhere, including beneath its panels and card previews.
 On macOS, hovering anywhere on a visible card row shows its image using passive
 cursor tracking; the overlay never enables mouse capture. Other platforms remain

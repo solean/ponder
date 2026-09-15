@@ -4,12 +4,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-bool ponderShowOverlayWindowInactive(
+bool ponderOverlayTargetRunning(const char *targetBundleID);
+bool ponderOverlayAttach(
     void *window,
+    const char *targetBundleID,
     int64_t *windowLevel,
     uint64_t *collectionBehavior
 );
-void ponderHideOverlayWindow(void *window);
+bool ponderOverlaySync(void);
+void ponderOverlayDetach(void *window);
 bool ponderOverlayPointerPosition(void *window, double *x, double *y);
 
 #endif

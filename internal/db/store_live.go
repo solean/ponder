@@ -3,31 +3,69 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/solean/ponder/internal/model"
 )
+
+// liveMatchRecencyWindow bounds how long an in-progress match row keeps
+// counting as live after Ponder last touched it. Arena quit mid-match never
+// produces an end event, so without a bound that row would be "live" forever.
+const liveMatchRecencyWindow = 6 * time.Hour
 
 // GetLiveMatchID returns the id of the match currently in progress, if any. A
 // match is "live" once UpsertMatchStart has created its row but UpdateMatchEnd
 // has not yet filled in a result/ended_at. The recency bound keeps an abandoned
 // game (closed Arena mid-match) from resurfacing days later.
 func (s *Store) GetLiveMatchID(ctx context.Context) (int64, bool, error) {
-	var id int64
-	err := s.db.QueryRowContext(ctx, `
+	return scanLiveMatchID(s.db.QueryRowContext(ctx, `
 		SELECT id
 		FROM matches
 		WHERE result IS NULL
 		  AND ended_at IS NULL
 		  AND started_at IS NOT NULL
-		  AND updated_at >= datetime('now', '-6 hours')
+		  AND updated_at >= ?
 		ORDER BY started_at DESC
 		LIMIT 1
-	`).Scan(&id)
-	if err == sql.ErrNoRows {
-		return 0, false, nil
-	}
-	if err != nil {
+	`, utcTimestamp(time.Now().Add(-liveMatchRecencyWindow))))
+}
+
+// GetLiveMatchIDActiveSince returns the in-progress match whose latest observed
+// game activity is at or after notBefore. Activity is the newest retained
+// replay frame (frames are archived only when a match completes, so the live
+// rows are exactly the current match's) and falls back to the match start
+// before the first frame arrives. The overlay uses this instead of
+// GetLiveMatchID: a match abandoned by quitting Arena keeps satisfying the
+// hours-long recency window, and an overlay pinned to a dead match is worse
+// than no overlay.
+func (s *Store) GetLiveMatchIDActiveSince(ctx context.Context, notBefore time.Time) (int64, bool, error) {
+	return scanLiveMatchID(s.db.QueryRowContext(ctx, `
+		SELECT m.id
+		FROM matches m
+		WHERE m.result IS NULL
+		  AND m.ended_at IS NULL
+		  AND m.started_at IS NOT NULL
+		  AND MAX(
+		        m.started_at,
+		        COALESCE((
+		          SELECT MAX(f.recorded_at)
+		          FROM match_replay_frames f
+		          WHERE f.match_id = m.id
+		        ), '')
+		      ) >= ?
+		ORDER BY m.started_at DESC
+		LIMIT 1
+	`, utcTimestamp(notBefore)))
+}
+
+func scanLiveMatchID(row *sql.Row) (int64, bool, error) {
+	var id int64
+	if err := row.Scan(&id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, false, nil
+		}
 		return 0, false, fmt.Errorf("get live match id: %w", err)
 	}
 	return id, true, nil

@@ -47,7 +47,14 @@ func (s *Store) AcquireWriter(ctx context.Context) (func(), error) {
 }
 
 func nowUTC() string {
-	return time.Now().UTC().Format(time.RFC3339Nano)
+	return utcTimestamp(time.Now())
+}
+
+// utcTimestamp renders a timestamp in the format every stored column uses.
+// Comparisons against stored values are lexicographic, so a bound produced any
+// other way (SQLite's datetime(), for instance) compares wrong.
+func utcTimestamp(t time.Time) string {
+	return t.UTC().Format(time.RFC3339Nano)
 }
 
 func uniquePositiveInt64(values []int64) []int64 {

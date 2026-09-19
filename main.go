@@ -96,6 +96,11 @@ func main() {
 		desktop.hideOverlay()
 		event.Cancel()
 	})
+	// ExecJS only queues until the page announces the Wails runtime, so the
+	// overlay's cursor feed and refetch nudges depend on this firing.
+	overlayWindow.RegisterHook(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+		log.Printf("overlay page runtime ready")
+	})
 	wailsApp.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
 		mainWindow.Show()
 		mainWindow.Focus()
@@ -108,13 +113,15 @@ func main() {
 			if menu == nil {
 				menu = application.DefaultApplicationMenu()
 			}
-			menu.AddSubmenu("Overlay").Add("Show / Hide Game Overlay").
-				SetTooltip("⌘⇧O on macOS; Ctrl+Shift+O on Windows/Linux").
-				OnClick(func(*application.Context) { desktop.toggleOverlay() })
+			overlayItem := menu.AddSubmenu("Overlay").Add(overlayMenuLabel(false))
+			overlayItem.OnClick(func(*application.Context) { desktop.toggleOverlay() })
+			desktop.setOverlayMenuItem(overlayItem)
 			wailsApp.Menu.Set(menu)
 		})
 		if err := wailsApp.GlobalShortcut.Register("CmdOrCtrl+Shift+O", desktop.toggleOverlay); err != nil {
 			log.Printf("overlay shortcut unavailable: %v; use the Overlay menu", err)
+		} else {
+			log.Printf("overlay shortcut registered: CmdOrCtrl+Shift+O")
 		}
 	})
 

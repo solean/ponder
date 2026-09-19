@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -59,8 +60,9 @@ type App struct {
 	apiHandler http.Handler
 	startupErr string
 
-	overlayHidden bool
-	overlayWake   chan struct{}
+	overlayHidden   bool
+	overlayWake     chan struct{}
+	overlayMenuItem *application.MenuItem
 }
 
 func NewApp(staticAssets fs.FS) *App {
@@ -305,10 +307,56 @@ func overlayPointerScript(x, y float64, supported bool) string {
 	return "window.dispatchEvent(new CustomEvent('ponder:overlay-pointer',{detail:" + detail + "}))"
 }
 
+// overlayMenuLabel names the action the item performs, because the item is the
+// only place the mechanism is visible: during a match the app runs as an
+// accessory (no Dock icon, no menu bar), so the global shortcut is the only
+// in-game control. The keystroke is part of the label rather than a menu
+// accelerator: the global shortcut already claims it everywhere, and a key
+// equivalent would fire the same toggle a second time whenever Ponder is
+// focused.
+func overlayMenuLabel(hidden bool) string {
+	shortcut := "Ctrl+Shift+O"
+	if runtime.GOOS == "darwin" {
+		shortcut = "\u2318\u21e7O"
+	}
+	if hidden {
+		return fmt.Sprintf("Show Game Overlay (%s)", shortcut)
+	}
+	return fmt.Sprintf("Hide Game Overlay (%s)", shortcut)
+}
+
+func (a *App) setOverlayMenuItem(item *application.MenuItem) {
+	a.mu.Lock()
+	a.overlayMenuItem = item
+	hidden := a.overlayHidden
+	a.mu.Unlock()
+	a.syncOverlayMenuItem(hidden)
+}
+
+// syncOverlayMenuItem keeps the label pointed at the next action. InvokeSync
+// short-circuits when already on the main thread, so a menu click can call it.
+func (a *App) syncOverlayMenuItem(hidden bool) {
+	a.mu.RLock()
+	item := a.overlayMenuItem
+	a.mu.RUnlock()
+	if item == nil {
+		return
+	}
+	label := overlayMenuLabel(hidden)
+	application.InvokeSync(func() { item.SetLabel(label) })
+}
+
 func (a *App) toggleOverlay() {
 	a.mu.Lock()
 	a.overlayHidden = !a.overlayHidden
+	hidden := a.overlayHidden
 	a.mu.Unlock()
+	state := "shown"
+	if hidden {
+		state = "hidden"
+	}
+	log.Printf("overlay %s by user", state)
+	a.syncOverlayMenuItem(hidden)
 	a.wakeOverlayMonitor()
 }
 
@@ -316,6 +364,7 @@ func (a *App) hideOverlay() {
 	a.mu.Lock()
 	a.overlayHidden = true
 	a.mu.Unlock()
+	a.syncOverlayMenuItem(true)
 	a.wakeOverlayMonitor()
 }
 

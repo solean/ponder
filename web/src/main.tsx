@@ -24,6 +24,16 @@ import "./styles.css";
 // flash while the dedicated Wails window loads.
 document.documentElement.classList.toggle("overlay-document", window.location.pathname === "/overlay");
 
+// Wails' host-side ExecJS silently queues every script until the page reports
+// "wails:runtime:ready", and only the framework runtime sends that. Without it
+// the overlay's native cursor feed and its refetch nudge never arrive, so hover
+// previews never open. The desktop asset server owns this path; under
+// `bun run dev` in a plain browser it 404s, which costs the browser nothing.
+const wailsRuntime = document.createElement("script");
+wailsRuntime.type = "module";
+wailsRuntime.src = "/wails/runtime.js";
+document.head.append(wailsRuntime);
+
 const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

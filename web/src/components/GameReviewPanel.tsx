@@ -141,7 +141,12 @@ export function GameReviewPanel({
               Cancel
             </button>
           ) : (
-            <button type="button" className="tab" onClick={startGeneration} disabled={!available || !hasReplayFrames}>
+            <button
+              type="button"
+              className={review ? "tab" : "control-button control-button--primary"}
+              onClick={startGeneration}
+              disabled={!available || !hasReplayFrames}
+            >
               {review ? "Regenerate" : "Review game"}
             </button>
           )}

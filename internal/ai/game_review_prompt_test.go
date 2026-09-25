@@ -72,6 +72,42 @@ func TestBuildGameReviewPromptGroundsCoachingInObservedDecisions(t *testing.T) {
 	}
 }
 
+func TestBuildGameReviewPromptLabelsWhoseTurnItIs(t *testing.T) {
+	pilotTurn := true
+	opponentTurn := false
+	landHeld := true
+	turnOne := int64(1)
+	turnTwo := int64(2)
+	input := GameReviewInput{
+		Match: model.MatchRow{ID: 42},
+		Game: model.GameRow{
+			GameNumber: 1,
+			PlayDraw:   "draw",
+			TurnStats: []model.GameTurnStatRow{
+				{TurnNumber: 1, IsPlayerTurn: &opponentTurn, LandsPlayed: 0, LandInHand: &landHeld},
+				{TurnNumber: 2, IsPlayerTurn: &pilotTurn, LandsPlayed: 1, LandInHand: &landHeld},
+			},
+		},
+		Frames: []model.MatchReplayFrameRow{
+			{TurnNumber: &turnOne, Phase: "main1"},
+			{TurnNumber: &turnTwo, Phase: "main1"},
+		},
+	}
+
+	prompt := BuildGameReviewPrompt(input)
+	for _, expected := range []string{
+		"Arena turn 1 (opponent turn): pilot lands played 0",
+		"Arena turn 2 (pilot turn): pilot lands played 1",
+		"Step 1 — Arena turn 1 (opponent turn), main1:",
+		"Step 2 — Arena turn 2 (pilot turn), main1:",
+		"Never treat zero pilot lands or spells on an opponent turn as a missed action or pass",
+	} {
+		if !strings.Contains(prompt, expected) {
+			t.Errorf("prompt missing %q", expected)
+		}
+	}
+}
+
 func TestBuildGameReviewPromptDoesNotPresentOfferedActionsAsTaken(t *testing.T) {
 	input := GameReviewInput{
 		Match: model.MatchRow{ID: 1},

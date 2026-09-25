@@ -47,14 +47,16 @@ func BuildGameReviewPrompt(input GameReviewInput) string {
 	writeReviewDeck(&b, input.DeckCards)
 	writeOpeningHands(&b, input.Game.OpeningHands)
 	writeSideboardChanges(&b, input.Game.SideboardChanges)
-	writeDerivedReviewData(&b, input.Game)
-	writeReplayEvidence(&b, input.Frames)
+	turnOwners := reviewTurnOwners(input.Game.TurnStats)
+	writeDerivedReviewData(&b, input.Game, turnOwners)
+	writeReplayEvidence(&b, input.Frames, turnOwners)
 	b.WriteString("--- END GAME DATA ---\n\n")
 
 	b.WriteString(`Instructions:
 - Analyze the pilot's decisions, not merely the final result. Avoid hindsight bias and do not label a reasonable line a mistake only because it lost.
 - If a card is unfamiliar or from a recent set, use web search to verify its rules text before evaluating a play.
 - Treat hidden opponent cards, unrecorded priority passes, available mana colors, and legal choices as unknown unless the game data establishes them. Never invent a card, action, board state, or choice.
+- Derived turn summaries count only the pilot's plays. Never treat zero pilot lands or spells on an opponent turn as a missed action or pass.
 - Every claimed mistake must cite the Arena turn and phase (or replay step when turn/phase is absent), quote the observed evidence, explain the stronger line, and include Confidence: High, Medium, or Low.
 - Reserve "misplay" for a line supported by the evidence. Put uncertain possibilities under review questions and say what missing information prevents a verdict.
 - Prefer a few consequential decisions over exhaustive narration. Include good decisions when they teach a repeatable habit.
@@ -122,11 +124,27 @@ func writeSideboardChanges(b *strings.Builder, changes *model.GameSideboardChang
 	fmt.Fprintf(b, "\nSideboarding: in [%s]; out [%s]\n", formatCards(changes.CardsIn), formatCards(changes.CardsOut))
 }
 
-func writeDerivedReviewData(b *strings.Builder, game model.GameRow) {
+func reviewTurnOwners(stats []model.GameTurnStatRow) map[int64]string {
+	owners := make(map[int64]string, len(stats))
+	for _, turn := range stats {
+		switch {
+		case turn.IsPlayerTurn == nil:
+			owners[turn.TurnNumber] = "turn owner unknown"
+		case *turn.IsPlayerTurn:
+			owners[turn.TurnNumber] = "pilot turn"
+		default:
+			owners[turn.TurnNumber] = "opponent turn"
+		}
+	}
+	return owners
+}
+
+func writeDerivedReviewData(b *strings.Builder, game model.GameRow, turnOwners map[int64]string) {
 	if len(game.TurnStats) > 0 {
 		b.WriteString("\nDerived turn summaries (heuristic, not verdicts):\n")
 		for _, turn := range game.TurnStats {
-			fmt.Fprintf(b, "- Arena turn %d: lands played %d; spells cast %d", turn.TurnNumber, turn.LandsPlayed, turn.SpellsCast)
+			fmt.Fprintf(b, "- Arena turn %d (%s): pilot lands played %d; pilot spells cast %d",
+				turn.TurnNumber, turnOwners[turn.TurnNumber], turn.LandsPlayed, turn.SpellsCast)
 			if turn.SelfLife != nil && turn.OpponentLife != nil {
 				fmt.Fprintf(b, "; life %d-%d", *turn.SelfLife, *turn.OpponentLife)
 			}
@@ -145,13 +163,16 @@ func writeDerivedReviewData(b *strings.Builder, game model.GameRow) {
 			fmt.Fprintf(b, "- %s", flag.Flag)
 			if flag.TurnNumber != nil {
 				fmt.Fprintf(b, " at Arena turn %d", *flag.TurnNumber)
+				if owner := turnOwners[*flag.TurnNumber]; owner != "" {
+					fmt.Fprintf(b, " (%s)", owner)
+				}
 			}
 			fmt.Fprintf(b, ": %s (%s confidence)\n", flag.Detail, fallback(flag.Confidence, "unknown"))
 		}
 	}
 }
 
-func writeReplayEvidence(b *strings.Builder, frames []model.MatchReplayFrameRow) {
+func writeReplayEvidence(b *strings.Builder, frames []model.MatchReplayFrameRow, turnOwners map[int64]string) {
 	b.WriteString("\nReplay evidence (ordered observations; snapshots do not prove every available choice):\n")
 	if len(frames) == 0 {
 		b.WriteString("- No replay frames were recorded.\n")
@@ -175,6 +196,9 @@ func writeReplayEvidence(b *strings.Builder, frames []model.MatchReplayFrameRow)
 		fmt.Fprintf(b, "\nStep %d", index+1)
 		if frame.TurnNumber != nil {
 			fmt.Fprintf(b, " — Arena turn %d", *frame.TurnNumber)
+			if owner := turnOwners[*frame.TurnNumber]; owner != "" {
+				fmt.Fprintf(b, " (%s)", owner)
+			}
 		}
 		if frame.Phase != "" {
 			fmt.Fprintf(b, ", %s", frame.Phase)

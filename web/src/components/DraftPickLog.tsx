@@ -3,7 +3,11 @@ import { useQueries } from "@tanstack/react-query";
 
 import { CardPreviewName } from "./CardPreviewName";
 import { StatusMessage } from "./StatusMessage";
-import { draftPickLogPacks } from "../lib/draftReport";
+import {
+  draftAlternativeCards,
+  draftPickLogPacks,
+  type DraftPickLogPick,
+} from "../lib/draftReport";
 import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
 import type { DraftPick, DraftPickCard } from "../lib/types";
 
@@ -44,6 +48,32 @@ function DraftCardList({
     </div>
   );
 }
+function DraftPackChoices({ pick }: { pick: DraftPickLogPick }) {
+  if (pick.packCards.length === 0) {
+    return <span className="draft-card-empty">Not recorded</span>;
+  }
+
+  const alternatives = draftAlternativeCards(pick);
+  return (
+    <details className="draft-choice-disclosure">
+      <summary>
+        {alternatives.length === 0
+          ? "No other cards"
+          : `${alternatives.length} other ${alternatives.length === 1 ? "card" : "cards"}`}
+      </summary>
+      {alternatives.length > 0 ? (
+        <ul className="draft-choice-list">
+          {alternatives.map((card, index) => (
+            <li key={`${card.cardId}-${index}`}>
+              <CardPreviewName cardId={card.cardId} cardName={card.cardName} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </details>
+  );
+}
+
 
 export function DraftPickLog({ picks }: { picks: DraftPick[] }) {
   const headingID = useId();
@@ -92,7 +122,7 @@ export function DraftPickLog({ picks }: { picks: DraftPick[] }) {
       <div className="panel-head">
         <div>
           <h3 id={headingID}>Pick Log</h3>
-          <p>Every recorded selection, grouped by pack</p>
+          <p>Each recorded selection and the cards passed over</p>
         </div>
       </div>
 
@@ -108,7 +138,7 @@ export function DraftPickLog({ picks }: { picks: DraftPick[] }) {
                   <thead>
                     <tr>
                       <th>Pick</th>
-                      <th>Selected Cards</th>
+                      <th>Selection and choices</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -117,6 +147,7 @@ export function DraftPickLog({ picks }: { picks: DraftPick[] }) {
                         <td>{pick.displayPick}</td>
                         <td>
                           <DraftCardList cards={pick.pickedCards} previews={previewByCardID} />
+                          <DraftPackChoices pick={pick} />
                         </td>
                       </tr>
                     ))}

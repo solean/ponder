@@ -12,6 +12,7 @@ export type DraftPickLogPick = {
   pickNumber: number;
   displayPick: number;
   pickedCards: DraftPickCard[];
+  packCards: DraftPickCard[];
 };
 
 export type DraftPickLogPack = {
@@ -59,15 +60,15 @@ function parseDraftCardIDs(raw: string): number[] {
     .filter((cardID) => Number.isFinite(cardID) && cardID > 0);
 }
 
-function normalizedPickedCards(pick: DraftPick): DraftPickCard[] {
-  if (Array.isArray(pick.pickedCards) && pick.pickedCards.length > 0) {
-    return pick.pickedCards.map((card) => ({
+function normalizedDraftCards(cards: DraftPickCard[] | undefined, raw: string): DraftPickCard[] {
+  if (Array.isArray(cards) && cards.length > 0) {
+    return cards.map((card) => ({
       cardId: card.cardId,
       cardName: card.cardName,
     }));
   }
 
-  return parseDraftCardIDs(pick.pickedCardIds).map((cardId) => ({ cardId }));
+  return parseDraftCardIDs(raw).map((cardId) => ({ cardId }));
 }
 
 export function draftPickLogPacks(picks: DraftPick[]): DraftPickLogPack[] {
@@ -80,7 +81,8 @@ export function draftPickLogPacks(picks: DraftPick[]): DraftPickLogPack[] {
     rows.push({
       pickNumber: pick.pickNumber,
       displayPick: pick.pickNumber + pickOffset,
-      pickedCards: normalizedPickedCards(pick),
+      pickedCards: normalizedDraftCards(pick.pickedCards, pick.pickedCardIds),
+      packCards: normalizedDraftCards(pick.packCards, pick.packCardIds),
     });
     grouped.set(pick.packNumber, rows);
   }
@@ -93,6 +95,22 @@ export function draftPickLogPacks(picks: DraftPick[]): DraftPickLogPack[] {
       picks: rows.sort((a, b) => a.pickNumber - b.pickNumber),
     }));
 }
+export function draftAlternativeCards(pick: DraftPickLogPick): DraftPickCard[] {
+  const selectedCounts = new Map<number, number>();
+  for (const card of pick.pickedCards) {
+    selectedCounts.set(card.cardId, (selectedCounts.get(card.cardId) ?? 0) + 1);
+  }
+
+  return pick.packCards.filter((card) => {
+    const selected = selectedCounts.get(card.cardId) ?? 0;
+    if (selected === 0) {
+      return true;
+    }
+    selectedCounts.set(card.cardId, selected - 1);
+    return false;
+  });
+}
+
 
 export function draftSessionStatus(session: DraftSession): DraftSessionStatus {
   if (validDateValue(session.completedAt) != null) {

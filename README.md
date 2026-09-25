@@ -229,7 +229,7 @@ By default, the desktop app stores its SQLite database and runtime config under 
 ## Notes
 
 - Event aliasing is implemented for common Arena naming differences (e.g. `FIN_Quick_Draft` to `QuickDraft_FIN_...`).
-- Draft parsing supports both `BotDraftDraftPick` and `EventPlayerDraftMakePick`.
+- Draft parsing supports both `BotDraftDraftPick` and `EventPlayerDraftMakePick`. Available pack cards are captured from bot-draft responses and player-draft `Draft.Notify` lines (or older `LogBusinessEvents`), then shown per pick in the draft report. Only drafts still present in `Player.log`/`Player-prev.log` can be backfilled by re-parsing with `-resume=false`.
 - Economy parsing tracks `InventoryInfo` snapshots: gold, gems, wildcards, vault progress, wildcard-track position, boosters, custom tokens, vouchers, and change sources.
 - Deck card names are resolved on demand and cached in the local `card_catalog` table:
   - First from the local MTGA raw card DB (`Raw_CardDatabase*.mtga`) if found.

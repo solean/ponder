@@ -89,7 +89,11 @@ func (p *Parser) handleMethodResponse(ctx context.Context, tx *sql.Tx, stats *mo
 		stats.RawEventsStored++
 	}
 
-	if method != "RankGetCombinedRankInfo" {
+	switch method {
+	case "BotDraftDraftStatus", "BotDraftDraftPick":
+		return p.handleBotDraftStatusResponse(ctx, tx, line, observedAt)
+	case "RankGetCombinedRankInfo":
+	default:
 		return nil
 	}
 

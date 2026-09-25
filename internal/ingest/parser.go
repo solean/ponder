@@ -834,11 +834,12 @@ func (p *Parser) processLine(ctx context.Context, tx *sql.Tx, stats *model.Parse
 		} else if stored {
 			stats.RawEventsStored++
 		}
-		if m[1] == "RankGetCombinedRankInfo" {
+		switch m[1] {
+		case "RankGetCombinedRankInfo", "BotDraftDraftStatus", "BotDraftDraftPick":
 			state.pendingResponseMethod = m[1]
 			state.pendingResponseRequestID = m[2]
 			state.pendingResponseObservedAt = state.lastUnityLogTimestamp
-		} else {
+		default:
 			state.clearPendingResponse()
 		}
 		return nil
@@ -846,6 +847,10 @@ func (p *Parser) processLine(ctx context.Context, tx *sql.Tx, stats *model.Parse
 
 	if state.pendingResponseMethod != "" {
 		state.clearPendingResponse()
+	}
+
+	if payload, ok := strings.CutPrefix(line, draftNotifyPrefix); ok {
+		return p.handleDraftNotify(ctx, tx, payload, state.lastUnityLogTimestamp)
 	}
 
 	if strings.HasPrefix(line, "{") {

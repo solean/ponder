@@ -7631,6 +7631,43 @@ button.match-replay-zonechip.is-button {
   color: var(--muted);
 }
 
+.draft-choice-disclosure {
+  margin-top: 0.4rem;
+}
+.draft-choice-disclosure > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0.18rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text-soft);
+  background: var(--surface-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.draft-choice-disclosure[open] > summary {
+  border-color: var(--line-strong);
+  background: var(--surface-strong);
+}
+
+.draft-choice-list {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 14rem;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.draft-choice-list .card-preview-trigger {
+  white-space: normal;
+}
+
+
 .deck-card-mana {
   justify-self: end;
   display: inline-flex;

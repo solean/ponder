@@ -112,7 +112,10 @@ func nullDraftID(v *string) any {
 }
 
 func (s *Store) InsertDraftPick(ctx context.Context, tx *sql.Tx, sessionID int64, packNo, pickNo int64, pickedIDs []int64, packIDs []int64, ts string) error {
-	pickedJSON, _ := json.Marshal(pickedIDs)
+	pickedJSON := []byte("[]")
+	if len(pickedIDs) > 0 {
+		pickedJSON, _ = json.Marshal(pickedIDs)
+	}
 	packJSON := []byte("[]")
 	if len(packIDs) > 0 {
 		packJSON, _ = json.Marshal(packIDs)
@@ -123,8 +126,14 @@ func (s *Store) InsertDraftPick(ctx context.Context, tx *sql.Tx, sessionID int64
 			draft_session_id, pack_number, pick_number, picked_card_ids, pack_card_ids, pick_ts, created_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(draft_session_id, pack_number, pick_number) DO UPDATE SET
-			picked_card_ids = excluded.picked_card_ids,
-			pack_card_ids = excluded.pack_card_ids,
+			picked_card_ids = CASE
+				WHEN COALESCE(excluded.picked_card_ids, '') NOT IN ('', '[]', 'null') THEN excluded.picked_card_ids
+				ELSE draft_picks.picked_card_ids
+			END,
+			pack_card_ids = CASE
+				WHEN COALESCE(excluded.pack_card_ids, '') NOT IN ('', '[]') THEN excluded.pack_card_ids
+				ELSE draft_picks.pack_card_ids
+			END,
 			pick_ts = COALESCE(excluded.pick_ts, draft_picks.pick_ts)
 	`, sessionID, packNo, pickNo, string(pickedJSON), string(packJSON), nullIfEmpty(normalizeTS(ts)), nowUTC())
 	if err != nil {
@@ -411,7 +420,10 @@ func (s *Store) ListDraftSessions(ctx context.Context) ([]model.DraftSessionRow,
 			er.id,
 			ec.wins,
 			ec.losses,
-			COUNT(dp.id) AS picks
+			SUM(CASE
+				WHEN dp.id IS NOT NULL AND COALESCE(dp.picked_card_ids, '') NOT IN ('', '[]', 'null') THEN 1
+				ELSE 0
+			END) AS picks
 		FROM draft_sessions ds
 		LEFT JOIN draft_picks dp ON dp.draft_session_id = ds.id
 		LEFT JOIN event_runs er ON er.draft_session_id = ds.id
@@ -628,6 +640,7 @@ func (s *Store) ListDraftPicks(ctx context.Context, draftSessionID int64) ([]mod
 		SELECT id, pack_number, pick_number, picked_card_ids, COALESCE(pack_card_ids, '[]'), COALESCE(pick_ts, '')
 		FROM draft_picks
 		WHERE draft_session_id = ?
+		  AND COALESCE(picked_card_ids, '') NOT IN ('', '[]', 'null')
 		ORDER BY pack_number, pick_number
 	`, draftSessionID)
 	if err != nil {

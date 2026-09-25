@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   countRareAndMythicPicks,
+  draftAlternativeCards,
   draftPickLogPacks,
   draftReplayCoverage,
   draftSessionDurationSeconds,
@@ -118,6 +119,22 @@ describe("draft pick log", () => {
     expect(pack.displayPack).toBe(1);
     expect(pack.picks[0].displayPick).toBe(1);
     expect(pack.picks[0].pickedCards).toEqual([{ cardId: 901 }, { cardId: 902 }]);
+  });
+
+  test("keeps pack choices and removes only the selected copies", () => {
+    const [pack] = draftPickLogPacks([
+      makePick({
+        pickedCards: [{ cardId: 101 }],
+        packCards: [
+          { cardId: 101 },
+          { cardId: 101 },
+          { cardId: 202 },
+        ],
+      }),
+    ]);
+
+    expect(pack.picks[0].packCards).toHaveLength(3);
+    expect(draftAlternativeCards(pack.picks[0]).map((card) => card.cardId)).toEqual([101, 202]);
   });
 
   test("counts only picks with recorded pack contents as replayable", () => {

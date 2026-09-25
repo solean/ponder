@@ -73,6 +73,122 @@ func TestParserPersistsLatestPlayerName(t *testing.T) {
 	}
 }
 
+func TestParserCapturesBotDraftPackChoicesFromMethodResponses(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	database, err := db.Open(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	logPath := filepath.Join(tmpDir, "Player.log")
+	lines := []string{
+		`[UnityCrossThreadLogger]9/19/2026 10:00:00 AM`,
+		`<== BotDraftDraftStatus(status-1)`,
+		`{"CurrentModule":"BotDraft","Payload":"{\"Result\":\"Success\",\"EventName\":\"QuickDraft_TST_20260901\",\"DraftStatus\":\"PickNext\",\"PackNumber\":0,\"PickNumber\":0,\"DraftPack\":[\"1001\",\"1002\"],\"PickedCards\":[]}"}`,
+		`[UnityCrossThreadLogger]9/19/2026 10:00:05 AM`,
+		`[UnityCrossThreadLogger]==> BotDraftDraftPick {"id":"pick-1","request":{"EventName":"QuickDraft_TST_20260901","PickInfo":{"CardIds":["1002"],"PackNumber":0,"PickNumber":0}}}`,
+		`<== BotDraftDraftPick(pick-1)`,
+		`{"CurrentModule":"BotDraft","Payload":"{\"Result\":\"Success\",\"EventName\":\"QuickDraft_TST_20260901\",\"DraftStatus\":\"PickNext\",\"PackNumber\":0,\"PickNumber\":1,\"DraftPack\":[\"2001\",\"2002\"],\"PickedCards\":[\"1002\"]}"}`,
+		`[UnityCrossThreadLogger]9/19/2026 10:00:10 AM`,
+		`[UnityCrossThreadLogger]==> BotDraftDraftPick {"id":"pick-2","request":{"EventName":"QuickDraft_TST_20260901","PickInfo":{"CardIds":["2001"],"PackNumber":0,"PickNumber":1}}}`,
+		`<== BotDraftDraftPick(pick-2)`,
+		`{"CurrentModule":"BotDraft","Payload":"{\"Result\":\"Success\",\"EventName\":\"QuickDraft_TST_20260901\",\"DraftStatus\":\"PickNext\",\"PackNumber\":0,\"PickNumber\":2,\"DraftPack\":[\"3001\"],\"PickedCards\":[\"1002\",\"2001\"]}"}`,
+	}
+	if err := writeLogLines(logPath, lines, false); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+
+	store := db.NewStore(database)
+	if _, err := NewParser(store).ParseFile(ctx, logPath, false); err != nil {
+		t.Fatalf("parse file: %v", err)
+	}
+
+	sessions, err := store.ListDraftSessions(ctx)
+	if err != nil {
+		t.Fatalf("ListDraftSessions: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].Picks != 2 {
+		t.Fatalf("sessions = %#v, want one session with two completed picks", sessions)
+	}
+
+	picks, err := store.ListDraftPicks(ctx, sessions[0].ID)
+	if err != nil {
+		t.Fatalf("ListDraftPicks: %v", err)
+	}
+	if len(picks) != 2 {
+		t.Fatalf("len(ListDraftPicks) = %d, want 2", len(picks))
+	}
+	if picks[0].PickedCardIDs != "[1002]" || picks[0].PackCardIDs != "[1001,1002]" {
+		t.Fatalf("first pick = %#v, want selected card and original pack", picks[0])
+	}
+	if picks[1].PickedCardIDs != "[2001]" || picks[1].PackCardIDs != "[2001,2002]" {
+		t.Fatalf("second pick = %#v, want selected card and original pack", picks[1])
+	}
+}
+
+func TestParserCapturesPlayerDraftPackChoicesFromDraftNotify(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	database, err := db.Open(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+
+	logPath := filepath.Join(tmpDir, "Player.log")
+	lines := []string{
+		`[UnityCrossThreadLogger]9/24/2026 7:40:40 PM`,
+		`[UnityCrossThreadLogger]Draft.Notify {"draftId":"draft-1","SelfPick":1,"SelfPack":1,"PackCards":"1001,1002,1002"}`,
+		`[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"pick-1","request":"{\"DraftId\":\"draft-1\",\"GrpIds\":[1002],\"Pack\":1,\"Pick\":1}"}`,
+		`[UnityCrossThreadLogger]9/24/2026 7:40:55 PM`,
+		`[UnityCrossThreadLogger]Draft.Notify {"draftId":"draft-1","SelfPick":2,"SelfPack":1,"PackCards":"2001"}`,
+		`[UnityCrossThreadLogger]Draft.Notify {"draftId":"draft-1","SelfPick":3,"SelfPack":1,"PackCards":"3001"}`,
+		`[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"pick-2","request":"{\"DraftId\":\"draft-1\",\"GrpIds\":[2001],\"Pack\":1,\"Pick\":2}"}`,
+	}
+	if err := writeLogLines(logPath, lines, false); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+
+	store := db.NewStore(database)
+	if _, err := NewParser(store).ParseFile(ctx, logPath, false); err != nil {
+		t.Fatalf("parse file: %v", err)
+	}
+
+	sessions, err := store.ListDraftSessions(ctx)
+	if err != nil {
+		t.Fatalf("ListDraftSessions: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].Picks != 2 {
+		t.Fatalf("sessions = %#v, want one session with two completed picks", sessions)
+	}
+
+	picks, err := store.ListDraftPicks(ctx, sessions[0].ID)
+	if err != nil {
+		t.Fatalf("ListDraftPicks: %v", err)
+	}
+	if len(picks) != 2 {
+		t.Fatalf("len(ListDraftPicks) = %d, want 2", len(picks))
+	}
+	if picks[0].PickedCardIDs != "[1002]" || picks[0].PackCardIDs != "[1001,1002,1002]" {
+		t.Fatalf("first pick = %#v, want selected card and notified pack", picks[0])
+	}
+	if picks[1].PickedCardIDs != "[2001]" || picks[1].PackCardIDs != "[2001]" {
+		t.Fatalf("second pick = %#v, want selected card and notified pack", picks[1])
+	}
+}
+
 func TestTailParseUnchangedLogDoesNotWaitForWriter(t *testing.T) {
 	t.Parallel()
 

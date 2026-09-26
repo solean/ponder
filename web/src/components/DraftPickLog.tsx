@@ -1,10 +1,10 @@
-import { useId, useMemo } from "react";
+import { useId, useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 
 import { CardPreviewName } from "./CardPreviewName";
+import { DraftPackDialog } from "./DraftPackDialog";
 import { StatusMessage } from "./StatusMessage";
 import {
-  draftAlternativeCards,
   draftPickLogPacks,
   type DraftPickLogPick,
 } from "../lib/draftReport";
@@ -48,29 +48,28 @@ function DraftCardList({
     </div>
   );
 }
-function DraftPackChoices({ pick }: { pick: DraftPickLogPick }) {
+function DraftPackChoices({ pick, displayPack }: { pick: DraftPickLogPick; displayPack: number }) {
+  const [isOpen, setIsOpen] = useState(false);
+
   if (pick.packCards.length === 0) {
     return <span className="draft-card-empty">Not recorded</span>;
   }
 
-  const alternatives = draftAlternativeCards(pick);
   return (
-    <details className="draft-choice-disclosure">
-      <summary>
-        {alternatives.length === 0
-          ? "No other cards"
-          : `${alternatives.length} other ${alternatives.length === 1 ? "card" : "cards"}`}
-      </summary>
-      {alternatives.length > 0 ? (
-        <ul className="draft-choice-list">
-          {alternatives.map((card, index) => (
-            <li key={`${card.cardId}-${index}`}>
-              <CardPreviewName cardId={card.cardId} cardName={card.cardName} />
-            </li>
-          ))}
-        </ul>
+    <>
+      <button
+        type="button"
+        className="draft-pack-trigger"
+        aria-haspopup="dialog"
+        aria-label={`View pack ${displayPack}, pick ${pick.displayPick}: ${pick.packCards.length} ${pick.packCards.length === 1 ? "card" : "cards"}`}
+        onClick={() => setIsOpen(true)}
+      >
+        View pack <span aria-hidden="true">·</span> {pick.packCards.length} {pick.packCards.length === 1 ? "card" : "cards"}
+      </button>
+      {isOpen ? (
+        <DraftPackDialog pick={pick} displayPack={displayPack} onClose={() => setIsOpen(false)} />
       ) : null}
-    </details>
+    </>
   );
 }
 
@@ -147,7 +146,7 @@ export function DraftPickLog({ picks }: { picks: DraftPick[] }) {
                         <td>{pick.displayPick}</td>
                         <td>
                           <DraftCardList cards={pick.pickedCards} previews={previewByCardID} />
-                          <DraftPackChoices pick={pick} />
+                          <DraftPackChoices pick={pick} displayPack={pack.displayPack} />
                         </td>
                       </tr>
                     ))}

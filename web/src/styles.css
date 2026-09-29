@@ -3149,6 +3149,21 @@ small.settings-meta,
   white-space: nowrap;
 }
 
+/* About a dozen rows; the rest scroll under a sticky header. */
+.draft-sessions-scroll {
+  max-height: 30rem;
+}
+
+.draft-sessions-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  /* Opaque backing so scrolled rows never bleed through the header. */
+  background:
+    linear-gradient(180deg, var(--table-head-bg-a) 0%, var(--table-head-bg-b) 100%),
+    var(--table-head-solid);
+}
+
 .data-table th,
 .data-table td {
   text-align: left;

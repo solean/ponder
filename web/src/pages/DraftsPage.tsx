@@ -137,7 +137,7 @@ export function DraftsPage() {
           <h3>Draft Sessions</h3>
           <p>{drafts.length} sessions</p>
         </div>
-        <div className="table-wrap">
+        <div className="table-wrap draft-sessions-scroll">
           <table className="data-table draft-sessions-table">
             <thead>
               <tr>

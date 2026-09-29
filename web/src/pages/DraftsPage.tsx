@@ -2,12 +2,14 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { ContextualLink, useBreadcrumbNavigationState } from "../components/Breadcrumbs";
+import { DraftPerformancePanel } from "../components/DraftPerformancePanel";
 import { DraftWins } from "../components/DraftWins";
 import { EventLabel } from "../components/EventLabel";
 import { LimitedMatchupsPanel } from "../components/MatchupPanels";
 import { SetSymbol } from "../components/SetSymbol";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { draftSessionDateValue } from "../lib/draftPerformance";
 import { draftSessionType } from "../lib/draftReport";
 import { parseEventName } from "../lib/events";
 import { formatGameFormat, pct, winRateTone } from "../lib/format";
@@ -26,14 +28,6 @@ function parseDateValue(timestamp?: string | null): number | null {
   }
 
   return date.getTime();
-}
-
-function getDraftSessionDateValue(draft: DraftSession): number | null {
-  return (
-    parseDateValue(draft.startedAt) ??
-    parseDateValue(draft.completedAt) ??
-    parseEventName(draft.eventName).dateValue
-  );
 }
 
 function formatDraftSessionDate(draft: DraftSession): string {
@@ -177,8 +171,8 @@ export function DraftsPage() {
   if (draftDecksQuery.error) return <StatusMessage tone="error">{(draftDecksQuery.error as Error).message}</StatusMessage>;
 
   const drafts = [...(draftsQuery.data ?? [])].sort((a, b) => {
-    const aDate = getDraftSessionDateValue(a);
-    const bDate = getDraftSessionDateValue(b);
+    const aDate = draftSessionDateValue(a);
+    const bDate = draftSessionDateValue(b);
 
     if (aDate != null && bDate != null && aDate !== bDate) {
       return bDate - aDate;
@@ -195,6 +189,8 @@ export function DraftsPage() {
 
   return (
     <div className="stack-lg">
+      <DraftPerformancePanel drafts={drafts} setLookup={setLookup} />
+
       <section className="panel">
         <div className="panel-head">
           <h3>Draft Sessions</h3>

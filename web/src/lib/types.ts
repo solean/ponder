@@ -694,6 +694,8 @@ export type DraftSession = {
   picks: number;
   wins?: number | null;
   losses?: number | null;
+  /** The draft deck built from this session, when it could be matched. */
+  deckId?: number | null;
   economy: EventRunEconomy | null;
 };
 

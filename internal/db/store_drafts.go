@@ -420,6 +420,7 @@ func (s *Store) ListDraftSessions(ctx context.Context) ([]model.DraftSessionRow,
 			er.id,
 			ec.wins,
 			ec.losses,
+			d.id,
 			SUM(CASE
 				WHEN dp.id IS NOT NULL AND COALESCE(dp.picked_card_ids, '') NOT IN ('', '[]', 'null') THEN 1
 				ELSE 0
@@ -428,6 +429,7 @@ func (s *Store) ListDraftSessions(ctx context.Context) ([]model.DraftSessionRow,
 		LEFT JOIN draft_picks dp ON dp.draft_session_id = ds.id
 		LEFT JOIN event_runs er ON er.draft_session_id = ds.id
 		LEFT JOIN event_courses ec ON ec.course_id = er.pay_source_id
+		LEFT JOIN decks d ON d.arena_deck_id = ec.deck_id AND COALESCE(ec.deck_id, '') <> ''
 		GROUP BY ds.id, ds.event_name, ds.draft_id, ds.is_bot_draft, ds.started_at, ds.completed_at, er.id
 		ORDER BY CASE WHEN COALESCE(ds.started_at, '') = '' THEN 1 ELSE 0 END, ds.started_at DESC, ds.id DESC
 	`)
@@ -441,10 +443,10 @@ func (s *Store) ListDraftSessions(ctx context.Context) ([]model.DraftSessionRow,
 		var row model.DraftSessionRow
 		var isBotInt int64
 		var eventRunID sql.NullInt64
-		var courseWins, courseLosses sql.NullInt64
+		var courseWins, courseLosses, courseDeckID sql.NullInt64
 		if err := rows.Scan(
 			&row.ID, &row.EventName, &row.DraftID, &isBotInt, &row.StartedAt, &row.CompletedAt,
-			&eventRunID, &courseWins, &courseLosses, &row.Picks,
+			&eventRunID, &courseWins, &courseLosses, &courseDeckID, &row.Picks,
 		); err != nil {
 			return nil, fmt.Errorf("scan draft session row: %w", err)
 		}
@@ -452,6 +454,7 @@ func (s *Store) ListDraftSessions(ctx context.Context) ([]model.DraftSessionRow,
 		row.EventRunID = nullInt64Ptr(eventRunID)
 		row.Wins = nullInt64Ptr(courseWins)
 		row.Losses = nullInt64Ptr(courseLosses)
+		row.DeckID = nullInt64Ptr(courseDeckID)
 		out = append(out, row)
 	}
 	if err := rows.Err(); err != nil {
@@ -469,6 +472,7 @@ func (s *Store) ListDraftSessions(ctx context.Context) ([]model.DraftSessionRow,
 }
 
 type draftDeckCandidate struct {
+	DeckID        int64
 	DeckTS        time.Time
 	FirstPlayedAt time.Time
 	LastPlayedAt  time.Time
@@ -476,22 +480,116 @@ type draftDeckCandidate struct {
 	Losses        int64
 }
 
+// enrichDraftSessionsWithDeckResults links sessions the Arena course record
+// didn't cover to their deck, and backfills results for sessions that have no
+// course record at all.
 func (s *Store) enrichDraftSessionsWithDeckResults(ctx context.Context, sessions []model.DraftSessionRow) error {
+	claimed := make(map[int64]bool)
+	for _, session := range sessions {
+		if session.DeckID != nil {
+			claimed[*session.DeckID] = true
+		}
+	}
+	candidatesByEvent := make(map[string][]draftDeckCandidate)
 	for idx := range sessions {
-		if sessions[idx].Wins != nil && sessions[idx].Losses != nil {
+		session := &sessions[idx]
+		if session.DeckID != nil && session.Wins != nil && session.Losses != nil {
 			continue
 		}
-		wins, losses, ok, err := s.resolveDraftSessionDeckResults(ctx, sessions[idx].EventName, sessions[idx].StartedAt, sessions[idx].CompletedAt)
-		if err != nil {
-			return err
+		candidates, cached := candidatesByEvent[session.EventName]
+		if !cached {
+			var err error
+			candidates, err = s.listDraftDeckCandidates(ctx, session.EventName)
+			if err != nil {
+				return err
+			}
+			candidatesByEvent[session.EventName] = candidates
 		}
-		if !ok {
-			continue
+		if session.Wins == nil || session.Losses == nil {
+			if candidate, ok := chooseDraftDeckCandidate(candidates, session.StartedAt, session.CompletedAt); ok {
+				session.Wins = nullableInt64Ptr(candidate.Wins)
+				session.Losses = nullableInt64Ptr(candidate.Losses)
+			}
 		}
-		sessions[idx].Wins = nullableInt64Ptr(wins)
-		sessions[idx].Losses = nullableInt64Ptr(losses)
+		if session.DeckID == nil {
+			if candidate, ok := draftSessionDeckInWindow(sessions, idx, candidates, claimed); ok {
+				claimed[candidate.DeckID] = true
+				session.DeckID = nullableInt64Ptr(candidate.DeckID)
+			}
+		}
 	}
 	return nil
+}
+
+// draftSessionDeckInWindow finds the deck built for sessions[idx]: the first
+// unclaimed deck of the event built after the draft finished and before the
+// next draft of the same event began. A re-entry whose deck was never built
+// gets nothing rather than borrowing a neighbor's.
+func draftSessionDeckInWindow(
+	sessions []model.DraftSessionRow,
+	idx int,
+	candidates []draftDeckCandidate,
+	claimed map[int64]bool,
+) (draftDeckCandidate, bool) {
+	session := sessions[idx]
+	var open []draftDeckCandidate
+	for _, candidate := range candidates {
+		if !claimed[candidate.DeckID] {
+			open = append(open, candidate)
+		}
+	}
+
+	var siblings int
+	for _, other := range sessions {
+		if other.EventName == session.EventName {
+			siblings++
+		}
+	}
+
+	anchor, ok := parseStoredTime(session.CompletedAt)
+	if !ok {
+		anchor, ok = parseStoredTime(session.StartedAt)
+	}
+	if !ok {
+		// Undated sessions only link when nothing else could claim the deck.
+		if siblings == 1 && len(open) == 1 {
+			return open[0], true
+		}
+		return draftDeckCandidate{}, false
+	}
+
+	var windowEnd time.Time
+	for otherIdx, other := range sessions {
+		if otherIdx == idx || other.EventName != session.EventName {
+			continue
+		}
+		started, ok := parseStoredTime(other.StartedAt)
+		if !ok || !started.After(anchor) {
+			continue
+		}
+		if windowEnd.IsZero() || started.Before(windowEnd) {
+			windowEnd = started
+		}
+	}
+	inWindow := func(ts time.Time) bool {
+		return !ts.IsZero() && !ts.Before(anchor) && (windowEnd.IsZero() || ts.Before(windowEnd))
+	}
+
+	best := -1
+	var bestTS time.Time
+	for candidateIdx, candidate := range open {
+		// Deck saves can land after the first match, so either timestamp counts.
+		for _, ts := range []time.Time{candidate.DeckTS, candidate.FirstPlayedAt} {
+			if inWindow(ts) && (best == -1 || ts.Before(bestTS)) {
+				best = candidateIdx
+				bestTS = ts
+			}
+		}
+	}
+	if best == -1 {
+		return draftDeckCandidate{}, false
+	}
+	return open[best], true
 }
 
 func (s *Store) enrichDraftSessionsWithEconomy(ctx context.Context, sessions []model.DraftSessionRow) error {
@@ -570,25 +668,29 @@ func chooseDraftDeckCandidate(candidates []draftDeckCandidate, startedAt, comple
 	return candidates[bestIdx], true
 }
 
-func (s *Store) resolveDraftSessionDeckResults(ctx context.Context, eventName, startedAt, completedAt string) (int64, int64, bool, error) {
-	candidate, ok, err := s.resolveDraftSessionDeckCandidate(ctx, eventName, startedAt, completedAt)
-	if err != nil || !ok {
-		return 0, 0, ok, err
-	}
-	return candidate.Wins, candidate.Losses, true, nil
-}
-
 func (s *Store) resolveDraftSessionDeckCandidate(
 	ctx context.Context,
 	eventName, startedAt, completedAt string,
 ) (draftDeckCandidate, bool, error) {
+	candidates, err := s.listDraftDeckCandidates(ctx, eventName)
+	if err != nil {
+		return draftDeckCandidate{}, false, err
+	}
+	candidate, ok := chooseDraftDeckCandidate(candidates, startedAt, completedAt)
+	return candidate, ok, nil
+}
+
+// listDraftDeckCandidates reads every draft deck submitted for an event with
+// its match span and record.
+func (s *Store) listDraftDeckCandidates(ctx context.Context, eventName string) ([]draftDeckCandidate, error) {
 	eventName = strings.TrimSpace(eventName)
 	if eventName == "" {
-		return draftDeckCandidate{}, false, nil
+		return nil, nil
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT
+			d.id,
 			COALESCE(d.last_updated, d.created_at, ''),
 			COALESCE(MIN(COALESCE(m.started_at, m.ended_at)), ''),
 			COALESCE(MAX(COALESCE(m.ended_at, m.started_at)), ''),
@@ -605,7 +707,7 @@ func (s *Store) resolveDraftSessionDeckCandidate(
 		GROUP BY d.id, d.last_updated, d.created_at
 	`, eventName)
 	if err != nil {
-		return draftDeckCandidate{}, false, fmt.Errorf("resolve draft session deck results: %w", err)
+		return nil, fmt.Errorf("resolve draft session deck results: %w", err)
 	}
 	defer rows.Close()
 
@@ -613,8 +715,8 @@ func (s *Store) resolveDraftSessionDeckCandidate(
 	for rows.Next() {
 		var deckTSRaw, firstPlayedRaw, lastPlayedRaw string
 		var candidate draftDeckCandidate
-		if err := rows.Scan(&deckTSRaw, &firstPlayedRaw, &lastPlayedRaw, &candidate.Wins, &candidate.Losses); err != nil {
-			return draftDeckCandidate{}, false, fmt.Errorf("scan draft deck candidate: %w", err)
+		if err := rows.Scan(&candidate.DeckID, &deckTSRaw, &firstPlayedRaw, &lastPlayedRaw, &candidate.Wins, &candidate.Losses); err != nil {
+			return nil, fmt.Errorf("scan draft deck candidate: %w", err)
 		}
 		if parsed, ok := parseStoredTime(deckTSRaw); ok {
 			candidate.DeckTS = parsed
@@ -628,11 +730,10 @@ func (s *Store) resolveDraftSessionDeckCandidate(
 		candidates = append(candidates, candidate)
 	}
 	if err := rows.Err(); err != nil {
-		return draftDeckCandidate{}, false, fmt.Errorf("iterate draft deck candidates: %w", err)
+		return nil, fmt.Errorf("iterate draft deck candidates: %w", err)
 	}
 
-	candidate, ok := chooseDraftDeckCandidate(candidates, startedAt, completedAt)
-	return candidate, ok, nil
+	return candidates, nil
 }
 
 func (s *Store) ListDraftPicks(ctx context.Context, draftSessionID int64) ([]model.DraftPickRow, error) {

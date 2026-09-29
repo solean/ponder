@@ -3142,6 +3142,13 @@ small.settings-meta,
   min-width: 700px;
 }
 
+/* Short cells (dates, formats, rates, deck link) read badly broken onto two
+   lines; the wrapper scrolls horizontally if the set names run long. */
+.draft-sessions-table th,
+.draft-sessions-table td {
+  white-space: nowrap;
+}
+
 .data-table th,
 .data-table td {
   text-align: left;

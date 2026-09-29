@@ -549,6 +549,7 @@ type DraftSessionRow struct {
 	Economy     *EventRunEconomy `json:"economy"`
 	Wins        *int64           `json:"wins,omitempty"`
 	Losses      *int64           `json:"losses,omitempty"`
+	DeckID      *int64           `json:"deckId,omitempty"`
 }
 
 type DraftPickRow struct {

@@ -1,10 +1,9 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
-import { ContextualLink, useBreadcrumbNavigationState } from "../components/Breadcrumbs";
+import { ContextualLink } from "../components/Breadcrumbs";
 import { DraftPerformancePanel } from "../components/DraftPerformancePanel";
 import { DraftWins } from "../components/DraftWins";
-import { EventLabel } from "../components/EventLabel";
 import { LimitedMatchupsPanel } from "../components/MatchupPanels";
 import { SetSymbol } from "../components/SetSymbol";
 import { StatusMessage } from "../components/StatusMessage";
@@ -12,8 +11,8 @@ import { api } from "../lib/api";
 import { draftSessionDateValue } from "../lib/draftPerformance";
 import { draftSessionType } from "../lib/draftReport";
 import { parseEventName } from "../lib/events";
-import { formatGameFormat, pct, winRateTone } from "../lib/format";
-import type { DeckSummary, DraftSession } from "../lib/types";
+import { pct, winRateTone } from "../lib/format";
+import type { DraftSession } from "../lib/types";
 import { useEventSets, type SetLookup } from "../lib/useEventSets";
 import { useRowLink } from "../lib/useRowLink";
 
@@ -62,28 +61,10 @@ function DraftSessionSet({ draft, lookup }: { draft: DraftSession; lookup: SetLo
   );
 }
 
-function getDraftDeckTimestamp(deck: DeckSummary): number | null {
-  return parseDateValue(deck.firstPlayedAt) ?? parseDateValue(deck.lastUpdatedAt);
-}
-
-function formatDraftDeckDate(deck: DeckSummary): string {
-  const timestamp = deck.firstPlayedAt || deck.lastUpdatedAt;
-  if (!timestamp) {
-    return "-";
-  }
-
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-  }).format(date);
-}
-
 function DraftSessionRow({ draft, setLookup }: { draft: DraftSession; setLookup: SetLookup }) {
   const rowLink = useRowLink(`/drafts/${draft.id}`);
+  const games = (draft.wins ?? 0) + (draft.losses ?? 0);
+  const winRate = games > 0 ? (draft.wins ?? 0) / games : null;
   return (
     <tr {...rowLink}>
       <td>
@@ -100,35 +81,21 @@ function DraftSessionRow({ draft, setLookup }: { draft: DraftSession; setLookup:
         <DraftWins wins={draft.wins} />
       </td>
       <td>{draft.losses ?? "-"}</td>
-    </tr>
-  );
-}
-
-function DraftDeckRow({ deck, setLookup }: { deck: DeckSummary; setLookup: SetLookup }) {
-  const to = `/decks/${deck.deckId}`;
-  const breadcrumbState = useBreadcrumbNavigationState(to);
-  const rowLink = useRowLink(to, breadcrumbState);
-  return (
-    <tr {...rowLink}>
-      <td>{formatDraftDeckDate(deck)}</td>
       <td>
-        <ContextualLink to={to} className="text-link">
-          {deck.deckName || `Deck ${deck.deckId}`}
-        </ContextualLink>
+        {winRate == null ? (
+          "-"
+        ) : (
+          <strong className={`win-rate win-rate--${winRateTone(winRate)}`}>{pct(winRate)}</strong>
+        )}
       </td>
-      <td>{formatGameFormat(deck.format)}</td>
       <td>
-        <EventLabel eventName={deck.eventName} lookup={setLookup} />
-      </td>
-      <td>{deck.matches}</td>
-      <td>
-        <DraftWins wins={deck.wins} />
-      </td>
-      <td>{deck.losses}</td>
-      <td>
-        <strong className={`win-rate win-rate--${winRateTone(deck.matches > 0 ? deck.winRate : null)}`}>
-          {pct(deck.winRate)}
-        </strong>
+        {draft.deckId != null ? (
+          <ContextualLink to={`/decks/${draft.deckId}`} className="text-link">
+            View deck
+          </ContextualLink>
+        ) : (
+          "-"
+        )}
       </td>
     </tr>
   );
@@ -139,36 +106,10 @@ export function DraftsPage() {
     queryKey: ["drafts"],
     queryFn: api.drafts,
   });
-  const draftDecksQuery = useQuery({
-    queryKey: ["decks", "draft"],
-    queryFn: () => api.decks("draft"),
-  });
+  const { lookup: setLookup } = useEventSets((draftsQuery.data ?? []).map((draft) => draft.eventName));
 
-  const { lookup: setLookup } = useEventSets([
-    ...(draftsQuery.data ?? []).map((draft) => draft.eventName),
-    ...(draftDecksQuery.data ?? []).map((deck) => deck.eventName),
-  ]);
-
-  const draftDecks = [...(draftDecksQuery.data ?? [])].sort((a, b) => {
-    const aDate = getDraftDeckTimestamp(a);
-    const bDate = getDraftDeckTimestamp(b);
-
-    if (aDate != null && bDate != null && aDate !== bDate) {
-      return bDate - aDate;
-    }
-    if (aDate != null) {
-      return -1;
-    }
-    if (bDate != null) {
-      return 1;
-    }
-
-    return b.deckId - a.deckId;
-  });
-
-  if (draftsQuery.isLoading || draftDecksQuery.isLoading) return <StatusMessage>Loading drafts…</StatusMessage>;
+  if (draftsQuery.isLoading) return <StatusMessage>Loading drafts…</StatusMessage>;
   if (draftsQuery.error) return <StatusMessage tone="error">{(draftsQuery.error as Error).message}</StatusMessage>;
-  if (draftDecksQuery.error) return <StatusMessage tone="error">{(draftDecksQuery.error as Error).message}</StatusMessage>;
 
   const drafts = [...(draftsQuery.data ?? [])].sort((a, b) => {
     const aDate = draftSessionDateValue(a);
@@ -197,7 +138,7 @@ export function DraftsPage() {
           <p>{drafts.length} sessions</p>
         </div>
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table draft-sessions-table">
             <thead>
               <tr>
                 <th>ID</th>
@@ -206,6 +147,8 @@ export function DraftsPage() {
                 <th>Set</th>
                 <th>Wins</th>
                 <th>Losses</th>
+                <th>Win Rate</th>
+                <th>Deck</th>
               </tr>
             </thead>
             <tbody>
@@ -218,34 +161,6 @@ export function DraftsPage() {
       </section>
 
       <LimitedMatchupsPanel />
-
-      <section className="panel">
-        <div className="panel-head">
-          <h3>Draft Decks</h3>
-          <p>{draftDecks.length} decks</p>
-        </div>
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Deck</th>
-                <th>Format</th>
-                <th>Event</th>
-                <th>Matches</th>
-                <th>Wins</th>
-                <th>Losses</th>
-                <th>Win Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {draftDecks.map((deck) => (
-                <DraftDeckRow key={deck.deckId} deck={deck} setLookup={setLookup} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
     </div>
   );
 }

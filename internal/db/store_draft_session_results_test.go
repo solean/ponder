@@ -31,7 +31,8 @@ func TestListDraftSessionsIncludesMatchedDeckResults(t *testing.T) {
 		t.Fatalf("InsertDraftPick: %v", err)
 	}
 
-	if _, err := store.UpsertDeck(ctx, tx, "draft-deck-results", "PremierDraft_TMT_20260303", "Draft Deck", "Draft", "test", "2026-04-04T00:49:51.310561Z", nil); err != nil {
+	deckID, err := store.UpsertDeck(ctx, tx, "draft-deck-results", "PremierDraft_TMT_20260303", "Draft Deck", "Draft", "test", "2026-04-04T00:49:51.310561Z", nil)
+	if err != nil {
 		t.Fatalf("UpsertDeck: %v", err)
 	}
 
@@ -73,5 +74,75 @@ func TestListDraftSessionsIncludesMatchedDeckResults(t *testing.T) {
 	}
 	if rows[0].Losses == nil || *rows[0].Losses != 1 {
 		t.Fatalf("Losses = %v, want 1", rows[0].Losses)
+	}
+	if rows[0].DeckID == nil || *rows[0].DeckID != deckID {
+		t.Fatalf("DeckID = %v, want %d", rows[0].DeckID, deckID)
+	}
+}
+
+func TestListDraftSessionsGivesReentriesTheirOwnDeck(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database := openTempSQLiteDB(t)
+	if err := Init(ctx, database); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	store := NewStore(database)
+	tx, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+
+	const event = "PremierDraft_HOB_20260811"
+	drafts := []struct {
+		draftID, started, completed, deckArenaID, deckTS string
+	}{
+		{"draft-a", "2026-09-01T10:00:00Z", "2026-09-01T10:20:00Z", "deck-a", "2026-09-01T10:25:00Z"},
+		{"draft-b", "2026-09-03T10:00:00Z", "2026-09-03T10:20:00Z", "deck-b", "2026-09-03T10:25:00Z"},
+		// Abandoned before building: must not borrow draft-c's deck.
+		{"draft-abandoned", "2026-09-05T10:00:00Z", "2026-09-05T10:20:00Z", "", ""},
+		{"draft-c", "2026-09-07T10:00:00Z", "2026-09-07T10:20:00Z", "deck-c", "2026-09-07T10:25:00Z"},
+	}
+	deckIDs := map[string]int64{}
+	for _, draft := range drafts {
+		if _, err := store.EnsureDraftSession(ctx, tx, event, ptrString(draft.draftID), false, draft.started); err != nil {
+			t.Fatalf("EnsureDraftSession(%s): %v", draft.draftID, err)
+		}
+		if err := store.CompleteDraftSession(ctx, tx, event, ptrString(draft.draftID), false, draft.completed); err != nil {
+			t.Fatalf("CompleteDraftSession(%s): %v", draft.draftID, err)
+		}
+		if draft.deckArenaID == "" {
+			continue
+		}
+		deckID, err := store.UpsertDeck(ctx, tx, draft.deckArenaID, event, "Draft Deck", "Draft", "test", draft.deckTS, nil)
+		if err != nil {
+			t.Fatalf("UpsertDeck(%s): %v", draft.deckArenaID, err)
+		}
+		deckIDs[draft.draftID] = deckID
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	rows, err := store.ListDraftSessions(ctx)
+	if err != nil {
+		t.Fatalf("ListDraftSessions: %v", err)
+	}
+	if len(rows) != 4 {
+		t.Fatalf("len(ListDraftSessions) = %d, want 4", len(rows))
+	}
+	for _, row := range rows {
+		want, hasDeck := deckIDs[*row.DraftID]
+		if !hasDeck {
+			if row.DeckID != nil {
+				t.Fatalf("session %s DeckID = %d, want none", *row.DraftID, *row.DeckID)
+			}
+			continue
+		}
+		if row.DeckID == nil || *row.DeckID != want {
+			t.Fatalf("session %s DeckID = %v, want %d", *row.DraftID, row.DeckID, want)
+		}
 	}
 }

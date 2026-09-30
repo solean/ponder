@@ -19,6 +19,7 @@ import (
 )
 
 const defaultDBPath = "data/ponder.db"
+const defaultServeAddr = "127.0.0.1:8080"
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
@@ -59,7 +60,7 @@ func printUsage() {
 	fmt.Println("ponder commands:")
 	fmt.Println("  parse -db <path> [-log <path>] [-include-prev=true] [-resume=true]")
 	fmt.Println("  tail  -db <path> [-log <path>] [-interval=2s] [-verbose=false]")
-	fmt.Println("  serve -db <path> [-addr=:8080] [-web-dist=<path>]")
+	fmt.Println("  serve -db <path> [-addr=127.0.0.1:8080] [-web-dist=<path>]")
 	fmt.Println("  compact -db <path>")
 	fmt.Println("")
 	fmt.Println("If -log is omitted, parse/tail default to:")
@@ -288,15 +289,12 @@ func runTail(ctx context.Context, args []string) error {
 }
 
 func runServe(ctx context.Context, args []string) error {
-	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	dbPath := fs.String("db", defaultDBPath, "sqlite database path")
-	addr := fs.String("addr", ":8080", "http listen address")
-	webDist := fs.String("web-dist", "", "path to built frontend dist")
-	if err := fs.Parse(args); err != nil {
+	opts, err := parseServeOptions(args)
+	if err != nil {
 		return err
 	}
 
-	database, err := db.Open(*dbPath)
+	database, err := db.Open(opts.dbPath)
 	if err != nil {
 		return err
 	}
@@ -306,7 +304,7 @@ func runServe(ctx context.Context, args []string) error {
 		return err
 	}
 
-	staticDir := *webDist
+	staticDir := opts.webDist
 	if staticDir == "" {
 		cwd, err := os.Getwd()
 		if err == nil {
@@ -321,7 +319,7 @@ func runServe(ctx context.Context, args []string) error {
 	currentLogPath, prevLogPath, _ := appstate.DefaultMTGALogPaths()
 	runtimeService, err := appstate.NewService(appstate.Options{
 		Store:              store,
-		DBPath:             *dbPath,
+		DBPath:             opts.dbPath,
 		DefaultLogPath:     currentLogPath,
 		DefaultPrevLogPath: prevLogPath,
 	})
@@ -339,5 +337,22 @@ func runServe(ctx context.Context, args []string) error {
 
 	server := api.NewServer(store, staticDir, runtimeService)
 	server.StartUpdateChecker(ctx)
-	return server.Run(ctx, *addr)
+	return server.Run(ctx, opts.addr)
+}
+
+type serveOptions struct {
+	dbPath  string
+	addr    string
+	webDist string
+}
+
+func parseServeOptions(args []string) (serveOptions, error) {
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	dbPath := fs.String("db", defaultDBPath, "sqlite database path")
+	addr := fs.String("addr", defaultServeAddr, "http listen address")
+	webDist := fs.String("web-dist", "", "path to built frontend dist")
+	if err := fs.Parse(args); err != nil {
+		return serveOptions{}, err
+	}
+	return serveOptions{dbPath: *dbPath, addr: *addr, webDist: *webDist}, nil
 }

@@ -111,8 +111,12 @@ go run ./cmd/ponder tail -db data/ponder.db -log /absolute/path/to/Player.log -i
 ## Run API Server
 
 ```bash
-go run ./cmd/ponder serve -db data/ponder.db -addr :8080
+go run ./cmd/ponder serve -db data/ponder.db
 ```
+
+The server listens on `127.0.0.1:8080` by default. You can override this with
+`-addr`; binding to a non-loopback address exposes the unauthenticated API to
+machines that can reach the host.
 
 API endpoints:
 - `GET /api/health`

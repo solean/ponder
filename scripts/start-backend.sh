@@ -4,4 +4,4 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 cd "$REPO_ROOT"
-exec go run ./cmd/ponder serve -db data/ponder.db -addr :8080 "$@"
+exec go run ./cmd/ponder serve -db data/ponder.db "$@"

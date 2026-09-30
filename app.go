@@ -96,12 +96,15 @@ func (a *App) APIMiddleware(next http.Handler) http.Handler {
 
 		if handler == nil {
 			message := startupErr
+			status := "failed"
 			if message == "" {
 				message = "backend is starting"
+				status = "starting"
 			}
+			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": message, "status": status})
 			return
 		}
 		handler.ServeHTTP(w, r)

@@ -1,3 +1,4 @@
+import { waitForBackend } from "./startup";
 import type {
   AiStatus,
   AutostartStatus,
@@ -56,6 +57,7 @@ async function postJSON<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export const api = {
+  waitForStartup: (signal: AbortSignal) => waitForBackend(`${API_BASE}/api/health`, signal),
   overview: () => getJSON<Overview>("/api/overview"),
   rankHistory: () => getJSON<RankHistoryPoint[]>("/api/rank-history"),
   economy: () => getJSON<EconomyHistory>("/api/economy"),

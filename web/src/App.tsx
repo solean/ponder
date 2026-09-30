@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
+import { StartupGate } from "./components/StartupGate";
 import { Layout } from "./components/Layout";
 import { DeckDetailPage } from "./pages/DeckDetailPage";
 import { DecksPage } from "./pages/DecksPage";
@@ -17,7 +18,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/overlay" element={<OverlayPage />} />
-      <Route path="/" element={<Layout />}>
+      <Route path="/" element={<StartupGate><Layout /></StartupGate>}>
         <Route index element={<OverviewPage />} />
         <Route path="matches" element={<MatchesPage />} />
         <Route path="matches/:matchId" element={<MatchDetailPage />} />

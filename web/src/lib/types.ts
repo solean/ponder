@@ -49,6 +49,24 @@ export type MatchList = {
   total: number;
 };
 
+export type ActivityDayBoundary = {
+  date: string;
+  start: string;
+  end: string;
+};
+
+export type DailyActivityTotals = {
+  date: string;
+  count: number;
+  wins: number;
+  losses: number;
+  unknown: number;
+  trackedSeconds: number;
+  timedMatches: number;
+  constructed: number;
+  limited: number;
+};
+
 export type OpponentObservedCard = {
   cardId: number;
   quantity: number;

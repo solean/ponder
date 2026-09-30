@@ -21,7 +21,8 @@ import {
 } from "../lib/format";
 import {
   currentStreak,
-  dailyActivity,
+  activityDayBoundaries,
+  labelDailyActivity,
   matchAverages,
   recentForm,
   recordWinRate,
@@ -40,6 +41,8 @@ const RECENT_MATCH_COUNT = 8;
 const FORM_WINDOW = 10;
 const MATCH_WINDOW = 500;
 const ACTIVITY_DAYS = 365;
+const currentActivityCalendar = () =>
+  `${new Date().toDateString()}|${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
 const MTGA_DETAILED_LOGS_HELP_URL =
   "https://mtgarena-support.wizards.com/hc/en-us/articles/360000726823-Creating-Log-Files-on-PC-Mac-Steam";
 
@@ -471,6 +474,23 @@ function draftRecordLabel(draft: DraftSession): string | null {
 }
 
 export function OverviewPage() {
+  const [activityCalendar, setActivityCalendar] = useState(currentActivityCalendar);
+  useEffect(() => {
+    const refreshCalendar = () => setActivityCalendar(currentActivityCalendar());
+    const interval = window.setInterval(refreshCalendar, 30_000);
+    window.addEventListener("focus", refreshCalendar);
+    document.addEventListener("visibilitychange", refreshCalendar);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshCalendar);
+      document.removeEventListener("visibilitychange", refreshCalendar);
+    };
+  }, []);
+  const activityDays = useMemo(() => activityDayBoundaries(ACTIVITY_DAYS), [activityCalendar]);
+  const activityQuery = useQuery({
+    queryKey: ["overview", "activity", activityDays],
+    queryFn: () => api.dailyActivity(activityDays),
+  });
   const { data, isLoading, error } = useQuery({
     queryKey: ["overview"],
     queryFn: api.overview,
@@ -510,7 +530,7 @@ export function OverviewPage() {
   ]);
 
   const splits = useMemo(() => splitRecords(allMatches), [allMatches]);
-  const activity = useMemo(() => dailyActivity(allMatches, ACTIVITY_DAYS), [allMatches]);
+  const activity = useMemo(() => labelDailyActivity(activityQuery.data ?? []), [activityQuery.data]);
   const weekdays = useMemo(() => weekdayPerformance(allMatches), [allMatches]);
   const timeSlots = useMemo(() => timeOfDayPerformance(allMatches), [allMatches]);
 
@@ -651,11 +671,18 @@ export function OverviewPage() {
         <div className="panel-head">
           <h3>Activity</h3>
           <p>
-            {activityTotal} match{activityTotal === 1 ? "" : "es"} · last {ACTIVITY_DAYS} days
+            {activityQuery.data && !activityQuery.error ? `${activityTotal} match${activityTotal === 1 ? "" : "es"} · ` : ""}
+            last {ACTIVITY_DAYS} days
           </p>
         </div>
-        <ActivityGraph activity={activity} total={activityTotal} />
-        {activityTotal === 0 ? (
+        {activityQuery.isPending ? (
+          <StatusMessage>Loading activity…</StatusMessage>
+        ) : activityQuery.error ? (
+          <StatusMessage tone="error">Unable to load activity: {(activityQuery.error as Error).message}</StatusMessage>
+        ) : (
+          <ActivityGraph activity={activity} total={activityTotal} />
+        )}
+        {activityQuery.isSuccess && activityTotal === 0 ? (
           <p className="state activity-empty">
             No matches in the last {ACTIVITY_DAYS} days
             {lastPlayedAt ? ` — last played ${formatRelativeTime(lastPlayedAt)}` : ""}.

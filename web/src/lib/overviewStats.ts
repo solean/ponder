@@ -1,10 +1,9 @@
 import { parseEventName } from "./events";
-import type { Match } from "./types";
+import type { ActivityDayBoundary, DailyActivityTotals, Match } from "./types";
 
 /**
- * Pure aggregation helpers for the Overview page. Everything operates on the
- * match list as returned by /api/matches (newest first); sortMatchesDesc is
- * available as a defensive re-sort.
+ * Overview helpers. Recent-match statistics operate on /api/matches (newest
+ * first); yearly activity uses browser-local boundaries and server totals.
  */
 
 export type WinLossRecord = {
@@ -90,18 +89,8 @@ export function splitRecords(matches: Match[]): SplitRecords {
   };
 }
 
-export type DailyActivity = {
-  /** Local date key, e.g. "2026-07-03". */
-  date: string;
+export type DailyActivity = DailyActivityTotals & {
   label: string;
-  count: number;
-  wins: number;
-  losses: number;
-  unknown: number;
-  trackedSeconds: number;
-  timedMatches: number;
-  constructed: number;
-  limited: number;
 };
 
 function localDateKey(date: Date): string {
@@ -111,7 +100,23 @@ function localDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-/** Matches per local calendar day for the trailing `days` days (oldest first). */
+/** Browser-local midnights, rather than fixed 24-hour offsets, preserve DST. */
+export function activityDayBoundaries(days: number, now = new Date()): ActivityDayBoundary[] {
+  return Array.from({ length: days }, (_, index) => {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days + 1 + index);
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1);
+    return { date: localDateKey(start), start: start.toISOString(), end: end.toISOString() };
+  });
+}
+
+export function labelDailyActivity(activity: DailyActivityTotals[]): DailyActivity[] {
+  return activity.map((day) => ({
+    ...day,
+    label: new Date(`${day.date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+  }));
+}
+
+/** Match-list aggregation for comparisons; the yearly chart uses server totals. */
 export function dailyActivity(matches: Match[], days: number, now = new Date()): DailyActivity[] {
   const activity = new Map<string, Omit<DailyActivity, "date" | "label">>();
   for (const match of matches) {

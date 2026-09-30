@@ -1,6 +1,7 @@
 import { waitForBackend } from "./startup";
 import type {
   AiStatus,
+  ActivityDayBoundary,
   AutostartStatus,
   DeckAnalytics,
   DeckAnalyticsGameRef,
@@ -10,6 +11,7 @@ import type {
   DeckSummary,
   DraftPick,
   DraftSession,
+  DailyActivityTotals,
   EconomyHistory,
   GameReview,
   MatchCardPlay,
@@ -59,6 +61,8 @@ async function postJSON<T>(path: string, body?: unknown): Promise<T> {
 export const api = {
   waitForStartup: (signal: AbortSignal) => waitForBackend(`${API_BASE}/api/health`, signal),
   overview: () => getJSON<Overview>("/api/overview"),
+  dailyActivity: (days: ActivityDayBoundary[]) =>
+    postJSON<DailyActivityTotals[]>("/api/activity", { days }),
   rankHistory: () => getJSON<RankHistoryPoint[]>("/api/rank-history"),
   economy: () => getJSON<EconomyHistory>("/api/economy"),
   matches: (limit = 500) => getJSON<MatchList>(`/api/matches?limit=${limit}`),

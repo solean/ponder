@@ -109,6 +109,7 @@ func (s *Server) routes() http.Handler {
 	})
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/overview", s.handleOverview)
+	mux.HandleFunc("/api/activity", s.handleActivity)
 	mux.HandleFunc("/api/rank-history", s.handleRankHistory)
 	mux.HandleFunc("/api/economy", s.handleEconomy)
 	mux.HandleFunc("/api/matches", s.handleMatches)

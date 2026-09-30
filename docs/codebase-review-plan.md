@@ -1,8 +1,8 @@
 # Codebase review: issues and implementation plan
 
 Reviewed September 29, 2026. This document records four concrete findings and a
-follow-up maintainability improvement. The CLI loopback default is implemented;
-remaining work is tracked below.
+follow-up maintainability improvement. The CLI loopback default and complete-range
+yearly activity are implemented; remaining work is tracked below.
 
 ## Priorities and order
 
@@ -11,7 +11,7 @@ remaining work is tracked below.
 | P1 | Preserve ingestion context across parser restarts | Not started |
 | P1 | Bind the CLI API to loopback by default | Partially complete |
 | P1 | Reject untrusted-origin API mutations | Not started |
-| P2 | Calculate yearly activity from the complete date range | Not started |
+| P2 | Calculate yearly activity from the complete date range | Complete |
 | Follow-up | Split the match-detail page into focused components | Not started |
 
 Address the three P1 issues first. The two API changes can ship together, but
@@ -154,27 +154,26 @@ returned 200 and invoked a mocked desktop action. No real browser was opened.
 
 ### Problem and evidence
 
-`web/src/pages/OverviewPage.tsx` fetches `api.matches(MATCH_WINDOW)` with
-`MATCH_WINDOW = 500`, then calls `dailyActivity(allMatches, ACTIVITY_DAYS)` with
+`web/src/pages/OverviewPage.tsx` originally fetched `api.matches(MATCH_WINDOW)` with
+`MATCH_WINDOW = 500`, then called `dailyActivity(allMatches, ACTIVITY_DAYS)` with
 `ACTIVITY_DAYS = 365`.
 
-The chart, total, and accessible label describe the last 365 days without
+The chart, total, and accessible label described the last 365 days without
 disclosing the match cap. A player with more than 500 matches in that period
-therefore sees understated totals and incomplete historical days. This finding
+therefore saw understated totals and incomplete historical days. This finding
 was established by tracing the fetch, aggregation, and display code.
 
 ### Implementation tasks
 
-- [ ] Prefer a backend daily-activity aggregate over the complete requested date
+- [x] Prefer a backend daily-activity aggregate over the complete requested date
   range, independent of the match-list limit.
-- [ ] Define local-day boundaries explicitly so the new aggregation preserves
+- [x] Define local-day boundaries explicitly so the new aggregation preserves
   the existing local-calendar behavior, including daylight-saving transitions.
-- [ ] Return the per-day data needed by the graph and hover details: counts,
+- [x] Return the per-day data needed by the graph and hover details: counts,
   results, tracked duration, and format mix.
-- [ ] Keep recent-match lists bounded and separate from yearly activity data.
-- [ ] If an interim fix retains the cap, disclose it in visible and accessible
-  labels and avoid presenting omitted history as a complete yearly record.
-- [ ] Add a fixture with more than 500 matches inside the year and additional
+- [x] Keep recent-match lists bounded and separate from yearly activity data.
+- [x] Remove the activity cap entirely; no interim cap disclosure is needed.
+- [x] Add a fixture with more than 500 matches inside the year and additional
   matches outside it.
 
 ### Acceptance checks
@@ -184,6 +183,32 @@ was established by tracing the fetch, aggregation, and display code.
 - Chart cells, hover details, displayed totals, and accessible labels agree.
 - Local midnight and daylight-saving boundary cases behave consistently.
 - Loading the yearly chart does not require downloading every match record.
+
+### Implementation result — September 30, 2026
+
+`POST /api/activity` accepts 1–366 ordered, consecutive local dates with
+contiguous explicit midnight intervals. The browser generates the boundaries,
+including 23/25-hour DST days, and refreshes its calendar key while mounted and
+when returning to the app. The store scans only scalar activity fields in the
+requested range, aggregates without a match limit, and returns one row per day.
+Precise timestamp comparisons assign days after a padded SQLite range prefilter,
+so submillisecond timestamps immediately before midnight remain on the correct
+day. Positive durations retain the match-list end/start fallback; nonpositive
+explicit durations remain untracked.
+
+The graph, hover details, visible total, and accessible labels now all consume
+the same server totals. Activity has independent loading/error states. The
+existing 500-match request continues to serve recent-match statistics.
+
+Regression coverage includes 601 matches inside a complete 365-day range,
+matches just outside both endpoints, empty days, result/duration/format totals,
+offset timestamps, and both DST transitions with nanosecond midnight cases.
+The full-year API regression failed with 404 before the endpoint was added.
+Focused Go tests, the full frontend test suite (193 tests), TypeScript
+typechecking, and the production build passed. The full Go suite also passed
+during independent review. Build warnings concerned existing bundle size and
+Browserslist data freshness.
+An interactive browser/desktop smoke test was not performed.
 
 ## 5. Follow-up — Reduce match-detail page complexity
 

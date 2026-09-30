@@ -121,6 +121,7 @@ machines that can reach the host.
 API endpoints:
 - `GET /api/health`
 - `GET /api/overview`
+- `POST /api/activity` with `{ "days": [{ "date": "2026-07-03", "start": "2026-07-03T04:00:00Z", "end": "2026-07-04T04:00:00Z" }] }` → daily counts, W/L/unresolved results, tracked duration/count, and Limited/Constructed mix over the complete range. Send 1–366 consecutive dates with contiguous browser-local midnight intervals; DST days can span 23 or 25 hours. Recent-match limits do not apply.
 - `GET /api/economy`
 - `GET /api/matches?limit=500` → `{ "matches": [...], "total": N }`; `limit` defaults to 200 and is clamped to 20000, `total` ignores it so the UI can say "showing N of M"
 - `GET /api/matches/:id`

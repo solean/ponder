@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   currentStreak,
+  activityDayBoundaries,
   dailyActivity,
+  labelDailyActivity,
   isLimitedEvent,
   matchAverages,
   recentForm,
@@ -155,6 +157,42 @@ describe("dailyActivity", () => {
       limited: 1,
       constructed: 2,
     });
+  });
+});
+
+describe("server activity helpers", () => {
+  test("generates the complete trailing range through tomorrow's local midnight", () => {
+    const now = new Date(2026, 6, 3, 12);
+    const days = activityDayBoundaries(365, now);
+    expect(days).toHaveLength(365);
+    expect(days[0]).toEqual({ date: "2025-07-04", start: new Date(2025, 6, 4).toISOString(), end: new Date(2025, 6, 5).toISOString() });
+    expect(days[364]).toEqual({ date: "2026-07-03", start: new Date(2026, 6, 3).toISOString(), end: new Date(2026, 6, 4).toISOString() });
+    expect(days.slice(1).every((day, i) => day.start === days[i].end)).toBe(true);
+  });
+
+  test("uses 23/25-hour calendar days in the browser timezone", () => {
+    // Isolate TZ from other tests so the host/browser's usual timezone cannot
+    // hide DST mistakes or affect unrelated formatting tests.
+    const helperPath = new URL("../src/lib/overviewStats.ts", import.meta.url).pathname;
+    const result = Bun.spawnSync([process.execPath, "--eval", `
+      import { activityDayBoundaries } from ${JSON.stringify(helperPath)};
+      console.log(JSON.stringify([
+        activityDayBoundaries(3, new Date(2026, 2, 9, 12)),
+        activityDayBoundaries(3, new Date(2026, 10, 2, 12)),
+      ]));
+    `], { env: { ...process.env, TZ: "America/New_York" } });
+    expect(result.exitCode).toBe(0);
+    const [spring, fall] = JSON.parse(result.stdout.toString()) as ReturnType<typeof activityDayBoundaries>[];
+    expect(spring.map((day) => (Date.parse(day.end) - Date.parse(day.start)) / 3_600_000)).toEqual([24, 23, 24]);
+    expect(fall.map((day) => (Date.parse(day.end) - Date.parse(day.start)) / 3_600_000)).toEqual([24, 25, 24]);
+    expect(spring[1]).toEqual({ date: "2026-03-08", start: "2026-03-08T05:00:00.000Z", end: "2026-03-09T04:00:00.000Z" });
+    expect(fall[1]).toEqual({ date: "2026-11-01", start: "2026-11-01T04:00:00.000Z", end: "2026-11-02T05:00:00.000Z" });
+  });
+
+  test("labels server totals without capping or recomputing hover fields", () => {
+    const totals = { date: "2026-07-03", count: 601, wins: 200, losses: 200, unknown: 201, trackedSeconds: 36000, timedMatches: 600, limited: 400, constructed: 201 };
+    const [day] = labelDailyActivity([totals]);
+    expect(day).toEqual({ ...totals, label: new Date(2026, 6, 3).toLocaleDateString(undefined, { month: "short", day: "numeric" }) });
   });
 });
 

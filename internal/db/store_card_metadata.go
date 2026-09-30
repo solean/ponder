@@ -58,6 +58,12 @@ func (s *Store) UpsertCardMetadata(ctx context.Context, metadata map[int64]CardM
 	if len(metadata) == 0 {
 		return nil
 	}
+	release, err := s.AcquireWriter(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	tx, err := s.BeginTx(ctx)
 	if err != nil {
 		return err

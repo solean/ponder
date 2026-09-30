@@ -62,6 +62,12 @@ func (s *Store) UpsertSets(ctx context.Context, sets map[string]model.SetInfo) e
 		return nil
 	}
 
+	release, err := s.AcquireWriter(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin set catalog tx: %w", err)

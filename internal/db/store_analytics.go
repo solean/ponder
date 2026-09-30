@@ -1024,6 +1024,13 @@ func (s *Store) EnsureMatchAnalytics(ctx context.Context, matchID int64) error {
 	if refreshNeeded == 0 {
 		return nil
 	}
+	// Page requests can race startup maintenance or ingest. Wait outside the
+	// connection pool so pending writers cannot starve unrelated page reads.
+	release, err := s.AcquireWriter(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
 	return s.RefreshMatchAnalytics(ctx, matchID)
 }
 

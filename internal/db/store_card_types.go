@@ -54,6 +54,12 @@ func (s *Store) UpsertCardTypeLines(ctx context.Context, typeLines map[int64]str
 		return nil
 	}
 
+	release, err := s.AcquireWriter(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin card types tx: %w", err)

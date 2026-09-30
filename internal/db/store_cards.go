@@ -51,6 +51,12 @@ func (s *Store) UpsertCardNames(ctx context.Context, names map[int64]string) err
 		return nil
 	}
 
+	release, err := s.AcquireWriter(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin card catalog tx: %w", err)

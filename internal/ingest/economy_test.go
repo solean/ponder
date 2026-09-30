@@ -26,7 +26,7 @@ func TestParserTracksEconomySnapshotsFromInventoryInfo(t *testing.T) {
 	lines := []string{
 		`[UnityCrossThreadLogger]7/12/2026 11:40:38 AM`,
 		`<== StartHook(request-1)`,
-		`{"InventoryInfo":{"SeqId":4,"Changes":[{"Source":"QuestReward","SourceId":"quest-1"}],"Gems":1200,"Gold":3450,"TotalVaultProgress":487,"wcTrackPosition":3,"WildCardCommons":20,"WildCardUnCommons":18,"WildCardRares":7,"WildCardMythics":2,"CustomTokens":{"PlayInToken":1,"Token_JumpIn":2},"Boosters":[{"CollationId":100061,"SetCode":"TST"},{"CollationId":100061,"SetCode":"TST"}],"Vouchers":{"DraftToken":1},"Cosmetics":{"ArtStyles":[{"Id":"ignored"}]}},"Decks":{"ignored":{"MainDeck":[]}}}`,
+		`{"InventoryInfo":{"SeqId":4,"Changes":[{"Source":"QuestReward","SourceId":"quest-1"}],"Gems":1200,"Gold":3450,"TotalVaultProgress":487,"wcTrackPosition":3,"WildCardCommons":20,"WildCardUnCommons":18,"WildCardRares":7,"WildCardMythics":2,"CustomTokens":{"PlayInToken":1,"Token_JumpIn":2},"Boosters":[{"CollationId":100061,"SetCode":"TST","Count":2},{"CollationId":100060,"SetCode":"OLD"}],"Vouchers":{"DraftToken":1},"Cosmetics":{"ArtStyles":[{"Id":"ignored"}]}},"Decks":{"ignored":{"MainDeck":[]}}}`,
 	}
 	if err := writeLogLines(logPath, lines, false); err != nil {
 		t.Fatalf("write log: %v", err)
@@ -67,7 +67,7 @@ func TestParserTracksEconomySnapshotsFromInventoryInfo(t *testing.T) {
 		t.Fatalf("custom tokens = %#v", snapshot.CustomTokens)
 	}
 	if len(snapshot.Boosters) != 1 || snapshot.Boosters[0].SetCode != "TST" || snapshot.Boosters[0].Count != 2 {
-		t.Fatalf("boosters = %#v, want two TST boosters", snapshot.Boosters)
+		t.Fatalf("boosters = %#v, want two TST boosters and no opened OLD entry", snapshot.Boosters)
 	}
 	if snapshot.Vouchers["DraftToken"] != 1 {
 		t.Fatalf("vouchers = %#v", snapshot.Vouchers)

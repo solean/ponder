@@ -143,7 +143,7 @@ func (s *Store) ListEconomyHistory(ctx context.Context) ([]model.EconomySnapshot
 		}
 
 		snapshot.CustomTokens = decodeIntMap(customTokensJSON)
-		snapshot.Boosters = decodeBoosterCounts(boostersJSON)
+		snapshot.Boosters = decodeInventoryBoosters(boostersJSON)
 		snapshot.Vouchers = decodeIntMap(vouchersJSON)
 		snapshot.ChangeSources = decodeChangeSources(changesJSON)
 		out = append(out, snapshot)

@@ -292,6 +292,7 @@ export type EconomyTransaction = {
   boosters: EconomyBoosterCount[];
   customTokens: Record<string, number>;
   vouchers: Record<string, number>;
+  inferred: boolean;
 };
 
 export type EventRunEconomy = {

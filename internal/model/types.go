@@ -648,6 +648,9 @@ type EconomyTransaction struct {
 	Boosters           []EconomyBoosterCount `json:"boosters"`
 	CustomTokens       map[string]int64      `json:"customTokens"`
 	Vouchers           map[string]int64      `json:"vouchers"`
+	// Inferred rows reconcile balance movements Arena applied without a
+	// Changes entry, such as booster opening.
+	Inferred bool `json:"inferred"`
 }
 
 // EventRunEconomy is the cost/reward summary of one event run. Entry deltas

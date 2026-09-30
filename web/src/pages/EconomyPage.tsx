@@ -102,7 +102,8 @@ const TRANSACTION_SOURCE_LABELS: Record<string, string> = {
   LoginGrant: "Login grant",
   RedeemVoucherReward: "Voucher redemption",
   PurchasedProductDelivery: "Store purchase",
-  BoosterOpen: "Booster opened",
+  BoosterOpen: "Packs opened",
+  Unreported: "Unreported",
   VaultOpen: "Vault opened",
   WildCardRedemption: "Wildcard crafted",
   RankedSeasonReward: "Ranked season reward",
@@ -113,6 +114,13 @@ const TRANSACTION_SOURCE_LABELS: Record<string, string> = {
 function transactionSourceLabel(source: string): string {
   return TRANSACTION_SOURCE_LABELS[source] ?? humanizeInventoryKey(source);
 }
+
+const INFERRED_SOURCE_TITLES: Record<string, string> = {
+  BoosterOpen:
+    "Arena doesn't itemize pack openings. Set-completion gems, wildcards, and vault progress were reconciled from the balance.",
+  Unreported:
+    "Arena changed this balance without itemizing why, e.g. quest and win gold or store purchases.",
+};
 
 function eventRunLabel(run: EventRunEconomy): string {
   const parsed = parseEventName(run.eventName);
@@ -558,7 +566,7 @@ export function EconomyPage() {
             <h3 id="recent-economy-heading">Recent balance changes</h3>
             <p>
               {recentTransactions.length > 0
-                ? "Itemized inventory changes reported by Arena"
+                ? "Itemized inventory changes, plus balance changes Arena doesn't itemize"
                 : "Changes calculated between consecutive Arena snapshots"}
             </p>
           </div>
@@ -574,18 +582,34 @@ export function EconomyPage() {
                   <th scope="col">Gold</th>
                   <th scope="col">Gems</th>
                   <th scope="col">Packs</th>
+                  <th scope="col">Vault</th>
+                  <th scope="col">Wildcards</th>
                   <th scope="col">Cards</th>
                 </tr>
               </thead>
               <tbody>
                 {recentTransactions.map((txn) => {
                   const packDelta = txn.boosters.reduce((sum, booster) => sum + booster.count, 0);
+                  const wildcardDelta = wildcardTotal(txn.wildcardDeltas);
                   return (
                     <tr key={txn.id}>
                       <td title={formatDateTime(txn.observedAt)}>
                         {txn.observedAt ? formatRelativeTime(txn.observedAt) : "Unknown"}
                       </td>
-                      <td>{transactionSourceLabel(txn.source)}</td>
+                      <td>
+                        {transactionSourceLabel(txn.source)}
+                        {txn.inferred ? (
+                          <>
+                            {" "}
+                            <span
+                              className="analytics-confidence is-derived"
+                              title={INFERRED_SOURCE_TITLES[txn.source]}
+                            >
+                              inferred
+                            </span>
+                          </>
+                        ) : null}
+                      </td>
                       <td>
                         {txn.eventName ? (
                           <EventLabel eventName={txn.eventName} lookup={setLookup} showSymbol={false} />
@@ -596,6 +620,10 @@ export function EconomyPage() {
                       <td className={deltaTone(txn.goldDelta)}>{formatDelta(txn.goldDelta)}</td>
                       <td className={deltaTone(txn.gemsDelta)}>{formatDelta(txn.gemsDelta)}</td>
                       <td className={deltaTone(packDelta)}>{formatDelta(packDelta)}</td>
+                      <td className={deltaTone(txn.vaultProgressDelta)}>
+                        {formatVaultDelta(txn.vaultProgressDelta)}
+                      </td>
+                      <td className={deltaTone(wildcardDelta)}>{formatDelta(wildcardDelta)}</td>
                       <td>{txn.cardsGranted > 0 ? `+${integerFormatter.format(txn.cardsGranted)}` : "—"}</td>
                     </tr>
                   );

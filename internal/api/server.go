@@ -616,7 +616,7 @@ func (s *Server) handleEconomy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	transactions, err := s.store.ListEconomyTransactions(r.Context())
+	transactions, err := s.store.ListEconomyLedger(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

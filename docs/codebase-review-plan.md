@@ -13,7 +13,7 @@ tracked below.
 | P1 | Bind the CLI API to loopback by default | Partially complete |
 | P1 | Reject untrusted-origin API mutations | Not started |
 | P2 | Calculate yearly activity from the complete date range | Complete |
-| Follow-up | Split the match-detail page into focused components | Not started |
+| Follow-up | Split the match-detail page into focused components | Complete |
 
 Address the three P1 issues first. The two API changes can ship together, but
 each needs its own regression coverage: loopback binding does not replace
@@ -258,16 +258,34 @@ An interactive browser/desktop smoke test was not performed.
 
 ## 5. Follow-up — Reduce match-detail page complexity
 
-`web/src/pages/MatchDetailPage.tsx` is roughly 4,900 lines. Extract focused replay,
-board, and review components to make behavior easier to understand and change.
-This is a maintainability improvement, not a separately reproduced defect.
+Implemented October 1, 2026. `web/src/pages/MatchDetailPage.tsx` now handles route
+queries, section selection, and shared game selection in 233 lines, down from
+4,919. Focused modules under `web/src/components/match-detail/` own replay boards,
+controls, battlefield rendering, connections, zone inspection, previews,
+analytics, sideboarding, overview, opponent cards, and review presentation.
 
-- [ ] Map state ownership and component boundaries before moving code.
-- [ ] Reuse the existing `web/src/lib/replay/` hooks where appropriate.
-- [ ] Extract cohesive sections incrementally, preserving behavior and query keys.
-- [ ] Verify replay navigation, keyboard controls, card previews, game switching,
-  and AI review behavior after each meaningful extraction.
-- [ ] Avoid combining this restructuring with the correctness fixes above.
+[Component boundaries and state ownership](match-detail-components.md) describe
+where each responsibility lives. `useMatchReplayView` groups replay/timeline data
+and eager card previews; a shared card-preview key helper preserves the existing
+cache keys. Playback, keyboard handling, persisted preferences, and review
+streaming still use their existing hooks/components. Shared game selection and
+keyed board/review resets retain their previous behavior.
+
+- [x] Map state ownership and component boundaries before moving code.
+- [x] Reuse the existing `web/src/lib/replay/` hooks where appropriate.
+- [x] Extract cohesive sections incrementally, preserving behavior and query keys.
+- [x] Verify replay navigation, keyboard controls, card previews, game switching,
+  and AI review behavior across the extraction.
+- [x] Avoid combining this restructuring with the correctness fixes above.
+
+Validation: `bun run typecheck`, `bun run build`, all 193 frontend tests,
+`go test ./...`, and `git diff --check` passed. Browser smoke checks used the
+production frontend build with temporary local API/card fixtures: replay and
+fallback navigation, playback/speed, keyboard seeking, card preview focus, zone
+dialogs, shared game tabs, sideboard changes, analytics, opponent cards, review
+streaming/cancellation/completion, and empty states. No real AI provider was
+invoked, and the native desktop shell was not exercised. Existing build warnings
+about chunk size and stale Browserslist data remain.
 
 ## Validation and completion
 

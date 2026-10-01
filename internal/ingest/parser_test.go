@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -346,75 +347,84 @@ func TestTailParseRewindsSameSizeReplacement(t *testing.T) {
 }
 
 func TestTailParsePersistsStateAcrossResumeCalls(t *testing.T) {
-	ctx := context.Background()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-	logPath := filepath.Join(tmpDir, "Player.log")
+	for _, restart := range []bool{false, true} {
+		t.Run(fmt.Sprintf("restart_%v", restart), func(t *testing.T) {
+			ctx := context.Background()
+			tmpDir := t.TempDir()
+			dbPath := filepath.Join(tmpDir, "test.db")
+			logPath := filepath.Join(tmpDir, "Player.log")
 
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	defer database.Close()
+			database, err := db.Open(dbPath)
+			if err != nil {
+				t.Fatalf("open db: %v", err)
+			}
+			defer database.Close()
 
-	if err := db.Init(ctx, database); err != nil {
-		t.Fatalf("init db: %v", err)
-	}
+			if err := db.Init(ctx, database); err != nil {
+				t.Fatalf("init db: %v", err)
+			}
 
-	parser := NewParser(db.NewStore(database))
+			parser := NewParser(db.NewStore(database))
 
-	initialLines := []string{
-		`{"clientId":"self-user","screenName":"Self"}`,
-		`{"timestamp":"1772330782273","matchGameRoomStateChangedEvent":{"gameRoomInfo":{"gameRoomConfig":{"reservedPlayers":[{"userId":"opp-user","playerName":"Opp","systemSeatId":1,"teamId":1,"eventId":"Traditional_Ladder"},{"userId":"self-user","playerName":"Self","systemSeatId":2,"teamId":2,"eventId":"Traditional_Ladder"}],"matchId":"match-1"},"stateType":"MatchGameRoomStateType_Playing"}}}`,
-		`{"timestamp":"1772330782309","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"gameStateMessage":{"gameInfo":{"matchID":"match-1"},"turnInfo":{"phase":"Phase_Main1","turnNumber":1},"zones":[{"zoneId":28,"type":"ZoneType_Battlefield"}],"gameObjects":[{"instanceId":101,"grpId":5001,"type":"GameObjectType_Card","zoneId":28,"visibility":"Visibility_Public","ownerSeatId":1}]}}]}}`,
-	}
+			initialLines := []string{
+				`{"clientId":"self-user","screenName":"Self"}`,
+				`{"timestamp":"1772330782273","matchGameRoomStateChangedEvent":{"gameRoomInfo":{"gameRoomConfig":{"reservedPlayers":[{"userId":"opp-user","playerName":"Opp","systemSeatId":1,"teamId":1,"eventId":"Traditional_Ladder"},{"userId":"self-user","playerName":"Self","systemSeatId":2,"teamId":2,"eventId":"Traditional_Ladder"}],"matchId":"match-1"},"stateType":"MatchGameRoomStateType_Playing"}}}`,
+				`{"timestamp":"1772330782309","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"gameStateMessage":{"gameInfo":{"matchID":"match-1"},"turnInfo":{"phase":"Phase_Main1","turnNumber":1},"zones":[{"zoneId":28,"type":"ZoneType_Battlefield"}],"gameObjects":[{"instanceId":101,"grpId":5001,"type":"GameObjectType_Card","zoneId":28,"visibility":"Visibility_Public","ownerSeatId":1}]}}]}}`,
+			}
 
-	if err := writeLogLines(logPath, initialLines, false); err != nil {
-		t.Fatalf("write initial log lines: %v", err)
-	}
+			if err := writeLogLines(logPath, initialLines, false); err != nil {
+				t.Fatalf("write initial log lines: %v", err)
+			}
 
-	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
-		t.Fatalf("first parse: %v", err)
-	}
-	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
-		t.Fatalf("unchanged poll between log appends: %v", err)
-	}
+			if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
+				t.Fatalf("first parse: %v", err)
+			}
+			if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
+				t.Fatalf("unchanged poll between log appends: %v", err)
+			}
 
-	nextLines := []string{
-		`{"timestamp":"1772330782310","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"gameStateMessage":{"turnInfo":{"phase":"Phase_Main1","turnNumber":2},"zones":[{"zoneId":28,"type":"ZoneType_Battlefield"}],"gameObjects":[{"instanceId":102,"grpId":5002,"type":"GameObjectType_Card","zoneId":28,"visibility":"Visibility_Public","ownerSeatId":1}]}}]}}`,
-	}
-	if err := writeLogLines(logPath, nextLines, true); err != nil {
-		t.Fatalf("append log lines: %v", err)
-	}
+			nextLines := []string{
+				`{"timestamp":"1772330782310","greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"gameStateMessage":{"turnInfo":{"phase":"Phase_Main1","turnNumber":2},"zones":[{"zoneId":28,"type":"ZoneType_Battlefield"}],"gameObjects":[{"instanceId":102,"grpId":5002,"type":"GameObjectType_Card","zoneId":28,"visibility":"Visibility_Public","ownerSeatId":1}]}}]}}`,
+			}
+			if err := writeLogLines(logPath, nextLines, true); err != nil {
+				t.Fatalf("append log lines: %v", err)
+			}
 
-	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
-		t.Fatalf("second parse: %v", err)
-	}
+			// A service stop/start and an app restart each construct a new Parser.
+			if restart {
+				parser = NewParser(db.NewStore(database))
+			}
+			if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
+				t.Fatalf("second parse: %v", err)
+			}
 
-	var plays int
-	if err := database.QueryRowContext(ctx, `
+			var plays int
+			if err := database.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM match_card_plays cp
 		JOIN matches m ON m.id = cp.match_id
 		WHERE m.arena_match_id = 'match-1'
 	`).Scan(&plays); err != nil {
-		t.Fatalf("count card plays: %v", err)
-	}
-	if plays != 2 {
-		t.Fatalf("expected 2 card plays, got %d", plays)
-	}
+				t.Fatalf("count card plays: %v", err)
+			}
+			if plays != 2 {
+				t.Fatalf("expected 2 card plays, got %d", plays)
+			}
 
-	var oppCards int
-	if err := database.QueryRowContext(ctx, `
+			var oppCards int
+			if err := database.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM match_opponent_card_instances oc
 		JOIN matches m ON m.id = oc.match_id
 		WHERE m.arena_match_id = 'match-1'
 	`).Scan(&oppCards); err != nil {
-		t.Fatalf("count opponent cards: %v", err)
-	}
-	if oppCards != 2 {
-		t.Fatalf("expected 2 opponent card instances, got %d", oppCards)
+				t.Fatalf("count opponent cards: %v", err)
+			}
+			if oppCards != 2 {
+				t.Fatalf("expected 2 opponent card instances, got %d", oppCards)
+			}
+
+		})
 	}
 }
 
@@ -487,57 +497,73 @@ func TestTailParseRewindsWhenLogPathIsReplaced(t *testing.T) {
 func TestParserStoresMatchRankSnapshotAcrossFiles(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
-	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "ponder.db")
+	for _, restart := range []bool{false, true} {
+		t.Run(fmt.Sprintf("restart_%v", restart), func(t *testing.T) {
+			ctx := context.Background()
+			tempDir := t.TempDir()
+			dbPath := filepath.Join(tempDir, "ponder.db")
 
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	defer database.Close()
+			database, err := db.Open(dbPath)
+			if err != nil {
+				t.Fatalf("open db: %v", err)
+			}
+			defer database.Close()
 
-	if err := db.Init(ctx, database); err != nil {
-		t.Fatalf("init db: %v", err)
-	}
+			if err := db.Init(ctx, database); err != nil {
+				t.Fatalf("init db: %v", err)
+			}
 
-	parser := NewParser(db.NewStore(database))
+			parser := NewParser(db.NewStore(database))
 
-	prevLog := filepath.Join(tempDir, "Player-prev.log")
-	currentLog := filepath.Join(tempDir, "Player.log")
+			prevLog := filepath.Join(tempDir, "Player-prev.log")
+			currentLog := filepath.Join(tempDir, "Player.log")
 
-	prevContents := `{"PersonaId":"SELF123"}
+			prevContents := `{"PersonaId":"SELF123"}
 {"timestamp":"1773367612385","matchGameRoomStateChangedEvent":{"gameRoomInfo":{"gameRoomConfig":{"matchId":"match-1","reservedPlayers":[{"userId":"OPP456","playerName":"Opponent","systemSeatId":1,"teamId":1,"eventId":"Traditional_Ladder"},{"userId":"SELF123","playerName":"Self","systemSeatId":2,"teamId":2,"eventId":"Traditional_Ladder"}]},"stateType":"MatchGameRoomStateType_MatchCompleted","finalMatchResult":{"matchId":"match-1","matchCompletedReason":"MatchCompletedReasonType_Success","resultList":[{"scope":"MatchScope_Match","result":"ResultType_WinLoss","winningTeamId":1,"reason":"ResultReason_Concede"}]}}}}`
-	if err := os.WriteFile(prevLog, []byte(prevContents+"\n"), 0o644); err != nil {
-		t.Fatalf("write prev log: %v", err)
-	}
+			if err := os.WriteFile(prevLog, []byte(prevContents+"\n"), 0o644); err != nil {
+				t.Fatalf("write prev log: %v", err)
+			}
 
-	currentContents := `[UnityCrossThreadLogger]3/12/2026 7:08:37 PM
+			currentContents := `[UnityCrossThreadLogger]3/12/2026 7:08:37 PM
 <== RankGetCombinedRankInfo(req-1)
 {"constructedSeasonOrdinal":87,"constructedLevel":3,"constructedStep":2,"constructedMatchesWon":2,"constructedMatchesLost":2,"limitedSeasonOrdinal":87,"limitedLevel":3,"limitedMatchesWon":2,"limitedMatchesLost":3}`
-	if err := os.WriteFile(currentLog, []byte(currentContents+"\n"), 0o644); err != nil {
-		t.Fatalf("write current log: %v", err)
-	}
+			if err := os.WriteFile(currentLog, []byte(currentContents+"\n"), 0o644); err != nil {
+				t.Fatalf("write current log: %v", err)
+			}
 
-	if _, err := parser.ParseFile(ctx, prevLog, false); err != nil {
-		t.Fatalf("parse prev log: %v", err)
-	}
-	if _, err := parser.ParseFile(ctx, currentLog, false); err != nil {
-		t.Fatalf("parse current log: %v", err)
-	}
+			if _, err := parser.ParseFile(ctx, prevLog, false); err != nil {
+				t.Fatalf("parse prev log: %v", err)
+			}
+			if restart {
+				parser = NewParser(db.NewStore(database))
+				parts := strings.Split(currentContents, "\n")
+				if err := writeLogLines(currentLog, parts[:2], false); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := parser.ParseFile(ctx, currentLog, true); err != nil {
+					t.Fatal(err)
+				}
+				parser = NewParser(db.NewStore(database))
+				if err := writeLogLines(currentLog, parts[2:], true); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := parser.ParseFile(ctx, currentLog, restart); err != nil {
+				t.Fatalf("parse current log: %v", err)
+			}
 
-	var (
-		matchID           string
-		constructedLevel  sql.NullInt64
-		constructedStep   sql.NullInt64
-		constructedWins   sql.NullInt64
-		constructedLosses sql.NullInt64
-		limitedLevel      sql.NullInt64
-		limitedWins       sql.NullInt64
-		limitedLosses     sql.NullInt64
-		observedAt        sql.NullString
-	)
-	err = database.QueryRowContext(ctx, `
+			var (
+				matchID           string
+				constructedLevel  sql.NullInt64
+				constructedStep   sql.NullInt64
+				constructedWins   sql.NullInt64
+				constructedLosses sql.NullInt64
+				limitedLevel      sql.NullInt64
+				limitedWins       sql.NullInt64
+				limitedLosses     sql.NullInt64
+				observedAt        sql.NullString
+			)
+			err = database.QueryRowContext(ctx, `
 		SELECT
 			m.arena_match_id,
 			mrs.constructed_level,
@@ -551,46 +577,49 @@ func TestParserStoresMatchRankSnapshotAcrossFiles(t *testing.T) {
 		FROM match_rank_snapshots mrs
 		JOIN matches m ON m.id = mrs.match_id
 	`).Scan(
-		&matchID,
-		&constructedLevel,
-		&constructedStep,
-		&constructedWins,
-		&constructedLosses,
-		&limitedLevel,
-		&limitedWins,
-		&limitedLosses,
-		&observedAt,
-	)
-	if err != nil {
-		t.Fatalf("query rank snapshot: %v", err)
-	}
+				&matchID,
+				&constructedLevel,
+				&constructedStep,
+				&constructedWins,
+				&constructedLosses,
+				&limitedLevel,
+				&limitedWins,
+				&limitedLosses,
+				&observedAt,
+			)
+			if err != nil {
+				t.Fatalf("query rank snapshot: %v", err)
+			}
 
-	if matchID != "match-1" {
-		t.Fatalf("match id = %q, want match-1", matchID)
-	}
-	if !constructedLevel.Valid || constructedLevel.Int64 != 3 {
-		t.Fatalf("constructed level = %+v, want 3", constructedLevel)
-	}
-	if !constructedStep.Valid || constructedStep.Int64 != 2 {
-		t.Fatalf("constructed step = %+v, want 2", constructedStep)
-	}
-	if !constructedWins.Valid || constructedWins.Int64 != 2 {
-		t.Fatalf("constructed wins = %+v, want 2", constructedWins)
-	}
-	if !constructedLosses.Valid || constructedLosses.Int64 != 2 {
-		t.Fatalf("constructed losses = %+v, want 2", constructedLosses)
-	}
-	if !limitedLevel.Valid || limitedLevel.Int64 != 3 {
-		t.Fatalf("limited level = %+v, want 3", limitedLevel)
-	}
-	if !limitedWins.Valid || limitedWins.Int64 != 2 {
-		t.Fatalf("limited wins = %+v, want 2", limitedWins)
-	}
-	if !limitedLosses.Valid || limitedLosses.Int64 != 3 {
-		t.Fatalf("limited losses = %+v, want 3", limitedLosses)
-	}
-	if !observedAt.Valid || observedAt.String == "" {
-		t.Fatalf("observed_at = %+v, want non-empty timestamp", observedAt)
+			if matchID != "match-1" {
+				t.Fatalf("match id = %q, want match-1", matchID)
+			}
+			if !constructedLevel.Valid || constructedLevel.Int64 != 3 {
+				t.Fatalf("constructed level = %+v, want 3", constructedLevel)
+			}
+			if !constructedStep.Valid || constructedStep.Int64 != 2 {
+				t.Fatalf("constructed step = %+v, want 2", constructedStep)
+			}
+			if !constructedWins.Valid || constructedWins.Int64 != 2 {
+				t.Fatalf("constructed wins = %+v, want 2", constructedWins)
+			}
+			if !constructedLosses.Valid || constructedLosses.Int64 != 2 {
+				t.Fatalf("constructed losses = %+v, want 2", constructedLosses)
+			}
+			if !limitedLevel.Valid || limitedLevel.Int64 != 3 {
+				t.Fatalf("limited level = %+v, want 3", limitedLevel)
+			}
+			if !limitedWins.Valid || limitedWins.Int64 != 2 {
+				t.Fatalf("limited wins = %+v, want 2", limitedWins)
+			}
+			if !limitedLosses.Valid || limitedLosses.Int64 != 3 {
+				t.Fatalf("limited losses = %+v, want 3", limitedLosses)
+			}
+			if !observedAt.Valid || observedAt.String == "" {
+				t.Fatalf("observed_at = %+v, want non-empty timestamp", observedAt)
+			}
+
+		})
 	}
 }
 
@@ -1737,9 +1766,17 @@ func TestTailParseBuffersMultilineSubmitDeckAcrossResumeCalls(t *testing.T) {
 	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
 		t.Fatalf("parse first segment: %v", err)
 	}
+	checkpoint, err := db.NewStore(database).GetIngestState(ctx, logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collector, ok := decodeParseCheckpoint(checkpoint.ContextJSON)
+	if checkpoint.Offset <= 0 || !ok || !collector.collectingClientGREJSON {
+		t.Fatalf("multiline collector was not checkpointed at a nonzero cursor: %+v", checkpoint)
+	}
 	// Simulate the app restarting while Arena is still writing the logical
-	// ClientToGRE record. The durable cursor must replay from its header rather
-	// than depending on the first Parser's in-memory JSON builder.
+	// ClientToGRE record. The saved context must restore its header and partial
+	// payload without depending on the first Parser's in-memory JSON builder.
 	parser = NewParser(db.NewStore(database))
 
 	completion := []string{
@@ -1752,8 +1789,10 @@ func TestTailParseBuffersMultilineSubmitDeckAcrossResumeCalls(t *testing.T) {
 	if err := writeLogLines(logPath, completion, true); err != nil {
 		t.Fatalf("append second log segment: %v", err)
 	}
-	if _, err := parser.ParseFile(ctx, logPath, true); err != nil {
+	if stats, err := parser.ParseFile(ctx, logPath, true); err != nil {
 		t.Fatalf("parse second segment: %v", err)
+	} else if stats.LinesRead != int64(len(completion)) {
+		t.Fatalf("completion read %d lines, want %d new lines", stats.LinesRead, len(completion))
 	}
 	// Restart again after the submission is complete but before Arena emits
 	// the full state that identifies its game. The pending deck must be just as

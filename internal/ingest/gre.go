@@ -734,6 +734,10 @@ func (p *Parser) replayStateForGame(
 	}
 
 	replay := newReplayPublicState()
+	if state.reconstructingCheckpoint {
+		state.rememberReplayState(matchID, gameNumber, replay)
+		return replay, nil
+	}
 	lastGameStateID, latestTurnNumber, objects, playerLifeTotals, err := p.store.LoadLatestMatchReplayFrameState(ctx, tx, matchID, gameNumber)
 	if err != nil {
 		return nil, err

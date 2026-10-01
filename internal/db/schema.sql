@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS ingest_state (
   byte_offset INTEGER NOT NULL DEFAULT 0,
   line_no INTEGER NOT NULL DEFAULT 0,
   file_signature TEXT NOT NULL DEFAULT '',
+  context_json TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL
 );
 

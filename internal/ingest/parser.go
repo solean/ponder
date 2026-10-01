@@ -35,16 +35,15 @@ var (
 type Parser struct {
 	store                   *db.Store
 	stateMu                 sync.Mutex
-	stateByLog              map[string]*parseState
 	personaID               string
 	playerName              string
 	pendingCompletedMatches []string
+	historicalReplayLogs    map[string]bool
 }
 
 func NewParser(store *db.Store) *Parser {
 	parser := &Parser{
-		store:      store,
-		stateByLog: make(map[string]*parseState),
+		store: store,
 	}
 
 	if store != nil {
@@ -56,39 +55,9 @@ func NewParser(store *db.Store) *Parser {
 	return parser
 }
 
-func (p *Parser) stateForLog(logPath string, reset bool) *parseState {
-	key := strings.TrimSpace(logPath)
-	if key == "" {
-		return &parseState{
-			personaID:  p.personaID,
-			playerName: p.playerName,
-		}
-	}
-
-	p.stateMu.Lock()
-	defer p.stateMu.Unlock()
-
-	if reset {
-		state := &parseState{
-			personaID:  p.personaID,
-			playerName: p.playerName,
-		}
-		p.stateByLog[key] = state
-		return state
-	}
-
-	state, ok := p.stateByLog[key]
-	if !ok || state == nil {
-		state = &parseState{
-			personaID:  p.personaID,
-			playerName: p.playerName,
-		}
-		p.stateByLog[key] = state
-	}
-	return state
-}
-
 type parseState struct {
+	// Legacy prefix recovery must not hydrate old diffs from newer stored frames.
+	reconstructingCheckpoint  bool
 	personaID                 string
 	playerName                string
 	activeMatchID             string
@@ -130,17 +99,6 @@ func (s *parseState) beginClientGREJSON() {
 func (s *parseState) clearClientGREJSON() {
 	s.collectingClientGREJSON = false
 	s.clientGREJSON.Reset()
-}
-
-func (s *parseState) ingestCheckpoint(byteOffset, lineNo int64) (int64, int64) {
-	if s.collectingClientGREJSON || s.pendingGameDeckSnapshot != nil {
-		// The match/game identity used to scope a deck submission also lives in
-		// parseState. Rewind the durable cursor while a logical record is being
-		// collected or is waiting for its matching full game state, so a process
-		// restart rebuilds both that context and the pending deck before resuming.
-		return 0, 0
-	}
-	return byteOffset, lineNo
 }
 
 func (s *parseState) rememberPendingGameDeckSnapshot(
@@ -448,6 +406,11 @@ func (p *Parser) rememberPersonaID(personaID string) {
 	}
 	p.stateMu.Lock()
 	defer p.stateMu.Unlock()
+	if p.personaID != "" && p.personaID != personaID {
+		// A rank response for the new account cannot complete the old account's
+		// pending match, even when the login happens between parser calls.
+		p.pendingCompletedMatches = nil
+	}
 	p.personaID = personaID
 }
 
@@ -545,88 +508,137 @@ func ingestFileSignature(file *os.File, offset int64) (string, error) {
 func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (model.ParseStats, error) {
 	stats := model.ParseStats{LogPath: logPath, StartedAt: time.Now().UTC()}
 
-	startOffset := int64(0)
-	startLine := int64(0)
-	savedFileSignature := ""
-	resetState := !resume
-	if resume {
-		ingestState, err := p.store.GetIngestState(ctx, logPath)
-		if err != nil {
-			return stats, err
-		}
-		if ingestState.Found {
-			startOffset = ingestState.Offset
-			startLine = ingestState.LineNo
-			savedFileSignature = ingestState.FileSignature
-			if startOffset == 0 && startLine == 0 {
-				resetState = true
-			}
-		}
-	}
-
 	file, err := os.Open(logPath)
 	if err != nil {
 		return stats, fmt.Errorf("open log file: %w", err)
 	}
 	defer file.Close()
 
-	info, err := file.Stat()
+	// Read before awaiting the writer so unchanged EOF polls remain read-only.
+	// Read again after acquiring it: another Parser may have committed while we
+	// waited, and both global and per-log context must describe that same cursor.
+	var supersededProgress db.IngestState
+	loadProgress := func() (db.IngestState, int64, error) {
+		supersededProgress = db.IngestState{}
+		progress := db.IngestState{}
+		if resume {
+			var err error
+			progress, err = p.store.GetIngestCursor(ctx, logPath)
+			if err != nil {
+				return progress, 0, err
+			}
+		}
+		info, err := file.Stat()
+		if err != nil {
+			return progress, 0, fmt.Errorf("stat log file: %w", err)
+		}
+		if progress.Offset > info.Size() {
+			supersededProgress = progress
+			progress = db.IngestState{}
+		} else if progress.Offset > 0 {
+			signature, err := ingestFileSignature(file, progress.Offset)
+			if err != nil {
+				return progress, 0, fmt.Errorf("fingerprint log cursor: %w", err)
+			}
+			if progress.FileSignature == "" || signature != progress.FileSignature {
+				supersededProgress = progress
+				progress = db.IngestState{}
+			}
+		}
+		if resume && !progress.Found && info.Size() > 0 {
+			// Arena renames Player.log to Player-prev.log. Reuse a matching
+			// cursor so old rank responses cannot consume the latest global queue.
+			// Explicit zero-cursor backfills must still replay their own history.
+			cursors, err := p.store.ListIngestCursors(ctx)
+			if err != nil {
+				return progress, 0, err
+			}
+			for _, candidate := range cursors {
+				if candidate.LogPath == logPath || candidate.Offset > info.Size() {
+					continue
+				}
+				signature, err := ingestFileSignature(file, candidate.Offset)
+				if err != nil {
+					return progress, 0, fmt.Errorf("fingerprint rotated log: %w", err)
+				}
+				if signature == candidate.FileSignature {
+					progress = candidate
+					break
+				}
+			}
+		}
+		return progress, info.Size(), nil
+	}
+	progress, fileSize, err := loadProgress()
 	if err != nil {
-		return stats, fmt.Errorf("stat log file: %w", err)
+		return stats, err
 	}
-
-	// MTGA rotates/truncates Player.log and replaces Player-prev.log. A size
-	// regression catches truncation; the saved cursor-window signature catches
-	// replacement files that have already grown beyond the previous offset.
-	if startOffset > info.Size() {
-		startOffset = 0
-		startLine = 0
-		resetState = true
-	} else if startOffset > 0 {
-		currentFileSignature, signatureErr := ingestFileSignature(file, startOffset)
-		if signatureErr != nil {
-			return stats, fmt.Errorf("fingerprint log file at offset %d: %w", startOffset, signatureErr)
+	if progress.Offset > 0 && progress.Offset == fileSize && progress.LogPath == logPath {
+		if err := p.loadParserCheckpoint(ctx); err != nil {
+			return stats, err
 		}
-		if savedFileSignature == "" || currentFileSignature != savedFileSignature {
-			startOffset = 0
-			startLine = 0
-			resetState = true
-		}
-	}
-
-	// Only a validated non-zero cursor can skip parsing: zero may be pinned
-	// for logical-record recovery. Check the signature above even at EOF so
-	// same-size replacements are not mistaken for an unchanged log.
-	if startOffset > 0 && startOffset == info.Size() {
 		stats.CompletedAt = time.Now().UTC()
 		return stats, nil
 	}
 
-	// A zero cursor can represent either a first import, a schema backfill, or
-	// recovery of a pending logical record. Keep intermediate batch commits at
-	// zero for this pass so a crash before the deck submission is reconstructed
-	// cannot strand the next restart in the middle of the log. The final commit
-	// advances to the safe tail once no collector or deck snapshot remains pending.
-	pinCheckpointUntilFinalCommit := startOffset == 0 && startLine == 0
-
-	state := p.stateForLog(logPath, resetState)
-
-	if startOffset > 0 {
-		if _, err := file.Seek(startOffset, io.SeekStart); err != nil {
-			return stats, fmt.Errorf("seek to offset %d: %w", startOffset, err)
-		}
-	}
-
-	reader := bufio.NewReaderSize(file, 4*1024*1024)
-
-	// Hold the store's write slot for the whole pass: the batch transactions
-	// below plus the trailing repair passes are one long write workload, and
-	// racing maintenance for the write lock outlasts SQLite's busy timeout.
-	releaseWriter, writerErr := p.store.AcquireWriter(ctx)
-	if writerErr != nil {
-		return stats, fmt.Errorf("await write slot: %w", writerErr)
+	// Batch transactions and trailing repairs share one write-workload slot.
+	releaseWriter, err := p.store.AcquireWriter(ctx)
+	if err != nil {
+		return stats, fmt.Errorf("await write slot: %w", err)
 	}
 	defer releaseWriter()
+	progress, fileSize, err = loadProgress()
+	if err != nil {
+		return stats, err
+	}
+	if err := p.loadParserCheckpoint(ctx); err != nil {
+		return stats, err
+	}
+	if progress.Offset > 0 && progress.Offset == fileSize && progress.LogPath == logPath {
+		stats.CompletedAt = time.Now().UTC()
+		return stats, nil
+	}
+
+	// Backfills reset offsets but retain the old nonempty cursor signature. A
+	// genuine empty-log checkpoint has an empty signature and may carry cross-log
+	// state, so it must not reset a pending rank queue when its first line arrives.
+	historicalReplay := !resume || (progress.Found && progress.Offset == 0 && progress.FileSignature != "")
+	p.stateMu.Lock()
+	if historicalReplay {
+		if len(p.historicalReplayLogs) == 0 || p.historicalReplayLogs[logPath] {
+			p.pendingCompletedMatches = nil
+			p.historicalReplayLogs = make(map[string]bool)
+		}
+		p.historicalReplayLogs[logPath] = true
+	} else {
+		p.historicalReplayLogs = nil
+	}
+	p.stateMu.Unlock()
+
+	// Always restore from the durable snapshot, even on a reused Parser, so a
+	// cancelled or failed transaction cannot leave in-memory state ahead of it.
+	var state *parseState
+	if resume && progress.Found && !historicalReplay {
+		withContext, err := p.store.GetIngestState(ctx, progress.LogPath)
+		if err != nil {
+			return stats, err
+		}
+		progress.ContextJSON = withContext.ContextJSON
+		state, _ = decodeParseCheckpoint(progress.ContextJSON)
+	}
+	if state == nil {
+		state = &parseState{personaID: p.personaID, playerName: p.playerName}
+		if progress.Offset > 0 {
+			if err := p.reconstructCheckpoint(ctx, file, logPath, progress, state); err != nil {
+				return stats, err
+			}
+		}
+	}
+	startOffset, startLine := progress.Offset, progress.LineNo
+	if _, err := file.Seek(startOffset, io.SeekStart); err != nil {
+		return stats, fmt.Errorf("seek to offset %d: %w", startOffset, err)
+	}
+	reader := bufio.NewReaderSize(file, 4*1024*1024)
 
 	tx, err := p.store.BeginTx(ctx)
 	if err != nil {
@@ -640,24 +652,37 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 			_ = tx.Rollback()
 		}
 	}()
+	if supersededProgress.Found {
+		if err := p.preserveRotatedCheckpoint(ctx, tx, logPath, supersededProgress); err != nil {
+			return stats, err
+		}
+	}
 
 	const batchSize = int64(500)
 	lineNo := startLine
 	byteOffset := startOffset
 	linesSinceCommit := int64(0)
 
+	saveCheckpoint := func() error {
+		signature, err := ingestFileSignature(file, byteOffset)
+		if err != nil {
+			return fmt.Errorf("fingerprint log checkpoint: %w", err)
+		}
+		contextJSON, err := encodeParseCheckpoint(state)
+		if err != nil {
+			return fmt.Errorf("encode ingest context: %w", err)
+		}
+		parserJSON, err := p.encodeParserCheckpoint()
+		if err != nil {
+			return fmt.Errorf("encode parser context: %w", err)
+		}
+		return p.store.SaveIngestCheckpoint(ctx, tx, logPath, byteOffset, lineNo, signature, contextJSON, parserJSON)
+	}
 	commit := func() error {
-		checkpointOffset, checkpointLine := state.ingestCheckpoint(byteOffset, lineNo)
-		if pinCheckpointUntilFinalCommit {
-			checkpointOffset, checkpointLine = 0, 0
-		}
-		fileSignature, signatureErr := ingestFileSignature(file, checkpointOffset)
-		if signatureErr != nil {
-			return fmt.Errorf("fingerprint log checkpoint at offset %d: %w", checkpointOffset, signatureErr)
-		}
-		if err := p.store.SaveIngestState(ctx, tx, logPath, checkpointOffset, checkpointLine, fileSignature); err != nil {
+		if err := saveCheckpoint(); err != nil {
 			return err
 		}
+
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("commit tx: %w", err)
 		}
@@ -709,14 +734,10 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		}
 	}
 
-	checkpointOffset, checkpointLine := state.ingestCheckpoint(byteOffset, lineNo)
-	fileSignature, err := ingestFileSignature(file, checkpointOffset)
-	if err != nil {
-		return stats, fmt.Errorf("fingerprint final log checkpoint at offset %d: %w", checkpointOffset, err)
-	}
-	if err := p.store.SaveIngestState(ctx, tx, logPath, checkpointOffset, checkpointLine, fileSignature); err != nil {
+	if err := saveCheckpoint(); err != nil {
 		return stats, err
 	}
+
 	if err := tx.Commit(); err != nil {
 		return stats, fmt.Errorf("commit final tx: %w", err)
 	}
@@ -765,27 +786,21 @@ func (p *Parser) processLine(ctx context.Context, tx *sql.Tx, stats *model.Parse
 		return p.handleClientToGREJSON(payload, state)
 	}
 
-	if state.personaID == "" {
-		match := rePersonaPlain.FindStringSubmatch(line)
-		if len(match) != 2 {
-			match = rePersonaEscaped.FindStringSubmatch(line)
+	for _, pattern := range []*regexp.Regexp{rePersonaPlain, rePersonaEscaped, rePersonaMatchTo, reClientID} {
+		match := pattern.FindStringSubmatch(line)
+		if len(match) != 2 || strings.HasPrefix(match[1], "NoInstallID") {
+			continue
 		}
-		if len(match) == 2 {
-			id := match[1]
-			if !strings.HasPrefix(id, "NoInstallID") {
-				state.personaID = id
+		id := strings.TrimSpace(match[1])
+		if state.personaID != "" && state.personaID != id {
+			// Discard the former account's match, deck and response context.
+			*state = parseState{
+				reconstructingCheckpoint: state.reconstructingCheckpoint,
+				lastUnityLogTimestamp:    state.lastUnityLogTimestamp,
 			}
 		}
-		if state.personaID == "" {
-			if m := rePersonaMatchTo.FindStringSubmatch(line); len(m) == 2 {
-				state.personaID = strings.TrimSpace(m[1])
-			}
-		}
-		if state.personaID == "" {
-			if m := reClientID.FindStringSubmatch(line); len(m) == 2 {
-				state.personaID = strings.TrimSpace(m[1])
-			}
-		}
+		state.personaID = id
+		break
 	}
 	if state.personaID != "" {
 		p.rememberPersonaID(state.personaID)

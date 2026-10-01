@@ -80,6 +80,13 @@ Use `-resume=true` for incremental ingestion:
 go run ./cmd/ponder parse -db data/ponder.db -resume=true
 ```
 
+Incremental ingestion saves parsing context with its cursor, so restarting the
+app or live tracking preserves active-match diffs, pending responses, and deck
+submissions. Existing databases with cursor-only checkpoints rebuild the saved
+log prefix when new lines next arrive, without committing duplicate records.
+That one-time recovery scales with the prefix length; ordinary unchanged polls
+do not reparse the log or load its full context.
+
 Optional explicit log path:
 
 ```bash

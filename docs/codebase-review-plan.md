@@ -1,14 +1,15 @@
 # Codebase review: issues and implementation plan
 
 Reviewed September 29, 2026. This document records four concrete findings and a
-follow-up maintainability improvement. The CLI loopback default and complete-range
-yearly activity are implemented; remaining work is tracked below.
+follow-up maintainability improvement. Parser restart recovery, the CLI loopback
+default, and complete-range yearly activity are implemented; remaining work is
+tracked below.
 
 ## Priorities and order
 
 | Priority | Work item | Status |
 | --- | --- | --- |
-| P1 | Preserve ingestion context across parser restarts | Not started |
+| P1 | Preserve ingestion context across parser restarts | Complete |
 | P1 | Bind the CLI API to loopback by default | Partially complete |
 | P1 | Reject untrusted-origin API mutations | Not started |
 | P2 | Calculate yearly activity from the complete date range | Complete |
@@ -22,9 +23,9 @@ request-origin validation. Fix activity correctness before restructuring UI code
 
 ### Problem and evidence
 
-`internal/ingest/parser.go` loads the durable byte offset, creates a fresh
-in-memory `parseState`, and seeks directly to that offset. A new parser does not
-restore the active match ID from the earlier log records.
+Before the fix, `internal/ingest/parser.go` loaded the durable byte offset,
+created a fresh in-memory `parseState`, and sought directly to that offset. A new
+parser did not restore the active match ID from the earlier log records.
 
 In `internal/ingest/gre.go`, game-state messages without `gameInfo.matchID` rely
 on `state.activeMatchID`. When both are empty, the message is skipped. The cursor
@@ -42,16 +43,16 @@ instance before the second parse. The existing fixture then reports
 
 ### Implementation tasks
 
-- [ ] Add a permanent regression test using the existing incremental-match fixture.
-- [ ] Choose and document a restart strategy: persist enough parsing context
+- [x] Add a permanent regression test using the existing incremental-match fixture.
+- [x] Choose and document a restart strategy: persist enough parsing context
   alongside the cursor, or replay from a checkpoint that reconstructs that context.
-- [ ] Inventory all state required after restart, including active match/game,
+- [x] Inventory all state required after restart, including active match/game,
   player identity and seat, pending responses, and replay zone context. Restoring
   only the match ID may leave other restart gaps.
-- [ ] Ensure cursor and persisted context remain consistent across batch commits,
+- [x] Ensure cursor and persisted context remain consistent across batch commits,
   cancellation, and failed transactions.
-- [ ] Preserve rotation detection and partial-record recovery behavior.
-- [ ] Add coverage through the live-service stop/start path.
+- [x] Preserve rotation detection and partial-record recovery behavior.
+- [x] Add coverage through the live-service stop/start path.
 
 ### Acceptance checks
 
@@ -62,6 +63,51 @@ instance before the second parse. The existing fixture then reports
   tests continue to pass.
 - Any replay-based recovery has a documented cost and avoids reparsing the whole
   log on every ordinary live poll.
+
+### Implementation result
+
+Completed September 30, 2026. Each ingest transaction now commits a versioned,
+compressed per-log context alongside the byte/line cursor and parsed records.
+The context includes match/game identity, seats, turn/phase, replay objects and
+zones (including hidden identities needed by later diffs), pending response
+headers, multiline collectors, and pending game deck snapshots. Player identity
+and the completed-match rank queue are persisted across files in the same
+transaction. Reused parsers reload durable state before parsing new lines, so a
+failed or cancelled transaction cannot leave their next pass ahead of the cursor.
+
+Existing databases retain their cursors during migration. When new lines arrive
+without a supported per-log checkpoint, a rollback-only pass reconstructs the
+saved prefix before ingesting the suffix. It does not commit duplicate raw events
+or hydrate historical diffs from newer replay frames. Recovery costs one prefix
+scan per successful upgrade; unchanged polls read cursor metadata and small
+global context without loading or decoding the per-log blob. Rotation detection
+and unterminated-tail handling remain in place. Full reparses and schema backfills
+clear stale rank queues while preserving responses split between consecutive logs.
+
+Checkpoint size and encoding work grow with the retained replay state. A local
+synthetic fixture with 100 games and 100 objects per game produced about 5 MB of
+JSON and 218 KB of stored compressed/base64 context; encoding and decoding took
+about 25 ms and 42 ms respectively. These are fixture measurements, not guarantees
+for real logs. A malformed or unsupported global checkpoint returns an explicit
+error rather than silently losing cross-file context.
+
+Regression coverage compares restarted and uninterrupted replay/card observations,
+retries failed commits before and after a 500-line batch, reconstructs legacy
+checkpoints without duplicate raw events, preserves split responses and deck
+submissions, and exercises repeated live-service stop/start. Historical rank
+responses cannot consume a newer pending match during a reparse. All Go tests
+and race checks for ingest, appstate, and DB passed using
+`GOCACHE=/tmp/ponder-review-go-cache`. Desktop GUI smoke checks were not performed.
+
+Review follow-up, October 1, 2026: rotated logs now reuse matching saved cursors
+and context, so importing `Player-prev.log` cannot replay an old rank response
+against a newer pending match. When live tracking reads a replacement `Player.log`
+first, it preserves the matching old checkpoint under `Player-prev.log` in the
+same transaction. An explicit account identity now replaces a cached identity
+and clears the former account's pending match, deck, response, and rank state.
+Regressions cover both rotation orders, unparsed diffs after rotation, account
+changes with and without restarts, and repeated or placeholder identities.
+Account histories still share one database; this does not add account filtering.
 
 ## 2. P1 — CLI API listens on all interfaces by default
 

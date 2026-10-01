@@ -20,9 +20,11 @@ type Store struct {
 }
 
 type IngestState struct {
+	LogPath       string
 	Offset        int64
 	LineNo        int64
 	FileSignature string
+	ContextJSON   string
 	Found         bool
 }
 
@@ -110,12 +112,44 @@ func (s *Store) BeginTx(ctx context.Context) (*sql.Tx, error) {
 }
 
 func (s *Store) GetIngestState(ctx context.Context, logPath string) (IngestState, error) {
-	state := IngestState{}
+	return s.getIngestState(ctx, logPath, true)
+}
+
+// GetIngestCursor avoids fetching the compressed context during idle polls.
+func (s *Store) GetIngestCursor(ctx context.Context, logPath string) (IngestState, error) {
+	return s.getIngestState(ctx, logPath, false)
+}
+
+// ListIngestCursors finds possible renamed logs without loading their contexts.
+func (s *Store) ListIngestCursors(ctx context.Context) ([]IngestState, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT log_path, byte_offset, line_no, file_signature
+		FROM ingest_state WHERE byte_offset > 0 AND file_signature <> '' ORDER BY byte_offset DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("list ingest cursors: %w", err)
+	}
+	defer rows.Close()
+	var states []IngestState
+	for rows.Next() {
+		state := IngestState{Found: true}
+		if err := rows.Scan(&state.LogPath, &state.Offset, &state.LineNo, &state.FileSignature); err != nil {
+			return nil, err
+		}
+		states = append(states, state)
+	}
+	return states, rows.Err()
+}
+
+func (s *Store) getIngestState(ctx context.Context, logPath string, withContext bool) (IngestState, error) {
+	state := IngestState{LogPath: logPath}
+	contextColumn := "''"
+	if withContext {
+		contextColumn = "COALESCE(context_json, '')"
+	}
 	err := s.db.QueryRowContext(ctx, `
-		SELECT byte_offset, line_no, COALESCE(file_signature, '')
+		SELECT byte_offset, line_no, COALESCE(file_signature, ''), `+contextColumn+`
 		FROM ingest_state
 		WHERE log_path = ?
-	`, logPath).Scan(&state.Offset, &state.LineNo, &state.FileSignature)
+	`, logPath).Scan(&state.Offset, &state.LineNo, &state.FileSignature, &state.ContextJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return state, nil
 	}
@@ -133,19 +167,46 @@ func (s *Store) SaveIngestState(
 	offset, lineNo int64,
 	fileSignature string,
 ) error {
+	return s.SaveIngestCheckpoint(ctx, tx, logPath, offset, lineNo, fileSignature, "", "")
+}
+
+// SaveIngestCheckpoint keeps parsed observations, the file cursor, and both
+// per-log and cross-log interpretation state within one transaction.
+func (s *Store) SaveIngestCheckpoint(ctx context.Context, tx *sql.Tx, logPath string, offset, lineNo int64, fileSignature, contextJSON, parserJSON string) error {
 	_, err := tx.ExecContext(ctx, `
-		INSERT INTO ingest_state (log_path, byte_offset, line_no, file_signature, updated_at)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO ingest_state (log_path, byte_offset, line_no, file_signature, context_json, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(log_path) DO UPDATE SET
 			byte_offset = excluded.byte_offset,
 			line_no = excluded.line_no,
 			file_signature = excluded.file_signature,
+			context_json = excluded.context_json,
 			updated_at = excluded.updated_at
-	`, logPath, offset, lineNo, fileSignature, nowUTC())
+	`, logPath, offset, lineNo, fileSignature, contextJSON, nowUTC())
 	if err != nil {
 		return fmt.Errorf("save ingest_state: %w", err)
 	}
+	if parserJSON != "" {
+		_, err = tx.ExecContext(ctx, `INSERT INTO app_metadata (key, value, updated_at)
+			VALUES ('parser_checkpoint', ?, ?) ON CONFLICT(key) DO UPDATE SET
+			value = excluded.value, updated_at = excluded.updated_at`, parserJSON, nowUTC())
+		if err != nil {
+			return fmt.Errorf("save parser checkpoint: %w", err)
+		}
+	}
 	return nil
+}
+
+func (s *Store) ParserCheckpoint(ctx context.Context) (string, error) {
+	var data string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM app_metadata WHERE key = 'parser_checkpoint'`).Scan(&data)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("get parser checkpoint: %w", err)
+	}
+	return data, nil
 }
 
 func (s *Store) SavePlayerName(ctx context.Context, tx *sql.Tx, playerName string) error {

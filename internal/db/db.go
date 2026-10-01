@@ -185,20 +185,33 @@ func Init(ctx context.Context, db *sql.DB) error {
 }
 
 func migrateIngestState(ctx context.Context, conn dbConn) error {
-	hasFileSignature, err := tableHasColumn(ctx, conn, "ingest_state", "file_signature")
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin ingest state migration: %w", err)
+	}
+	defer tx.Rollback()
+	hasFileSignature, err := tableHasColumnInTx(ctx, tx, "ingest_state", "file_signature")
 	if err != nil {
 		return fmt.Errorf("inspect ingest state signature schema: %w", err)
 	}
-	if hasFileSignature {
-		return nil
-	}
-	if _, err := conn.ExecContext(ctx, `
+	if !hasFileSignature {
+		if _, err := tx.ExecContext(ctx, `
 		ALTER TABLE ingest_state
 		ADD COLUMN file_signature TEXT NOT NULL DEFAULT ''
 	`); err != nil {
-		return fmt.Errorf("add ingest state file signature: %w", err)
+			return fmt.Errorf("add ingest state file signature: %w", err)
+		}
 	}
-	return nil
+	hasContext, err := tableHasColumnInTx(ctx, tx, "ingest_state", "context_json")
+	if err != nil {
+		return fmt.Errorf("inspect ingest context schema: %w", err)
+	}
+	if !hasContext {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE ingest_state ADD COLUMN context_json TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add ingest context: %w", err)
+		}
+	}
+	return tx.Commit()
 }
 
 const economyBackfillMetadataKey = "economy_backfill_v1"

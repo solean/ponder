@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
+import { CardPreviewName } from "../components/CardPreviewName";
+import { floatingCardPreviewPosition as floatingPopoverPosition } from "../lib/cardPreviewPosition";
 import { DeckAnalyticsPanel } from "../components/DeckAnalyticsPanel";
 import { ContextualLink, useBreadcrumbLabel } from "../components/Breadcrumbs";
 import { DeckColorIdentity } from "../components/MatchDeckColors";
@@ -30,8 +32,6 @@ type DeckListCard = {
   quantity: number;
 };
 
-type PopoverPlacement = "left" | "right";
-type PopoverPlacementMode = "auto" | "force-right";
 type FloatingPopoverPosition = {
   top: number;
   left: number;
@@ -184,31 +184,6 @@ function cardScryfallHref(card: DeckListCard, scryfallUrl?: string): string {
   return card.cardName?.trim()
     ? `https://scryfall.com/search?q=${encodeURIComponent(`!"${name}"`)}`
     : `https://scryfall.com/search?q=${encodeURIComponent(`arenaid:${card.cardId}`)}`;
-}
-
-function floatingPopoverPosition(
-  anchor: HTMLElement,
-  popoverWidth: number,
-  popoverHeight: number,
-  horizontalGap = 16,
-  viewportPadding = 8,
-): FloatingPopoverPosition {
-  const rect = anchor.getBoundingClientRect();
-  const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-  const availableRight = viewportWidth - rect.right;
-  const availableLeft = rect.left;
-  const placement: PopoverPlacement =
-    availableRight < popoverWidth + horizontalGap && availableLeft >= popoverWidth + horizontalGap ? "left" : "right";
-
-  const rawLeft = placement === "right" ? rect.right + horizontalGap : rect.left - popoverWidth - horizontalGap;
-  const maxLeft = Math.max(viewportPadding, viewportWidth - popoverWidth - viewportPadding);
-  const left = Math.max(viewportPadding, Math.min(rawLeft, maxLeft));
-  const rawTop = rect.top + rect.height / 2 - popoverHeight / 2;
-  const maxTop = Math.max(viewportPadding, viewportHeight - popoverHeight - viewportPadding);
-  const top = Math.max(viewportPadding, Math.min(rawTop, maxTop));
-
-  return { top, left, width: popoverWidth, height: popoverHeight };
 }
 
 function classifyMainboardCard(typeLine?: string): MainboardCategory {
@@ -555,107 +530,8 @@ function ManaCostDisplay({ manaCost }: { manaCost: string }) {
   );
 }
 
-function DeckCardPreviewName({ card, placementMode = "auto" }: { card: DeckListCard; placementMode?: PopoverPlacementMode }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [popoverPlacement, setPopoverPlacement] = useState<PopoverPlacement>("right");
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const name = cardDisplayName(card);
-  const fallbackHref = cardScryfallHref(card);
-
-  const updatePopoverPlacement = () => {
-    if (placementMode === "force-right") {
-      setPopoverPlacement("right");
-      return;
-    }
-
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const wrapper = wrapperRef.current;
-    if (!wrapper) {
-      return;
-    }
-
-    const rect = wrapper.getBoundingClientRect();
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-    const popoverWidth = 336;
-    const horizontalGap = 14;
-    const availableRight = viewportWidth - rect.right;
-    const availableLeft = rect.left;
-
-    if (availableRight >= popoverWidth + horizontalGap) {
-      setPopoverPlacement("right");
-      return;
-    }
-    if (availableLeft >= popoverWidth + horizontalGap) {
-      setPopoverPlacement("left");
-      return;
-    }
-    setPopoverPlacement(availableRight >= availableLeft ? "right" : "left");
-  };
-
-  const openPopover = () => {
-    updatePopoverPlacement();
-    setIsOpen(true);
-  };
-
-  const previewQuery = useQuery({
-    queryKey: cardPreviewQueryKey(card),
-    queryFn: () => fetchCardPreview(card.cardId, card.cardName),
-    enabled: isOpen,
-    staleTime: 1000 * 60 * 60 * 24,
-    gcTime: 1000 * 60 * 60 * 24,
-    retry: 1,
-  });
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-    const onResize = () => updatePopoverPlacement();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [isOpen, placementMode]);
-
-  return (
-    <div
-      className="card-preview-anchor"
-      data-popover-placement={popoverPlacement}
-      ref={wrapperRef}
-      onMouseEnter={openPopover}
-      onMouseLeave={() => setIsOpen(false)}
-    >
-      <a
-        className="card-preview-trigger"
-        href={previewQuery.data?.scryfallUrl ?? fallbackHref}
-        target="_blank"
-        rel="noreferrer"
-        onFocus={openPopover}
-        onBlur={(event) => {
-          if (wrapperRef.current && event.relatedTarget instanceof Node && wrapperRef.current.contains(event.relatedTarget)) {
-            return;
-          }
-          setIsOpen(false);
-        }}
-        aria-label={`Open ${name} on Scryfall`}
-      >
-        <code>{name}</code>
-      </a>
-
-      {isOpen ? (
-        <div className="card-preview-popover" role="tooltip">
-          {previewQuery.isLoading ? (
-            <p className="card-preview-status">Loading preview…</p>
-          ) : previewQuery.data ? (
-            <img src={previewQuery.data.imageUrl} alt={previewQuery.data.name} loading="lazy" />
-          ) : (
-            <p className="card-preview-status">Preview unavailable.</p>
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
+function DeckCardPreviewName({ card }: { card: DeckListCard }) {
+  return <CardPreviewName cardId={card.cardId} cardName={card.cardName} />;
 }
 
 function DeckImageCardLink({
@@ -1596,7 +1472,7 @@ export function DeckDetailPage() {
           {enrichedSideboardCards.map((card) => (
             <li key={`sideboard-${card.cardId}`}>
               <span className="deck-card-qty">{card.quantity}x</span>
-              <DeckCardPreviewName card={card} placementMode="force-right" />
+              <DeckCardPreviewName card={card} />
               <span className="deck-card-mana">
                 <ManaCostDisplay manaCost={card.manaCost} />
                 <RarityDot rarity={card.rarity} />

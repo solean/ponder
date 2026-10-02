@@ -33,6 +33,8 @@ import { fetchCardPreview } from "../../lib/scryfall";
 import type { MatchCardPlay, MatchReplayFrameObject } from "../../lib/types";
 import { ManaSymbol } from "../ManaSymbol";
 
+import { floatingCardPreviewPosition } from "../../lib/cardPreviewPosition";
+
 type PopoverPlacement = "left" | "right";
 
 type ReplayRelationshipPill = {
@@ -105,7 +107,9 @@ function useFloatingCardPreviewPopover(isEnabled = true) {
   const [popoverStyle, setPopoverStyle] = useState<{
     top: number;
     left: number;
-  }>({ top: 0, left: 0 });
+    width: number;
+    height: number;
+  }>({ top: 0, left: 0, width: 336, height: 468 });
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   const updatePopoverPlacement = () => {
@@ -118,40 +122,9 @@ function useFloatingCardPreviewPopover(isEnabled = true) {
       return;
     }
 
-    const rect = wrapper.getBoundingClientRect();
-    const viewportWidth =
-      window.innerWidth || document.documentElement.clientWidth;
-    const viewportHeight =
-      window.innerHeight || document.documentElement.clientHeight;
-    const popoverWidth = 336;
-    const popoverHeight = 468;
-    const horizontalGap = 14;
-    const verticalMargin = 10;
-    const availableRight = viewportWidth - rect.right;
-    const availableLeft = rect.left;
-    let placement: PopoverPlacement;
-
-    if (availableRight >= popoverWidth + horizontalGap) {
-      placement = "right";
-    } else if (availableLeft >= popoverWidth + horizontalGap) {
-      placement = "left";
-    } else {
-      placement = availableRight >= availableLeft ? "right" : "left";
-    }
-
-    const left =
-      placement === "right"
-        ? rect.right + horizontalGap
-        : rect.left - popoverWidth - horizontalGap;
-    const maxTop = Math.max(
-      verticalMargin,
-      viewportHeight - popoverHeight - verticalMargin,
-    );
-    const centeredTop = rect.top + rect.height / 2 - popoverHeight / 2;
-    const top = Math.max(verticalMargin, Math.min(centeredTop, maxTop));
-
-    setPopoverPlacement(placement);
-    setPopoverStyle({ top, left });
+    const position = floatingCardPreviewPosition(wrapper);
+    setPopoverPlacement(position.left < wrapper.getBoundingClientRect().left ? "left" : "right");
+    setPopoverStyle(position);
   };
 
   const openPopover = () => {
@@ -255,10 +228,7 @@ export function CardPreviewName({ card }: { card: PreviewCard }) {
         ? createPortal(
             <div
               className="card-preview-popover card-preview-popover-floating"
-              style={{
-                top: `${popoverStyle.top}px`,
-                left: `${popoverStyle.left}px`,
-              }}
+              style={popoverStyle}
               role="tooltip"
             >
               {previewQuery.isLoading ? (
@@ -321,10 +291,7 @@ export function ReplayCardPreviewAnchor({
         ? createPortal(
             <div
               className="card-preview-popover card-preview-popover-floating"
-              style={{
-                top: `${popoverStyle.top}px`,
-                left: `${popoverStyle.left}px`,
-              }}
+              style={popoverStyle}
               role="tooltip"
             >
               <img src={preview.imageUrl} alt="" width={336} height={468} />

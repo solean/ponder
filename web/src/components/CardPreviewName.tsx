@@ -4,12 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 
 import { fetchCardPreview } from "../lib/scryfall";
 
-const POPOVER_WIDTH = 336;
-const POPOVER_HEIGHT = 468;
-const HORIZONTAL_GAP = 14;
-const VIEWPORT_PADDING = 8;
+import { floatingCardPreviewPosition } from "../lib/cardPreviewPosition";
 
-type FloatingPosition = { top: number; left: number };
+type FloatingPosition = ReturnType<typeof floatingCardPreviewPosition>;
 
 function displayName(cardId: number, cardName?: string): string {
   return cardName?.trim() || `Card ${cardId}`;
@@ -20,28 +17,6 @@ function scryfallHref(cardId: number, cardName?: string): string {
   return name
     ? `https://scryfall.com/search?q=${encodeURIComponent(`!"${name}"`)}`
     : `https://scryfall.com/search?q=${encodeURIComponent(`arenaid:${cardId}`)}`;
-}
-
-// Position the popover beside the anchor in viewport coordinates so it can be
-// rendered via a portal — escaping the live banner's (and table cells')
-// `overflow: hidden`, which would otherwise clip an absolutely-positioned one.
-function floatingPosition(anchor: HTMLElement): FloatingPosition {
-  const rect = anchor.getBoundingClientRect();
-  const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-  const availableRight = viewportWidth - rect.right;
-  const availableLeft = rect.left;
-  const placeLeft = availableRight < POPOVER_WIDTH + HORIZONTAL_GAP && availableLeft >= POPOVER_WIDTH + HORIZONTAL_GAP;
-
-  const rawLeft = placeLeft ? rect.left - POPOVER_WIDTH - HORIZONTAL_GAP : rect.right + HORIZONTAL_GAP;
-  const maxLeft = Math.max(VIEWPORT_PADDING, viewportWidth - POPOVER_WIDTH - VIEWPORT_PADDING);
-  const left = Math.max(VIEWPORT_PADDING, Math.min(rawLeft, maxLeft));
-
-  const rawTop = rect.top + rect.height / 2 - POPOVER_HEIGHT / 2;
-  const maxTop = Math.max(VIEWPORT_PADDING, viewportHeight - POPOVER_HEIGHT - VIEWPORT_PADDING);
-  const top = Math.max(VIEWPORT_PADDING, Math.min(rawTop, maxTop));
-
-  return { top, left };
 }
 
 /**
@@ -77,7 +52,7 @@ export function CardPreviewName({
 
   const openPopover = () => {
     if (anchorRef.current) {
-      setPosition(floatingPosition(anchorRef.current));
+      setPosition(floatingCardPreviewPosition(anchorRef.current));
     }
     setIsOpen(true);
   };
@@ -105,7 +80,7 @@ export function CardPreviewName({
         setIsOpen(false);
         return;
       }
-      setPosition(floatingPosition(anchor));
+      setPosition(floatingCardPreviewPosition(anchor));
     };
     if (passiveHover !== undefined) reposition();
     window.addEventListener("resize", reposition);
@@ -143,7 +118,7 @@ export function CardPreviewName({
             <div
               className="card-preview-popover card-preview-popover-floating"
               role="tooltip"
-              style={{ top: position.top, left: position.left, width: POPOVER_WIDTH, height: POPOVER_HEIGHT }}
+              style={position}
             >
               {previewQuery.isLoading ? (
                 <p className="card-preview-status">Loading preview…</p>

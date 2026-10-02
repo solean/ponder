@@ -57,3 +57,15 @@ test("times out a stalled health request", async () => {
   });
   await expect(waitForBackend("/api/health", new AbortController().signal, { timeoutMs: 10, pollMs: 1 })).rejects.toThrow("taking longer");
 });
+
+test("reports rejected startup requests immediately instead of timing out", async () => {
+  for (const status of [401, 403]) {
+    let calls = 0;
+    globalThis.fetch = async () => {
+      calls++;
+      return Response.json({ error: "forbidden origin" }, { status });
+    };
+    await expect(waitForBackend("/api/health", new AbortController().signal, options)).rejects.toThrow(`(${status}): forbidden origin`);
+    expect(calls).toBe(1);
+  }
+});

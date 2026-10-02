@@ -43,7 +43,7 @@ func TestEconomyEndpointReturnsLatestAndHistory(t *testing.T) {
 		t.Fatalf("commit snapshots: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/economy", nil)
+	req := localRequest(http.MethodGet, "/api/economy", nil)
 	rec := httptest.NewRecorder()
 	NewServer(store, "", nil).Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

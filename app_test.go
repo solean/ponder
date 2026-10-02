@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+
+	"github.com/solean/ponder/internal/api"
 )
 
 func TestDesktopDatabasePath(t *testing.T) {
@@ -62,5 +64,20 @@ func TestAPIMiddlewareStartupStatus(t *testing.T) {
 				t.Fatalf("ready status = %d", response.Code)
 			}
 		})
+	}
+}
+
+func TestAPIMiddlewareAllowsNativeDevelopmentHealthRequest(t *testing.T) {
+	app := &App{}
+	server := api.NewServer(nil, "", nil)
+	server.SetDesktop(app)
+	app.apiHandler = server.Handler()
+	handler := app.APIMiddleware(http.NotFoundHandler())
+	req := httptest.NewRequest(http.MethodGet, "wails://localhost:9245/api/health", nil)
+	req.Header.Set("Referer", "wails://localhost:9245/")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, req)
+	if response.Code != http.StatusOK {
+		t.Fatalf("native development health status=%d; body=%s", response.Code, response.Body.String())
 	}
 }

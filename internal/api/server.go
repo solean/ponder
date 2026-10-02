@@ -10,7 +10,6 @@ import (
 	"io"
 	"io/fs"
 	"log"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -151,7 +150,7 @@ func (s *Server) routes() http.Handler {
 		})
 	}
 
-	return withCORS(withGzip(mux))
+	return withGzip(mux)
 }
 
 // SetStaticAssets serves the frontend from the given filesystem (typically
@@ -182,7 +181,7 @@ func SPAFileServer(assets fs.FS) http.Handler {
 // Handler exposes the full route handler so the desktop shell can mount the
 // API on the Wails asset server (same-origin, no listening port).
 func (s *Server) Handler() http.Handler {
-	return s.routes()
+	return requestPolicy{desktop: s.desktop != nil}.wrap(s.routes())
 }
 
 type gzipResponseWriter struct {
@@ -218,7 +217,7 @@ func withGzip(next http.Handler) http.Handler {
 func (s *Server) Run(ctx context.Context, addr string) error {
 	httpServer := &http.Server{
 		Addr:              addr,
-		Handler:           withHostCheck(s.routes()),
+		Handler:           listenerPolicy(addr).wrap(s.routes()),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -244,52 +243,6 @@ func (s *Server) Run(ctx context.Context, addr string) error {
 	}
 }
 
-// isLocalDevOrigin reports whether a browser Origin belongs to a local dev
-// server (e.g. Vite on http://localhost:5173). Cross-origin access is only
-// granted to those; arbitrary websites must not be able to read the API.
-func isLocalDevOrigin(origin string) bool {
-	parsed, err := url.Parse(origin)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return false
-	}
-	host := parsed.Hostname()
-	return host == "localhost" || host == "127.0.0.1" || host == "::1"
-}
-
-func withCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if origin := r.Header.Get("Origin"); origin != "" && isLocalDevOrigin(origin) {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Add("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS, POST")
-		}
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-// withHostCheck rejects requests whose Host header is a non-local hostname.
-// DNS rebinding attacks reach a localhost server through a hostname the
-// attacker controls; direct IP and localhost access are unaffected.
-func withHostCheck(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		host := r.Host
-		if split, _, err := net.SplitHostPort(host); err == nil {
-			host = split
-		}
-		host = strings.ToLower(strings.Trim(host, "[]"))
-		if host == "localhost" || host == "wails.localhost" || host == "wails" || net.ParseIP(host) != nil {
-			next.ServeHTTP(w, r)
-			return
-		}
-		http.Error(w, "forbidden host", http.StatusForbidden)
-	})
-}
-
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -306,6 +259,9 @@ func writeError(w http.ResponseWriter, status int, message string) {
 }
 
 func decodeJSONBody(r *http.Request, dst any) error {
+	if err := requireJSONContentType(r); err != nil {
+		return err
+	}
 	if r.Body == nil {
 		return nil
 	}
@@ -352,7 +308,7 @@ func (s *Server) handleRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 
 	var input appstate.Config
 	if err := decodeJSONBody(r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeJSONBodyError(w, err)
 		return
 	}
 
@@ -378,7 +334,7 @@ func (s *Server) handleRuntimeImport(w http.ResponseWriter, r *http.Request) {
 		Resume *bool `json:"resume"`
 	}{}
 	if err := decodeJSONBody(r, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeJSONBodyError(w, err)
 		return
 	}
 	resume := true
@@ -439,7 +395,7 @@ func (s *Server) handleRuntimeAutostart(w http.ResponseWriter, r *http.Request) 
 			Enabled bool `json:"enabled"`
 		}{}
 		if err := decodeJSONBody(r, &payload); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeJSONBodyError(w, err)
 			return
 		}
 		status, err := appstate.SetAutostart(payload.Enabled)

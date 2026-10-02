@@ -80,7 +80,7 @@ func seedMatchListStore(t *testing.T, count int) *db.Store {
 func getMatchList(t *testing.T, store *db.Store, target string) model.MatchListResponse {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodGet, target, nil)
+	req := localRequest(http.MethodGet, target, nil)
 	rec := httptest.NewRecorder()
 	NewServer(store, "", nil).Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -154,7 +154,7 @@ func TestMatchReplayStatusEndpoint(t *testing.T) {
 		t.Helper()
 		target := fmt.Sprintf("/api/matches/%d/replay-status", matchID)
 		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		handler.ServeHTTP(rec, localRequest(http.MethodGet, target, nil))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("GET replay-status: status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -193,7 +193,7 @@ func TestMatchReplayStatusEndpoint(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/matches/%d/replay", matchID), nil))
+	handler.ServeHTTP(rec, localRequest(http.MethodGet, fmt.Sprintf("/api/matches/%d/replay", matchID), nil))
 	var frames []model.MatchReplayFrameRow
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET replay: status=%d body=%s", rec.Code, rec.Body.String())
@@ -206,7 +206,7 @@ func TestMatchReplayStatusEndpoint(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/matches/%d/replay-status", matchID+1), nil))
+	handler.ServeHTTP(rec, localRequest(http.MethodGet, fmt.Sprintf("/api/matches/%d/replay-status", matchID+1), nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("missing match status=%d, want 404; body=%s", rec.Code, rec.Body.String())
 	}

@@ -66,7 +66,7 @@ func TestRuntimeOpenURLUsesDesktopBrowser(t *testing.T) {
 	server := NewServer(nil, "", &appstate.Service{})
 	server.SetDesktop(desktop)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/runtime/open-url", strings.NewReader(
+	req := localRequest(http.MethodPost, "/api/runtime/open-url", strings.NewReader(
 		`{"url":"https://mtgarena-support.wizards.com/hc/en-us/articles/360000726823-Creating-Log-Files-on-PC-Mac-Steam"}`,
 	))
 	rec := httptest.NewRecorder()
@@ -85,7 +85,7 @@ func TestRuntimeOpenURLRejectsNonHTTPURLs(t *testing.T) {
 	server := NewServer(nil, "", &appstate.Service{})
 	server.SetDesktop(desktop)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/runtime/open-url", strings.NewReader(
+	req := localRequest(http.MethodPost, "/api/runtime/open-url", strings.NewReader(
 		`{"url":"file:///etc/passwd"}`,
 	))
 	rec := httptest.NewRecorder()

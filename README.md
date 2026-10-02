@@ -125,6 +125,28 @@ The server listens on `127.0.0.1:8080` by default. You can override this with
 `-addr`; binding to a non-loopback address exposes the unauthenticated API to
 machines that can reach the host.
 
+The API rejects untrusted browser origins with HTTP 403 before dispatching any
+handler, including bodyless runtime controls. Same-origin pages and HTTP(S)
+origins on `localhost` or a loopback IP are trusted; all loopback ports remain
+supported for local development. JSON endpoints require `Content-Type: application/json` (parameters such as
+`charset=utf-8` are accepted), and return HTTP 415 for missing or unsupported
+media types. Bodyless controls
+do not require that header.
+
+Requests without `Origin` remain supported for CLI clients. If a Referer or
+`Sec-Fetch-Site: cross-site` identifies an untrusted browser request, it is
+rejected. `Origin: null`, malformed origins, and duplicate Origin headers are
+rejected. Native Wails asset requests use a separate policy that accepts the
+local Wails origin/Referer; those exceptions do not apply to HTTP listeners.
+
+Default listeners accept only localhost and loopback Host headers. An explicit
+non-loopback `-addr` permits its configured IP or hostname; a wildcard bind
+permits literal IP hosts. Arbitrary DNS names remain rejected unless explicitly
+configured. Remote same-origin pages are supported with an explicit remote bind,
+but this policy is not authentication: clients without browser origin headers
+can still use any API exposed by that bind. Forwarded host/protocol headers do
+not expand the trusted origin policy.
+
 API endpoints:
 - `GET /api/health`
 - `GET /api/overview`

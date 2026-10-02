@@ -1,17 +1,17 @@
 # Codebase review: issues and implementation plan
 
 Reviewed September 29, 2026. This document records four concrete findings and a
-follow-up maintainability improvement. Parser restart recovery, the CLI loopback
-default, and complete-range yearly activity are implemented; remaining work is
-tracked below.
+follow-up maintainability improvement. The listed issues and the match-detail
+refactor are implemented; validation and remaining platform limitations are
+recorded below.
 
 ## Priorities and order
 
 | Priority | Work item | Status |
 | --- | --- | --- |
 | P1 | Preserve ingestion context across parser restarts | Complete |
-| P1 | Bind the CLI API to loopback by default | Partially complete |
-| P1 | Reject untrusted-origin API mutations | Not started |
+| P1 | Bind the CLI API to loopback by default | Complete |
+| P1 | Reject untrusted-origin API mutations | Complete |
 | P2 | Calculate yearly activity from the complete date range | Complete |
 | Follow-up | Split the match-detail page into focused components | Complete |
 
@@ -132,10 +132,10 @@ test, not an external network penetration test.
 - [x] Update CLI help, README examples, and scripts that imply the old default.
 - [x] Keep explicit `-addr` overrides supported and document that a non-loopback
   binding exposes the unauthenticated API.
-- [ ] Define host validation consistently with the supported deployment modes,
+- [x] Define host validation consistently with the supported deployment modes,
   preserving intended localhost, IPv6 loopback, and desktop behavior.
 - [x] Add CLI option tests for the default address and explicit override.
-- [ ] Add tests for accepted/rejected host cases as part of origin/host policy work.
+- [x] Add tests for accepted/rejected host cases as part of origin/host policy work.
 
 ### Acceptance checks
 
@@ -155,15 +155,15 @@ of the fix. `go test ./cmd/ponder ./internal/api`,
 `bash -n scripts/start-backend.sh`, and `git diff --check` passed. Go tests used
 `GOCACHE=/tmp/ponder-review-go-cache` because of the default cache's sandbox
 permissions. Desktop/browser smoke checks and a live listener inspection were
-not performed. Host validation and origin protection remain separate pending work.
+not performed. Host validation and origin protection were completed October 1, 2026, as described below.
 
 ## 3. P1 — CORS does not prevent untrusted-origin mutations
 
 ### Problem and evidence
 
-`internal/api/server.go:withCORS` conditionally sets response headers but forwards
-requests from untrusted origins to the same handlers. `decodeJSONBody` accepts
-JSON regardless of the request's content type. Several control endpoints also
+Before the fix, `internal/api/server.go:withCORS` conditionally set response
+headers but forwarded requests from untrusted origins to the same handlers.
+`decodeJSONBody` accepted JSON regardless of the request's content type. Several control endpoints also
 accept a POST without a body.
 
 Withholding CORS headers prevents browser code from reading a response; it does
@@ -178,15 +178,15 @@ returned 200 and invoked a mocked desktop action. No real browser was opened.
 
 ### Implementation tasks
 
-- [ ] Define an explicit origin policy for production desktop, CLI same-origin
+- [x] Define an explicit origin policy for production desktop, CLI same-origin
   pages, and supported local development servers.
-- [ ] Reject disallowed origins before executing state-changing handlers.
-- [ ] Define handling for absent and `null` origins, including non-browser CLI
+- [x] Reject disallowed origins before executing state-changing handlers.
+- [x] Define handling for absent and `null` origins, including non-browser CLI
   clients and actual Wails request behavior.
-- [ ] Validate media types for endpoints that require JSON. Treat this as an
+- [x] Validate media types for endpoints that require JSON. Treat this as an
   additional check, not a replacement for origin validation.
-- [ ] Apply protection to bodyless mutations as well as JSON mutations.
-- [ ] Add handler tests asserting both rejection and absence of side effects.
+- [x] Apply protection to bodyless mutations as well as JSON mutations.
+- [x] Add handler tests asserting both rejection and absence of side effects.
 
 ### Acceptance checks
 
@@ -195,6 +195,56 @@ returned 200 and invoked a mocked desktop action. No real browser was opened.
 - Disallowed preflights do not grant access.
 - Valid same-origin, supported development, and desktop requests still succeed.
 - The missing-Origin policy is explicit and covered by tests.
+
+### Implementation result
+
+Implemented October 1, 2026. A shared request policy validates Host and browser
+origin before route dispatch. `Handler` uses the desktop asset policy when native
+integrations are configured; `Run` always uses a listener policy derived from its
+bind address. Loopback listeners reject remote IP hosts and arbitrary DNS names.
+Explicit remote binds permit their configured host, and wildcard binds permit
+literal IP hosts, while preserving the documented unauthenticated remote mode.
+
+Valid HTTP(S) loopback origins on all local ports support Vite, port fallback,
+and desktop development. Remote browser pages must match the accepted request
+scheme, host, and effective port. Native Wails origins are accepted only by the
+asset handler. Missing Origin remains allowed for CLI clients and the macOS
+webview; an untrusted Referer or cross-site Fetch Metadata is rejected. Null,
+malformed, and duplicate origins are rejected. Forwarded headers do not change
+the policy. Denied preflights receive 403 without CORS grants.
+
+JSON endpoints now require `application/json`, including the activity endpoint's
+separate decoder, and return 415 for unsupported or missing media types. Bodyless
+controls remain supported and receive the same origin protection.
+
+Permanent regressions reproduced the old flaw: text/plain requests from
+untrusted origins invoked mocked desktop actions. The fixed tests check zero
+side effects, actual live start/stop state, origin/host deployment cases,
+preflights, media types, and legitimate mutations. Existing endpoint fixtures now
+supply the same loopback host and JSON headers as the frontend.
+
+Browser and native macOS Wails smoke checks used temporary mock desktop actions:
+trusted JSON and bodyless POSTs succeeded, text/plain JSON returned 415, and a
+sandboxed browser form's opaque-origin POST returned 403. The native webview sent
+no Origin and a `wails://localhost/` Referer; both were preserved successfully.
+No real native action was invoked or tracker data changed. Windows/Linux origin
+forms are covered by handler tests; native smoke checks on those platforms remain
+unperformed. `go test ./...`, `go test -race ./internal/api`, `go vet ./...`,
+frontend typechecking, all 193 frontend tests, and `git diff --check` passed
+using a temporary writable Go cache. The temporary smoke harness was removed.
+
+Development startup follow-up, October 1, 2026: the portless native harness did
+not cover Wails development URLs. Wails adds the Vite port to the native URL
+(`wails://localhost:9245`); rejecting that port made health checks return 403 and
+the frontend eventually displayed a misleading timeout. Native custom origins
+now require the full authority, including the port, to match the asset request.
+HTTP listeners still reject Wails origins. Regressions cover native development
+Origin/Referer, mismatched ports, and the actual App API middleware path. Startup
+now reports JSON 401/403 permission errors immediately instead of retrying them
+until the timeout. Both regressions failed before their fixes and pass afterward.
+The running development app rebuilt and loaded its dashboard successfully.
+Full Go tests, API race tests, frontend typechecking/build, all 194 frontend
+tests, and diff checks passed.
 
 ## 4. P2 — Yearly activity is calculated from only 500 matches
 

@@ -73,7 +73,7 @@ func TestLiveEndpointProjectsTurnButStoreRetainsArenaTurn(t *testing.T) {
 		t.Fatalf("stored live turn = %d, want raw Arena turn 4", rawTurn)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/live", nil)
+	req := localRequest(http.MethodGet, "/api/live", nil)
 	rec := httptest.NewRecorder()
 	NewServer(store, "", nil).Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -180,7 +180,7 @@ func TestLiveEndpointUsesSubmittedDeckAndLatestKnownZones(t *testing.T) {
 		t.Fatalf("commit: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/live", nil)
+	req := localRequest(http.MethodGet, "/api/live", nil)
 	rec := httptest.NewRecorder()
 	NewServer(store, "", nil).Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

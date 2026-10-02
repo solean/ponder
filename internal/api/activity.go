@@ -40,6 +40,10 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	if err := requireJSONContentType(r); err != nil {
+		writeJSONBodyError(w, err)
+		return
+	}
 	var request struct {
 		Days []model.ActivityDayBoundary `json:"days"`
 	}

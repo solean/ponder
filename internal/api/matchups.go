@@ -1074,7 +1074,7 @@ func (s *Server) handleMatchOpponentArchetype(w http.ResponseWriter, r *http.Req
 		Archetype string `json:"archetype"`
 	}{}
 	if err := decodeJSONBody(r, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeJSONBodyError(w, err)
 		return
 	}
 	archetype := strings.ToLower(strings.TrimSpace(payload.Archetype))

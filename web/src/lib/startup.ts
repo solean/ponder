@@ -35,6 +35,11 @@ export async function waitForBackend(
       const body = await response.json() as { status?: string; error?: string };
       signal.throwIfAborted();
       if (response.ok && body.status === "ok") return true;
+      if (response.status === 401 || response.status === 403) {
+        throw new StartupFailure(
+          `Ponder’s startup request was rejected (${response.status}): ${body.error || "access denied"}`,
+        );
+      }
       if (body.status === "failed") {
         throw new StartupFailure(body.error || "Ponder could not start. Restart the app and try again.");
       }

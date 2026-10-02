@@ -36,7 +36,7 @@ func TestSPAFallback(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", tc.path, nil)
+			req := localRequest("GET", tc.path, nil)
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)
 

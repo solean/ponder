@@ -74,7 +74,7 @@ func TestActivityIncludesCompleteYearBeyondMatchListLimit(t *testing.T) {
 	}
 	server := NewServer(db.NewStore(database), "", nil)
 	w := httptest.NewRecorder()
-	server.routes().ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/activity", bytes.NewReader(body)))
+	server.Handler().ServeHTTP(w, localRequest(http.MethodPost, "/api/activity", bytes.NewReader(body)))
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
@@ -190,7 +190,7 @@ func TestActivityRequestValidation(t *testing.T) {
 		{http.MethodPost, strings.Repeat(" ", 64<<10) + `{}`, http.StatusBadRequest},
 	} {
 		w := httptest.NewRecorder()
-		server.routes().ServeHTTP(w, httptest.NewRequest(fixture.method, "/api/activity", strings.NewReader(fixture.body)))
+		server.Handler().ServeHTTP(w, localRequest(fixture.method, "/api/activity", strings.NewReader(fixture.body)))
 		if w.Code != fixture.status {
 			t.Fatalf("request %q: status = %d, want %d", fixture.body[:min(30, len(fixture.body))], w.Code, fixture.status)
 		}

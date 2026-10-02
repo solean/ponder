@@ -67,7 +67,7 @@ func (s *Server) handleRuntimeReveal(w http.ResponseWriter, r *http.Request) {
 		Path string `json:"path"`
 	}{}
 	if err := decodeJSONBody(r, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeJSONBodyError(w, err)
 		return
 	}
 
@@ -101,7 +101,7 @@ func (s *Server) handleRuntimeOpenURL(w http.ResponseWriter, r *http.Request) {
 		URL string `json:"url"`
 	}{}
 	if err := decodeJSONBody(r, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeJSONBodyError(w, err)
 		return
 	}
 	parsed, err := url.Parse(strings.TrimSpace(payload.URL))

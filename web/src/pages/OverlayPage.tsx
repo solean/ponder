@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
+import { ManaSymbol } from "../components/ManaSymbol";
 import { CardPreviewName } from "../components/CardPreviewName";
 import { api } from "../lib/api";
 import { fetchCardPreview } from "../lib/scryfall";
-import type { LiveDeckCard, LiveMatch, OpponentObservedCard } from "../lib/types";
+import type { LiveMatch } from "../lib/types";
 
 function cardName(card: { cardId: number; cardName?: string }): string {
   return card.cardName?.trim() || `Card ${card.cardId}`;
@@ -18,7 +20,7 @@ function compareCardNames(
   return byName || left.cardId - right.cardId;
 }
 
-function useOrderedCards<T extends { cardId: number; cardName?: string }>(cards: T[]): T[] {
+function useOrderedCards<T extends { cardId: number; cardName?: string }>(cards: T[]) {
   // Reuse the deck page's batched metadata requests and the hover preview cache.
   const previews = useQueries({
     queries: cards.map((card) => ({
@@ -36,7 +38,8 @@ function useOrderedCards<T extends { cardId: number; cardName?: string }>(cards:
       const metadata = previews[index]?.data;
       return {
         card,
-        isLand: metadata?.typeLine?.toLowerCase().includes("land") ?? false,
+        isLand: /\bland\b/i.test(metadata?.typeLine?.split(" // ")[0] ?? ""),
+        manaCost: metadata?.manaCost ?? "",
         manaValue: metadata?.manaValue ?? Number.POSITIVE_INFINITY,
       };
     });
@@ -47,12 +50,96 @@ function useOrderedCards<T extends { cardId: number; cardName?: string }>(cards:
       }
       return compareCardNames(left.card, right.card);
     });
-    return ranked.map(({ card }) => card);
+    return ranked.map(({ card, isLand, manaCost }) => ({ ...card, isLand, manaCost }));
   }, [cards, previews]);
+}
+
+function OverlayManaCost({ cost }: { cost: string }) {
+  if (!cost) return <span />;
+  return (
+    <span className="overlay-mana-cost" aria-label={`Mana cost ${cost}`}>
+      {cost.split(/(\{[^}]+\})/).filter(Boolean).map((part, index) =>
+        part.startsWith("{") ? <ManaSymbol key={index} token={part.slice(1, -1)} /> : <span key={index}>{part.trim()}</span>,
+      )}
+    </span>
+  );
+}
+
+function OverlaySubmenu({ title, count, children }: { title: string; count: number; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const flyoutRef = useRef<HTMLDivElement>(null);
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ left: 0, top: 0, width: 288 });
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const reposition = () => {
+      const trigger = ref.current?.getBoundingClientRect();
+      const panel = ref.current?.closest(".overlay-panel")?.getBoundingClientRect();
+      const flyout = flyoutRef.current;
+      if (!trigger || !panel || !flyout) return;
+      const width = Math.min(panel.width, window.innerWidth - panel.right);
+      setPosition({
+        left: panel.right,
+        top: Math.max(0, Math.min(trigger.top, window.innerHeight - flyout.offsetHeight)),
+        width,
+      });
+    };
+    reposition();
+    const observer = new ResizeObserver(reposition);
+    if (flyoutRef.current) observer.observe(flyoutRef.current);
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    const onPointer = (event: Event) => {
+      const point = (event as CustomEvent<{ x: number; y: number } | null>).detail;
+      const contains = (element: HTMLElement | null) => {
+        const rect = element?.getBoundingClientRect();
+        return Boolean(point && rect && point.x * window.innerWidth >= rect.left &&
+          point.x * window.innerWidth <= rect.right + 1 && point.y * window.innerHeight >= rect.top &&
+          point.y * window.innerHeight < rect.bottom);
+      };
+      setOpen(contains(ref.current) || contains(flyoutRef.current));
+    };
+    window.addEventListener("ponder:overlay-pointer", onPointer);
+    return () => window.removeEventListener("ponder:overlay-pointer", onPointer);
+  }, []);
+
+  return (
+    <div className="overlay-submenu" ref={ref}
+      onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}
+      onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget) && !flyoutRef.current?.contains(event.relatedTarget)) setOpen(false);
+      }}>
+      <button type="button" aria-expanded={open} aria-controls={open ? id : undefined}
+        onClick={() => setOpen((current) => !current)}>
+        <span>{title}</span><span className="overlay-submenu-count">{count}</span><span aria-hidden="true">›</span>
+      </button>
+      {open && createPortal(
+        <div id={id} ref={flyoutRef} className="overlay-panel overlay-submenu-flyout"
+          role="region" aria-label={title} style={position}>
+          <div className="overlay-submenu-heading">{title}<span>{count}</span></div>
+          {children}
+        </div>, document.body,
+      )}
+    </div>
+  );
 }
 
 function DeckPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: string | null }) {
   const cards = useOrderedCards(live.deck);
+  const main = cards.filter((card) => card.section === "main" && !card.isLand);
+  const lands = cards.filter((card) => card.section === "main" && card.isLand);
+  const sideboard = cards.filter((card) => card.section === "sideboard");
   const libraryCount = live.libraryCount;
   const hasLibraryCount = libraryCount != null;
   const sourceLabel =
@@ -61,6 +148,28 @@ function DeckPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: string
       : live.deckSource === "linked"
         ? "Linked deck estimate"
         : "Deck submission unavailable";
+
+  const renderCards = (entries: typeof cards) => (
+    <ul className="overlay-card-list">
+      {entries.map((card) => {
+        const name = cardName(card);
+        const remainingLabel = card.remaining == null ? "Unknown" : `${card.remaining} of ${card.quantity}`;
+        return (
+          <li className={card.section === "main" && card.remaining === 0 ? "is-empty" : undefined} key={`${card.section}:${card.cardId}`} data-overlay-card={`deck:${card.section}:${card.cardId}`}>
+            <span className="overlay-card-mark" aria-hidden="true" />
+            <div className="overlay-card-name">
+              <CardPreviewName cardId={card.cardId} cardName={card.cardName} label={<span>{name}</span>} passiveHover={hoveredCard === `deck:${card.section}:${card.cardId}`} />
+            </div>
+            <OverlayManaCost cost={card.manaCost} />
+            <span className="overlay-card-count" aria-label={card.section === "sideboard" ? `${card.quantity} sideboard copies` : `${remainingLabel} copies left`}>
+              <strong>{card.section === "sideboard" ? card.quantity : card.remaining ?? "—"}</strong>
+              {card.section === "main" && <span>/{card.quantity}</span>}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
 
   return (
     <aside className="overlay-panel overlay-panel-deck" aria-labelledby="overlay-deck-title">
@@ -81,24 +190,11 @@ function DeckPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: string
         <span>Left</span>
       </div>
       {cards.length > 0 ? (
-        <ul className="overlay-card-list">
-          {cards.map((card: LiveDeckCard) => {
-            const name = cardName(card);
-            const remainingLabel = card.remaining == null ? "Unknown" : `${card.remaining} of ${card.quantity}`;
-            return (
-              <li className={card.remaining === 0 ? "is-empty" : undefined} key={card.cardId} data-overlay-card={`deck:${card.cardId}`}>
-                <span className="overlay-card-mark" aria-hidden="true" />
-                <div className="overlay-card-name">
-                  <CardPreviewName cardId={card.cardId} cardName={card.cardName} label={<span>{name}</span>} passiveHover={hoveredCard === `deck:${card.cardId}`} />
-                </div>
-                <span className="overlay-card-count" aria-label={`${remainingLabel} copies left`}>
-                  <strong>{card.remaining ?? "—"}</strong>
-                  <span>/{card.quantity}</span>
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="overlay-deck-sections">
+          {renderCards(main)}
+          {lands.length > 0 && <OverlaySubmenu title="Lands" count={lands.reduce((sum, card) => sum + card.quantity, 0)}>{renderCards(lands)}</OverlaySubmenu>}
+          {sideboard.length > 0 && <OverlaySubmenu title="Sideboard" count={sideboard.reduce((sum, card) => sum + card.quantity, 0)}>{renderCards(sideboard)}</OverlaySubmenu>}
+        </div>
       ) : (
         <p className="overlay-empty">Waiting for the submitted decklist.</p>
       )}
@@ -137,7 +233,7 @@ function OpponentPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: st
       </div>
       {cards.length > 0 ? (
         <ul className="overlay-card-list">
-          {cards.map((card: OpponentObservedCard) => {
+          {cards.map((card) => {
             const name = cardName(card);
             return (
               <li key={card.cardId} data-overlay-card={`opponent:${card.cardId}`}>
@@ -145,6 +241,7 @@ function OpponentPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: st
                 <div className="overlay-card-name">
                   <CardPreviewName cardId={card.cardId} cardName={card.cardName} label={<span>{name}</span>} passiveHover={hoveredCard === `opponent:${card.cardId}`} />
                 </div>
+                <OverlayManaCost cost={card.manaCost} />
                 <span className="overlay-card-count" aria-label={`${card.quantity} copies seen`}>
                   <strong>{card.quantity}</strong>
                 </span>
@@ -176,11 +273,18 @@ export function OverlayPage() {
         const y = point.y * window.innerHeight;
         // The native overlay remains click-through. Hit-test whole visible rows
         // so names, counts, and row padding all reveal the same card preview.
-        for (const row of hudRef.current.querySelectorAll<HTMLElement>("[data-overlay-card]")) {
+        for (const row of document.querySelectorAll<HTMLElement>(".overlay-hud [data-overlay-card], .overlay-submenu-flyout [data-overlay-card]")) {
           const list = row.parentElement;
           if (!list) continue;
           const rect = row.getBoundingClientRect();
           const clip = list.getBoundingClientRect();
+          // Nested menus can be clipped by the scrolling deck section or panel.
+          for (let ancestor = list.parentElement; ancestor && ancestor !== hudRef.current && ancestor !== document.body; ancestor = ancestor.parentElement) {
+            const bounds = ancestor.getBoundingClientRect();
+            const bottom = Math.min(clip.bottom, bounds.bottom);
+            clip.y = Math.max(clip.top, bounds.top);
+            clip.height = Math.max(0, bottom - clip.top);
+          }
           if (x >= Math.max(rect.left, clip.left) && x < Math.min(rect.right, clip.right) &&
               y >= Math.max(rect.top, clip.top) && y < Math.min(rect.bottom, clip.bottom)) {
             next = row.dataset.overlayCard ?? null;
@@ -236,7 +340,7 @@ export function OverlayPage() {
 
   return (
     <main className="overlay-hud" aria-label="Ponder game overlay" ref={hudRef}>
-      <DeckPanel live={live} hoveredCard={hoveredCard} />
+      <DeckPanel key={`${live.match.id}:${live.gameNumber}`} live={live} hoveredCard={hoveredCard} />
       <OpponentPanel live={live} hoveredCard={hoveredCard} />
     </main>
   );

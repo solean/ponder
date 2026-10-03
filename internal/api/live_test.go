@@ -25,9 +25,39 @@ func TestProjectLiveDeckSubtractsKnownCards(t *testing.T) {
 	if total != 5 || library == nil || *library != 1 {
 		t.Fatalf("projected totals = %d, %v; want 5, 1", total, library)
 	}
-	if len(deck) != 2 || deck[0].Remaining == nil || *deck[0].Remaining != 1 ||
+	if len(deck) != 3 || deck[0].Remaining == nil || *deck[0].Remaining != 1 ||
 		deck[1].Remaining == nil || *deck[1].Remaining != 0 {
 		t.Fatalf("projected deck = %#v, want remaining counts 1 and 0", deck)
+	}
+	if deck[2].Section != "sideboard" || deck[2].Remaining != nil {
+		t.Fatalf("sideboard = %#v, want sideboard section without a remaining count", deck[2])
+	}
+}
+
+func TestProjectLiveDeckKeepsSideboardSeparateFromLibrary(t *testing.T) {
+	t.Parallel()
+	cards := []model.DeckCardRow{
+		{Section: "main", CardID: 101, Quantity: 4, CardName: "Alpha"},
+		{Section: "sideboard", CardID: 101, Quantity: 2, CardName: "Alpha"},
+		{Section: "other", CardID: 102, Quantity: 1},
+		{Section: "sideboard", CardID: 103, Quantity: 0},
+	}
+	for _, stateAvailable := range []bool{false, true} {
+		deck, total, library := projectLiveDeck(cards, map[int64]int64{101: 1}, stateAvailable)
+		if len(deck) != 2 || total != 4 || deck[1].Remaining != nil {
+			t.Fatalf("state available %v: deck = %#v, total = %d", stateAvailable, deck, total)
+		}
+		if stateAvailable {
+			if library == nil || *library != 3 || deck[0].Remaining == nil || *deck[0].Remaining != 3 {
+				t.Fatalf("library = %v, main card = %#v; want 3 remaining", library, deck[0])
+			}
+		} else if library != nil || deck[0].Remaining != nil {
+			t.Fatalf("unknown state should omit remaining counts: library = %v, deck = %#v", library, deck)
+		}
+	}
+	deck, total, library := projectLiveDeck(cards[1:2], nil, true)
+	if len(deck) != 1 || total != 0 || library != nil {
+		t.Fatalf("sideboard-only deck = %#v, total = %d, library = %v", deck, total, library)
 	}
 }
 
@@ -111,6 +141,7 @@ func TestLiveEndpointUsesSubmittedDeckAndLatestKnownZones(t *testing.T) {
 	if err := store.UpsertCardNames(ctx, map[int64]string{
 		101: "Alpha",
 		102: "Beta",
+		103: "Sideboard Card",
 		999: "Old Linked Card",
 	}); err != nil {
 		t.Fatalf("upsert card names: %v", err)
@@ -141,7 +172,7 @@ func TestLiveEndpointUsesSubmittedDeckAndLatestKnownZones(t *testing.T) {
 		observedAt,
 		"gre_submit_deck",
 		[]int64{101, 101, 102, 102, 102},
-		nil,
+		[]int64{103, 103},
 	); err != nil {
 		t.Fatalf("replace submitted deck snapshot: %v", err)
 	}
@@ -202,11 +233,17 @@ func TestLiveEndpointUsesSubmittedDeckAndLatestKnownZones(t *testing.T) {
 	if response.Live.DeckTotal != 5 || response.Live.LibraryCount == nil || *response.Live.LibraryCount != 2 {
 		t.Fatalf("live totals = %d, %v; want 5, 2", response.Live.DeckTotal, response.Live.LibraryCount)
 	}
-	if len(response.Live.Deck) != 2 {
-		t.Fatalf("live deck = %#v, want only two submitted mainboard cards", response.Live.Deck)
+	if len(response.Live.Deck) != 3 {
+		t.Fatalf("live deck = %#v, want two submitted mainboard cards and one sideboard card", response.Live.Deck)
 	}
 	remaining := make(map[int64]int64, len(response.Live.Deck))
 	for _, card := range response.Live.Deck {
+		if card.Section == "sideboard" {
+			if card.CardID != 103 || card.Quantity != 2 || card.CardName != "Sideboard Card" || card.Remaining != nil {
+				t.Fatalf("sideboard card = %#v, want two named copies without a remaining count", card)
+			}
+			continue
+		}
 		if card.Remaining == nil {
 			t.Fatalf("remaining count missing for card %#v", card)
 		}

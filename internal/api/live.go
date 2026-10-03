@@ -18,7 +18,7 @@ func projectLiveDeck(
 	deck := make([]model.LiveDeckCardRow, 0, len(cards))
 	var deckTotal, libraryCount int64
 	for _, card := range cards {
-		if card.Section != "main" || card.Quantity <= 0 {
+		if (card.Section != "main" && card.Section != "sideboard") || card.Quantity <= 0 {
 			continue
 		}
 		row := model.LiveDeckCardRow{
@@ -27,11 +27,13 @@ func projectLiveDeck(
 			Quantity: card.Quantity,
 			CardName: card.CardName,
 		}
-		deckTotal += card.Quantity
-		if stateAvailable {
-			remaining := max(int64(0), card.Quantity-knownOutsideLibrary[card.CardID])
-			row.Remaining = &remaining
-			libraryCount += remaining
+		if card.Section == "main" {
+			deckTotal += card.Quantity
+			if stateAvailable {
+				remaining := max(int64(0), card.Quantity-knownOutsideLibrary[card.CardID])
+				row.Remaining = &remaining
+				libraryCount += remaining
+			}
 		}
 		deck = append(deck, row)
 	}
@@ -43,7 +45,7 @@ func projectLiveDeck(
 		}
 		return deck[i].CardID < deck[j].CardID
 	})
-	if !stateAvailable || len(deck) == 0 {
+	if !stateAvailable || deckTotal == 0 {
 		return deck, deckTotal, nil
 	}
 	return deck, deckTotal, &libraryCount

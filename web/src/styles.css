@@ -11629,7 +11629,8 @@ html.overlay-document body::before {
   --overlay-accent-soft: rgba(240, 164, 91, 0.14);
   display: flex;
   flex-direction: column;
-  width: clamp(19rem, 23vw, 22rem);
+  width: min(18rem, calc(50vw - 0.325rem));
+  flex-shrink: 0;
   max-height: 100vh;
   overflow: hidden;
   pointer-events: none;
@@ -11654,6 +11655,7 @@ html.overlay-document body::before {
 }
 
 .overlay-panel-head {
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
@@ -11761,11 +11763,11 @@ html.overlay-document body::before {
 
 .overlay-card-list li {
   display: grid;
-  grid-template-columns: 0.25rem minmax(0, 1fr) 3rem;
+  grid-template-columns: 0.2rem minmax(0, 1fr) auto 2rem;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.35rem;
   min-height: 2rem;
-  padding: 0.32rem 0.9rem 0.32rem 0.55rem;
+  padding: 0.3rem 0.6rem 0.3rem 0.4rem;
   border-top: 1px solid rgba(255, 255, 255, 0.07);
   background: rgba(0, 0, 0, 0.12);
   transition:
@@ -11833,6 +11835,7 @@ html.overlay-document body::before {
 }
 
 .overlay-panel-foot {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 0.42rem;
@@ -11896,7 +11899,7 @@ html.overlay-document body::before {
   }
 
   .overlay-panel {
-    width: calc(50vw - 0.325rem);
+    width: min(18rem, calc(50vw - 0.325rem));
   }
 }
 
@@ -11904,6 +11907,89 @@ html.overlay-document body::before {
   .overlay-panel {
     animation: none;
   }
+}
+
+.overlay-mana-cost {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  max-width: 5rem;
+  font-size: 0.625rem;
+}
+
+.overlay-mana-cost .mana-symbol-icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.overlay-card-name .card-preview-trigger {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overlay-deck-sections {
+  min-height: 0;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+.overlay-submenu {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.overlay-submenu button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 0.55rem 0.6rem;
+  color: var(--overlay-accent);
+  background: rgba(0, 0, 0, 0.22);
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.overlay-submenu-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  color: rgba(224, 230, 238, 0.7);
+}
+
+.overlay-submenu button:focus-visible {
+  outline: 2px solid var(--overlay-accent);
+  outline-offset: -2px;
+}
+
+.overlay-submenu-flyout {
+  position: fixed;
+  z-index: 20;
+  border-radius: 0 8px 8px 0;
+  pointer-events: auto;
+  color: #f5f7fa;
+  font-family: var(--font-sans);
+  animation: none;
+}
+
+.overlay-submenu-flyout .overlay-card-list {
+  overflow-y: auto;
+}
+
+.overlay-submenu-heading {
+  display: flex;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--overlay-accent);
+  font-size: 0.6875rem;
+  font-weight: 600;
 }
 
 /* Startup readiness */

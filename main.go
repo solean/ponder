@@ -23,6 +23,7 @@ func main() {
 	}
 
 	desktop := NewApp(assets)
+	windowState := newMainWindowState()
 	wailsApp := application.New(application.Options{
 		Name:        appDisplayName,
 		Description: "Private, local-first MTG Arena match tracking and analytics.",
@@ -37,16 +38,20 @@ func main() {
 			UniqueID:               "dev.ixianlabs.ponder",
 			OnSecondInstanceLaunch: desktop.onSecondInstanceLaunch,
 		},
-		OnShutdown: desktop.shutdown,
+		OnShutdown: func() {
+			windowState.flush()
+			desktop.shutdown()
+		},
 	})
 
 	mainWindow := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "main",
 		Title:            appDisplayName,
-		Width:            1480,
-		Height:           960,
+		Width:            1600,
+		Height:           1000,
 		MinWidth:         1200,
 		MinHeight:        760,
+		Hidden:           true,
 		BackgroundColour: application.NewRGBA(8, 12, 21, 255),
 		URL:              "/",
 		Mac: application.MacWindow{
@@ -89,6 +94,8 @@ func main() {
 	// Closing the main window keeps the log tailer running. The Dock icon or a
 	// second launch restores the existing window; Cmd+Q still quits the app.
 	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		windowState.capture(mainWindow)
+		windowState.flush()
 		mainWindow.Hide()
 		event.Cancel()
 	})
@@ -106,6 +113,8 @@ func main() {
 		mainWindow.Focus()
 	})
 	wailsApp.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		windowState.restore(wailsApp, mainWindow)
+		mainWindow.Show()
 		desktop.startup()
 		desktop.showStartupError()
 		application.InvokeSync(func() {

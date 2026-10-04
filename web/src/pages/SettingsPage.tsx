@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { StatusMessage } from "../components/StatusMessage";
+import { OverlaySettingsPanel } from "../components/OverlaySettingsPanel";
 import { api } from "../lib/api";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { APP_NAME } from "../lib/branding";
@@ -1024,6 +1025,8 @@ export function SettingsPage() {
           </article>
         </div>
       </section>
+
+      <OverlaySettingsPanel />
 
       <section className="panel">
         <div className="panel-head panel-head--stacked">

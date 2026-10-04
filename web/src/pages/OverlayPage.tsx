@@ -5,6 +5,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { ManaSymbol } from "../components/ManaSymbol";
 import { CardPreviewName } from "../components/CardPreviewName";
 import { api } from "../lib/api";
+import { DEFAULT_OVERLAY_SETTINGS, overlayPanelWidth, overlayShortcutLabel } from "../lib/overlaySettings";
 import { fetchCardPreview } from "../lib/scryfall";
 import type { LiveMatch } from "../lib/types";
 
@@ -89,6 +90,8 @@ function OverlaySubmenu({ title, count, children }: { title: string; count: numb
     reposition();
     const observer = new ResizeObserver(reposition);
     if (flyoutRef.current) observer.observe(flyoutRef.current);
+    const panel = ref.current?.closest(".overlay-panel");
+    if (panel) observer.observe(panel);
     window.addEventListener("resize", reposition);
     window.addEventListener("scroll", reposition, true);
     return () => {
@@ -135,7 +138,7 @@ function OverlaySubmenu({ title, count, children }: { title: string; count: numb
   );
 }
 
-function DeckPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: string | null }) {
+function DeckPanel({ live, hoveredCard, shortcut }: { live: LiveMatch; hoveredCard: string | null; shortcut: string }) {
   const cards = useOrderedCards(live.deck);
   const main = cards.filter((card) => card.section === "main" && !card.isLand);
   const lands = cards.filter((card) => card.section === "main" && card.isLand);
@@ -203,7 +206,7 @@ function DeckPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: string
         {hasLibraryCount ? `${live.deckTotal - libraryCount} known outside the library` : "Waiting for full game state"}
       </footer>
       <div className="overlay-panel-foot">
-        {navigator.platform.startsWith("Mac") ? "⌘⇧O" : "Ctrl+Shift+O"} · hide/show overlay
+        {overlayShortcutLabel(shortcut)} · hide/show overlay
       </div>
     </aside>
   );
@@ -263,6 +266,42 @@ function OpponentPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: st
 export function OverlayPage() {
   const hudRef = useRef<HTMLElement | null>(null);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+  const settingsQuery = useQuery({
+    queryKey: ["overlay-settings"],
+    queryFn: api.overlaySettings,
+    refetchInterval: 2000,
+    refetchIntervalInBackground: true,
+  });
+  const settings = settingsQuery.data ?? DEFAULT_OVERLAY_SETTINGS;
+  const [previewCard, setPreviewCard] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPreviewCard(null);
+    if (!settings.cardPreviews || !hoveredCard) return;
+    const timer = window.setTimeout(() => setPreviewCard(hoveredCard), settings.hoverDelayMs);
+    return () => window.clearTimeout(timer);
+  }, [hoveredCard, settings.cardPreviews, settings.hoverDelayMs]);
+  const activePreview = settings.cardPreviews && previewCard === hoveredCard ? previewCard : null;
+
+  useLayoutEffect(() => {
+    // Root variables also reach the portaled Lands and Sideboard flyouts.
+    const root = document.documentElement;
+    const values: Record<string, string> = {
+      "--overlay-panel-width": `${overlayPanelWidth(settings.panelSize)}rem`,
+      "--overlay-opacity": String(settings.opacity),
+      "--overlay-card-font-size": settings.panelSize === "large" ? "0.875rem" : settings.panelSize === "compact" ? "0.6875rem" : "0.75rem",
+      "--overlay-row-height": settings.panelSize === "large" ? "2.3rem" : settings.panelSize === "compact" ? "1.75rem" : "2rem",
+    };
+    const previous = Object.keys(values).map((key) => [key, root.style.getPropertyValue(key)]);
+    for (const [key, value] of Object.entries(values)) root.style.setProperty(key, value);
+    return () => {
+      for (const [key, value] of previous) {
+        if (value) root.style.setProperty(key, value);
+        else root.style.removeProperty(key);
+      }
+    };
+  }, [settings.panelSize, settings.opacity]);
+
 
   useEffect(() => {
     const updateHover = (event: Event) => {
@@ -320,11 +359,12 @@ export function OverlayPage() {
   // can throttle or suspend this webview's timers; refetch on the way back in.
   // The listener needs a stable identity to be removable.
   const refetchLive = liveQuery.refetch;
+  const refetchSettings = settingsQuery.refetch;
   useEffect(() => {
-    const onShown = () => void refetchLive();
+    const onShown = () => { void refetchLive(); void refetchSettings(); };
     window.addEventListener("ponder:overlay-shown", onShown);
     return () => window.removeEventListener("ponder:overlay-shown", onShown);
-  }, [refetchLive]);
+  }, [refetchLive, refetchSettings]);
   const live = liveQuery.data?.live ?? null;
 
   if (liveQuery.isError) {
@@ -340,8 +380,8 @@ export function OverlayPage() {
 
   return (
     <main className="overlay-hud" aria-label="Ponder game overlay" ref={hudRef}>
-      <DeckPanel key={`${live.match.id}:${live.gameNumber}`} live={live} hoveredCard={hoveredCard} />
-      <OpponentPanel live={live} hoveredCard={hoveredCard} />
+      {settings.showDeck && <DeckPanel key={`${live.match.id}:${live.gameNumber}`} live={live} hoveredCard={activePreview} shortcut={settings.shortcut} />}
+      {settings.showOpponent && <OpponentPanel live={live} hoveredCard={activePreview} />}
     </main>
   );
 }

@@ -1,0 +1,22 @@
+.overlay-settings-fields { margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: minmax(15rem, 1fr) minmax(16rem, 1fr); gap: 2rem; min-width: 0; }
+.overlay-settings-controls { display: grid; gap: 1.25rem; }
+.overlay-settings-controls .settings-checkbox:first-child { margin-top: 0; }
+.overlay-settings input[type="range"] { width: 100%; accent-color: var(--accent); min-height: 1.75rem; }
+.overlay-settings-delay { margin-top: 1rem; }
+.overlay-settings-preview { min-width: 0; padding: 1rem; background: repeating-linear-gradient(135deg, var(--panel-inner-a), var(--panel-inner-a) 16px, var(--panel-inner-b) 16px, var(--panel-inner-b) 32px); border: 1px solid var(--line); border-radius: 4px; align-self: start; }
+.overlay-settings-preview-label { color: var(--muted); font-size: var(--text-sm); }
+.overlay-settings-samples { display: grid; gap: 1rem; margin: 1rem 0; }
+.overlay-settings-sample { width: min(100%, var(--sample-width)); padding: .65rem; border: 1px solid #ffffff24; border-radius: 6px; background: rgb(17 22 25 / var(--sample-opacity)); color: #edf1f0; font-size: var(--sample-font-size); }
+.overlay-settings-sample > strong { display: block; font-size: .85rem; }
+.overlay-settings-sample > small { display: block; color: #b3beb9; margin: .3rem 0 .65rem; }
+.overlay-settings-sample-card { display: flex; align-items: center; gap: .45rem; position: relative; min-height: var(--sample-row-height); padding: .2rem 0; }
+.overlay-settings-sample-card .card-preview-anchor { flex: 1; min-width: 0; }
+.overlay-settings-sample-card .card-preview-trigger { color: inherit; font: inherit; cursor: pointer; }
+.overlay-settings-sample-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.overlay-settings-sample-card > span:first-child { color: #b3beb9; }
+.overlay-settings-mana { display: inline-flex; gap: .15rem; white-space: nowrap; font-size: .7rem; }
+.overlay-settings-mana .mana-symbol-icon { width: .85rem; height: .85rem; }
+.overlay-settings-sample-menus { display: grid; gap: .4rem; margin-top: .6rem; color: #b3beb9; }
+.overlay-settings-sample-menus > span { display: flex; justify-content: space-between; }
+.overlay-settings-preview-note { color: var(--muted-strong); font-size: var(--text-sm); }
+@media (max-width: 760px) { .overlay-settings-fields { grid-template-columns: 1fr; gap: 1.5rem; } }

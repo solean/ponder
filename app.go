@@ -60,9 +60,11 @@ type App struct {
 	apiHandler http.Handler
 	startupErr string
 
-	overlayHidden   bool
-	overlayWake     chan struct{}
-	overlayMenuItem *application.MenuItem
+	overlayHidden     bool
+	overlayWake       chan struct{}
+	overlayMenuItem   *application.MenuItem
+	overlayShortcut   string
+	overlayShortcutMu sync.Mutex
 }
 
 func NewApp(staticAssets fs.FS) *App {
@@ -229,11 +231,12 @@ func (a *App) startup() {
 	store := db.NewStore(database)
 	currentLogPath, prevLogPath, _ := appstate.DefaultMTGALogPaths()
 	runtimeService, err := appstate.NewService(appstate.Options{
-		Store:              store,
-		DBPath:             dbPath,
-		SupportDir:         supportDir,
-		DefaultLogPath:     currentLogPath,
-		DefaultPrevLogPath: prevLogPath,
+		Store:                  store,
+		DBPath:                 dbPath,
+		SupportDir:             supportDir,
+		OverlayShortcutChanged: a.updateOverlayShortcut,
+		DefaultLogPath:         currentLogPath,
+		DefaultPrevLogPath:     prevLogPath,
 		Capabilities: appstate.Capabilities{
 			PickFile: true,
 			Reveal:   true,
@@ -245,6 +248,9 @@ func (a *App) startup() {
 		return
 	}
 
+	if err := a.updateOverlayShortcut(runtimeService.OverlaySettings().Shortcut); err != nil {
+		log.Printf("overlay shortcut unavailable: %v; use the Overlay menu", err)
+	}
 	server := api.NewServer(store, "", runtimeService)
 	server.SetDesktop(a)
 
@@ -318,9 +324,26 @@ func overlayPointerScript(x, y float64, supported bool) string {
 // equivalent would fire the same toggle a second time whenever Ponder is
 // focused.
 func overlayMenuLabel(hidden bool) string {
-	shortcut := "Ctrl+Shift+O"
+	return overlayMenuLabelWithShortcut(hidden, "CmdOrCtrl+Shift+O")
+}
+
+func overlayMenuLabelWithShortcut(hidden bool, shortcut string) string {
+	if shortcut == "" {
+		if hidden {
+			return "Show Game Overlay (shortcut unavailable)"
+		}
+		return "Hide Game Overlay (shortcut unavailable)"
+	}
 	if runtime.GOOS == "darwin" {
-		shortcut = "\u2318\u21e7O"
+		shortcut = strings.ReplaceAll(shortcut, "CmdOrCtrl", "⌘")
+		shortcut = strings.ReplaceAll(shortcut, "Cmd", "⌘")
+		shortcut = strings.ReplaceAll(shortcut, "Super", "⌘")
+		shortcut = strings.ReplaceAll(shortcut, "Ctrl", "⌃")
+		shortcut = strings.ReplaceAll(shortcut, "Alt", "⌥")
+		shortcut = strings.ReplaceAll(shortcut, "Shift", "⇧")
+		shortcut = strings.ReplaceAll(shortcut, "+", "")
+	} else {
+		shortcut = strings.ReplaceAll(shortcut, "CmdOrCtrl", "Ctrl")
 	}
 	if hidden {
 		return fmt.Sprintf("Show Game Overlay (%s)", shortcut)
@@ -341,11 +364,12 @@ func (a *App) setOverlayMenuItem(item *application.MenuItem) {
 func (a *App) syncOverlayMenuItem(hidden bool) {
 	a.mu.RLock()
 	item := a.overlayMenuItem
+	shortcut := a.overlayShortcut
 	a.mu.RUnlock()
 	if item == nil {
 		return
 	}
-	label := overlayMenuLabel(hidden)
+	label := overlayMenuLabelWithShortcut(hidden, shortcut)
 	application.InvokeSync(func() { item.SetLabel(label) })
 }
 
@@ -489,4 +513,37 @@ func (a *App) shutdown() {
 		_ = a.database.Close()
 		a.database = nil
 	}
+}
+
+// updateOverlayShortcut registers the replacement before releasing the previous
+// binding, so a rejected shortcut leaves the current control available.
+func (a *App) updateOverlayShortcut(shortcut string) error {
+	a.overlayShortcutMu.Lock()
+	defer a.overlayShortcutMu.Unlock()
+	a.mu.RLock()
+	previous := a.overlayShortcut
+	a.mu.RUnlock()
+	if shortcut == previous {
+		return nil
+	}
+	if a.wailsApp != nil {
+		if previous != "" && a.wailsApp.GlobalShortcut.IsRegistered(shortcut) {
+			return fmt.Errorf("shortcut is already registered; use the existing shortcut spelling %s", previous)
+		}
+		if err := a.wailsApp.GlobalShortcut.Register(shortcut, a.toggleOverlay); err != nil {
+			return fmt.Errorf("overlay shortcut unavailable: %w", err)
+		}
+		if previous != "" {
+			if err := a.wailsApp.GlobalShortcut.Unregister(previous); err != nil {
+				_ = a.wailsApp.GlobalShortcut.Unregister(shortcut)
+				return fmt.Errorf("replace overlay shortcut: %w", err)
+			}
+		}
+	}
+	a.mu.Lock()
+	a.overlayShortcut = shortcut
+	hidden := a.overlayHidden
+	a.mu.Unlock()
+	a.syncOverlayMenuItem(hidden)
+	return nil
 }

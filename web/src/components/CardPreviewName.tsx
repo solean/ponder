@@ -60,7 +60,7 @@ export function CardPreviewName({
   const previewQuery = useQuery({
     queryKey: ["card-preview", cardId, displayName(cardId, cardName)],
     queryFn: () => fetchCardPreview(cardId, cardName),
-    enabled: cardId > 0 && (isOpen || (resolveName && knownName.length === 0)),
+    enabled: (cardId > 0 || (cardId === 0 && knownName.length > 0)) && (isOpen || (resolveName && knownName.length === 0)),
     staleTime: 1000 * 60 * 60 * 24,
     gcTime: 1000 * 60 * 60 * 24,
     retry: 1,

@@ -316,10 +316,12 @@ async function fetchByName(name: string): Promise<ScryfallCard | null> {
 
 async function fetchCardPreviewIndividually(cardID: number, cardName?: string): Promise<CardPreview | null> {
   let card: ScryfallCard | null = null;
-  try {
-    card = await fetchScryfallCard(`/cards/arena/${cardID}`);
-  } catch {
-    card = null;
+  if (cardID > 0) {
+    try {
+      card = await fetchScryfallCard(`/cards/arena/${cardID}`);
+    } catch {
+      card = null;
+    }
   }
 
   if (!card && cardName) {
@@ -393,7 +395,8 @@ function scheduleCardPreviewBatch(): void {
 }
 
 export function fetchCardPreview(cardID: number, cardName?: string): Promise<CardPreview | null> {
-  if (!Number.isFinite(cardID) || cardID <= 0) {
+  // Settings samples have a card name but no Arena printing ID.
+  if (!Number.isFinite(cardID) || cardID < 0 || (cardID === 0 && !cardName?.trim())) {
     return Promise.resolve(null);
   }
 

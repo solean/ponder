@@ -1,3 +1,4 @@
+import type { OverlaySettings } from "./overlaySettings";
 import { waitForBackend } from "./startup";
 import type {
   AiStatus,
@@ -125,6 +126,8 @@ export const api = {
   sets: (codes: string[]) =>
     getJSON<Record<string, SetInfo>>(`/api/sets?codes=${encodeURIComponent(codes.join(","))}`),
   live: () => getJSON<{ live: LiveMatch | null }>("/api/live"),
+  overlaySettings: () => getJSON<OverlaySettings>("/api/overlay/settings"),
+  saveOverlaySettings: (settings: OverlaySettings) => postJSON<OverlaySettings>("/api/overlay/settings", settings),
   runtimeStatus: () => getJSON<RuntimeStatus>("/api/runtime/status"),
   saveRuntimeConfig: (config: RuntimeConfig) => postJSON<RuntimeStatus>("/api/runtime/config", config),
   runImport: (resume = true) => postJSON<RuntimeOperation>("/api/runtime/import", { resume }),

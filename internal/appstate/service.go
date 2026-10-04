@@ -22,14 +22,15 @@ const defaultPollInterval = 2 * time.Second
 const supportDirName = "ponder"
 
 type Options struct {
-	Store               *db.Store
-	DBPath              string
-	SupportDir          string
-	ConfigPath          string
-	DefaultLogPath      string
-	DefaultPrevLogPath  string
-	DefaultPollInterval time.Duration
-	Capabilities        Capabilities
+	Store                  *db.Store
+	DBPath                 string
+	SupportDir             string
+	ConfigPath             string
+	DefaultLogPath         string
+	DefaultPrevLogPath     string
+	DefaultPollInterval    time.Duration
+	Capabilities           Capabilities
+	OverlayShortcutChanged func(string) error
 }
 
 // Capabilities advertises native-shell integrations available to the frontend.
@@ -40,13 +41,14 @@ type Capabilities struct {
 }
 
 type Config struct {
-	LogPath             string `json:"logPath"`
-	PollIntervalSeconds int    `json:"pollIntervalSeconds"`
-	IncludePrev         bool   `json:"includePrev"`
-	AutoStartLive       bool   `json:"autoStartLive"`
-	AutoCheckUpdates    bool   `json:"autoCheckUpdates"`
-	AIProvider          string `json:"aiProvider"`
-	AIModel             string `json:"aiModel"`
+	Overlay             *OverlaySettings `json:"overlay,omitempty"`
+	LogPath             string           `json:"logPath"`
+	PollIntervalSeconds int              `json:"pollIntervalSeconds"`
+	IncludePrev         bool             `json:"includePrev"`
+	AutoStartLive       bool             `json:"autoStartLive"`
+	AutoCheckUpdates    bool             `json:"autoCheckUpdates"`
+	AIProvider          string           `json:"aiProvider"`
+	AIModel             string           `json:"aiModel"`
 }
 
 // UpdateCheck is the outcome of a GitHub release check. CheckedAt lets the UI
@@ -110,17 +112,19 @@ type Service struct {
 	defaultPoll        time.Duration
 	capabilities       Capabilities
 
-	mu               sync.RWMutex
-	config           Config
-	liveRunning      bool
-	liveStartedAt    time.Time
-	liveLastTickAt   time.Time
-	liveCancel       context.CancelFunc
-	liveDone         chan struct{}
-	lastImport       *OperationResult
-	lastLiveActivity *OperationResult
-	lastError        string
-	lastUpdateCheck  *UpdateCheck
+	updateMu               sync.Mutex
+	overlayShortcutChanged func(string) error
+	mu                     sync.RWMutex
+	config                 Config
+	liveRunning            bool
+	liveStartedAt          time.Time
+	liveLastTickAt         time.Time
+	liveCancel             context.CancelFunc
+	liveDone               chan struct{}
+	lastImport             *OperationResult
+	lastLiveActivity       *OperationResult
+	lastError              string
+	lastUpdateCheck        *UpdateCheck
 }
 
 func NewService(opts Options) (*Service, error) {
@@ -180,15 +184,16 @@ func NewService(opts Options) (*Service, error) {
 	}
 
 	return &Service{
-		store:              opts.Store,
-		dbPath:             dbPath,
-		supportDir:         supportDir,
-		configPath:         configPath,
-		defaultLogPath:     currentLogPath,
-		defaultPrevLogPath: prevLogPath,
-		defaultPoll:        poll,
-		capabilities:       opts.Capabilities,
-		config:             normalizeConfig(cfg, poll),
+		store:                  opts.Store,
+		dbPath:                 dbPath,
+		supportDir:             supportDir,
+		configPath:             configPath,
+		defaultLogPath:         currentLogPath,
+		defaultPrevLogPath:     prevLogPath,
+		defaultPoll:            poll,
+		capabilities:           opts.Capabilities,
+		config:                 normalizeConfig(cfg, poll),
+		overlayShortcutChanged: opts.OverlayShortcutChanged,
 	}, nil
 }
 
@@ -297,6 +302,9 @@ func (s Status) RevealablePaths() []string {
 }
 
 func (s *Service) UpdateConfig(next Config) (Status, error) {
+	s.updateMu.Lock()
+	defer s.updateMu.Unlock()
+	next.Overlay = s.Config().Overlay // Dedicated overlay endpoint owns these settings.
 	cfg := normalizeConfig(next, s.defaultPoll)
 	if err := s.saveConfig(cfg); err != nil {
 		return s.Status(), err
@@ -548,6 +556,10 @@ func supportDirPath(base string) string {
 }
 
 func normalizeConfig(cfg Config, poll time.Duration) Config {
+	if cfg.Overlay == nil || ValidateOverlaySettings(*cfg.Overlay) != nil {
+		defaults := DefaultOverlaySettings()
+		cfg.Overlay = &defaults
+	}
 	cfg.LogPath = strings.TrimSpace(cfg.LogPath)
 	if cfg.PollIntervalSeconds <= 0 {
 		cfg.PollIntervalSeconds = max(1, int(poll.Round(time.Second)/time.Second))

@@ -2,6 +2,26 @@ import { expect, test } from "bun:test";
 
 import { fetchCardPreview } from "../src/lib/scryfall";
 
+test("looks up sample card images by name without an Arena ID", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedURLs: string[] = [];
+  globalThis.fetch = async (input) => {
+    requestedURLs.push(String(input));
+    return Response.json({
+      name: "Llanowar Elves",
+      image_uris: { normal: "https://cards.example/llanowar-elves.jpg" },
+    });
+  };
+  try {
+    expect(await fetchCardPreview(0)).toBeNull();
+    const preview = await fetchCardPreview(0, "Llanowar Elves");
+    expect(requestedURLs).toEqual(["https://api.scryfall.com/cards/named?exact=Llanowar%20Elves"]);
+    expect(preview?.imageUrl).toBe("https://cards.example/llanowar-elves.jpg");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("batches named card previews and stops during a rate-limit cooldown", async () => {
   const originalFetch = globalThis.fetch;
   const requestedURLs: string[] = [];

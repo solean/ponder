@@ -118,11 +118,6 @@ func main() {
 			desktop.setOverlayMenuItem(overlayItem)
 			wailsApp.Menu.Set(menu)
 		})
-		if err := wailsApp.GlobalShortcut.Register("CmdOrCtrl+Shift+O", desktop.toggleOverlay); err != nil {
-			log.Printf("overlay shortcut unavailable: %v; use the Overlay menu", err)
-		} else {
-			log.Printf("overlay shortcut registered: CmdOrCtrl+Shift+O")
-		}
 	})
 
 	if err := wailsApp.Run(); err != nil {

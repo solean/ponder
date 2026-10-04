@@ -1,0 +1,78 @@
+.settings-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 2.75rem;
+  color: var(--text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.settings-toggle input {
+  position: absolute;
+  width: 2.25rem;
+  height: 1.25rem;
+  margin: 0;
+  opacity: 0;
+}
+
+.settings-toggle-track {
+  display: block;
+  flex: 0 0 2.25rem;
+  width: 2.25rem;
+  height: 1.25rem;
+  padding: 2px;
+  border: 1px solid var(--muted);
+  border-radius: 999px;
+  background: var(--panel-inner-b);
+  transition: background-color 120ms ease;
+}
+
+.settings-toggle-track::before {
+  content: "";
+  display: block;
+  width: calc(1.25rem - 6px);
+  height: calc(1.25rem - 6px);
+  border-radius: 50%;
+  background: var(--muted-strong);
+  transition: transform 120ms ease;
+}
+
+.settings-toggle input:checked + .settings-toggle-track {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.settings-toggle input:checked + .settings-toggle-track::before {
+  transform: translateX(1rem);
+  background: var(--bg);
+}
+
+.settings-toggle input:focus-visible + .settings-toggle-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.settings-toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.settings-save-status {
+  min-height: 1.5rem;
+  color: var(--muted-strong);
+  font-size: var(--text-sm);
+}
+
+.settings-toggle code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-toggle-track,
+  .settings-toggle-track::before {
+    transition: none;
+  }
+}

@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { SettingToggle } from "../components/SettingToggle";
 import { StatusMessage } from "../components/StatusMessage";
 import { OverlaySettingsPanel } from "../components/OverlaySettingsPanel";
 import { api } from "../lib/api";
+import { RuntimeConfigSaveQueue } from "../lib/runtimeConfigSaveQueue";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { APP_NAME } from "../lib/branding";
 import { formatBytes, formatDateTime, formatRelativeTime, shortenHomePath } from "../lib/format";
@@ -355,35 +357,73 @@ export function SettingsPage() {
     aiProvider: "claude",
     aiModel: "opus",
   });
-  const [hasLocalEdits, setHasLocalEdits] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [pathError, setPathError] = useState("");
   const [savedFlash, setSavedFlash] = useState(false);
   const [dismissedError, setDismissedError] = useState("");
+  const saveQueue = useRef(new RuntimeConfigSaveQueue(form)).current;
+  const logDraft = useRef<string | null>(null);
+  const [pathDirty, setPathDirty] = useState(false);
 
   useEffect(() => {
-    if (!data || hasLocalEdits) {
-      return;
-    }
-    setForm(syncForm(data));
-  }, [data, hasLocalEdits]);
+    if (!data || saveQueue.running || Object.keys(saveQueue.pending).length) return;
+    saveQueue.baseline = syncForm(data);
+    setForm({ ...saveQueue.baseline, ...(logDraft.current !== null ? { logPath: logDraft.current } : {}) });
+  }, [data]);
 
   useEffect(() => {
-    if (!savedFlash) {
-      return;
-    }
+    if (!savedFlash) return;
     const timer = window.setTimeout(() => setSavedFlash(false), 2000);
     return () => window.clearTimeout(timer);
   }, [savedFlash]);
 
-  const saveMutation = useMutation({
-    mutationFn: () => api.saveRuntimeConfig(form),
-    onSuccess: (status) => {
-      queryClient.setQueryData(runtimeStatusKey, status);
-      setForm(syncForm(status));
-      setHasLocalEdits(false);
+  // Serialize full-config requests and merge queued patches into the last
+  // acknowledged config. Polling and earlier saves must never erase later edits.
+  const drainSaves = async () => {
+    if (saveQueue.running) return;
+    setSaving(true);
+    setSavedFlash(false);
+    setSaveError("");
+    try {
+      await saveQueue.drain(async (config, patch) => {
+        await queryClient.cancelQueries({ queryKey: runtimeStatusKey });
+        const status = await api.saveRuntimeConfig(config);
+        await queryClient.cancelQueries({ queryKey: runtimeStatusKey });
+        const acknowledged = syncForm(status);
+        queryClient.setQueryData(runtimeStatusKey, status);
+        if (patch.autoCheckUpdates && !status.updateCheck) updateCheckMutation.mutate();
+        setForm({ ...acknowledged, ...saveQueue.pending,
+          ...(logDraft.current !== null ? { logPath: logDraft.current } : {}) });
+        void queryClient.invalidateQueries({ queryKey: aiStatusKey });
+        return acknowledged;
+      });
       setSavedFlash(true);
-      void queryClient.invalidateQueries({ queryKey: aiStatusKey });
-    },
-  });
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Unable to save settings.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const savePatch = (patch: Partial<RuntimeConfig>) => {
+    saveQueue.enqueue(patch);
+    setForm((current) => ({ ...current, ...patch }));
+    void drainSaves();
+  };
+
+  const commitLogPath = (value: string) => {
+    const logPath = value.trim();
+    if (/[\r\n\0]/.test(logPath)) {
+      setPathError("Enter a log file path on one line.");
+      return;
+    }
+    setPathError("");
+    logDraft.current = null;
+    setPathDirty(false);
+    if (saveQueue.running || logPath !== saveQueue.baseline.logPath || "logPath" in saveQueue.pending) savePatch({ logPath });
+    else setForm((current) => ({ ...current, logPath }));
+  };
 
   const importMutation = useMutation({
     mutationFn: () => api.runImport(true),
@@ -412,10 +452,13 @@ export function SettingsPage() {
     staleTime: 60_000,
   });
 
+  const [autostartDraft, setAutostartDraft] = useState<boolean | null>(null);
   const autostartMutation = useMutation({
     mutationFn: (enabled: boolean) => api.setAutostart(enabled),
     onSuccess: (status) => {
       queryClient.setQueryData(autostartKey, status);
+      setAutostartDraft(null);
+      setSavedFlash(true);
     },
   });
 
@@ -428,34 +471,11 @@ export function SettingsPage() {
     },
   });
 
-  // Saves immediately (like launch-at-login) rather than through the form's
-  // Save button, since it lives in the Application panel away from the form.
-  const autoCheckUpdatesMutation = useMutation({
-    mutationFn: (enabled: boolean) => {
-      const saved = queryClient.getQueryData<RuntimeStatus>(runtimeStatusKey);
-      if (!saved) {
-        return Promise.reject(new Error("runtime status not loaded yet"));
-      }
-      return api.saveRuntimeConfig({ ...saved.config, autoCheckUpdates: enabled });
-    },
-    onSuccess: (status) => {
-      queryClient.setQueryData(runtimeStatusKey, status);
-      // Keep a dirty form consistent so a later Save doesn't revert the toggle.
-      setForm((current) => ({ ...current, autoCheckUpdates: status.config.autoCheckUpdates ?? false }));
-      // The background checker only wakes daily, so run one check right away
-      // when the setting is switched on.
-      if (status.config.autoCheckUpdates && !data?.updateCheck) {
-        updateCheckMutation.mutate();
-      }
-    },
-  });
-
   const pickLogMutation = useMutation({
     mutationFn: api.pickLogFile,
     onSuccess: (result) => {
       if (result.path) {
-        setForm((current) => ({ ...current, logPath: result.path }));
-        setHasLocalEdits(true);
+        commitLogPath(result.path);
       }
     },
   });
@@ -476,9 +496,9 @@ export function SettingsPage() {
   const canPickFile = Boolean(data.capabilities?.pickFile);
   const canReveal = Boolean(data.capabilities?.reveal);
   const updateResult = data.updateCheck ?? updateCheckMutation.data;
-  const saveDisabled = saveMutation.isPending || !hasLocalEdits;
+  const settingsPending = saving || Boolean(saveError) || pathDirty || Boolean(pathError);
   const liveMutationPending = startLiveMutation.isPending || stopLiveMutation.isPending;
-  const importDisabled = importMutation.isPending || data.liveRunning || hasLocalEdits;
+  const importDisabled = importMutation.isPending || data.liveRunning || settingsPending;
   const liveError = (startLiveMutation.error || stopLiveMutation.error) as Error | null;
   const aiProviders = aiStatusQuery.data?.providers?.length ? aiStatusQuery.data.providers : fallbackAIProviders;
   const selectedAIProvider =
@@ -487,11 +507,6 @@ export function SettingsPage() {
   const aiModels = modelsForProvider(aiProviders, form.aiProvider, form.aiModel);
   const selectedAIModel = aiModels.find((model) => model.id === form.aiModel);
   const aiUsage = aiStatusQuery.data?.usage;
-
-  const discardEdits = () => {
-    setForm(syncForm(data));
-    setHasLocalEdits(false);
-  };
 
   const importCompletedAt = data.lastImport?.completedAt ? Date.parse(data.lastImport.completedAt) : 0;
   const liveCompletedAt = data.lastLiveActivity?.completedAt ? Date.parse(data.lastLiveActivity.completedAt) : 0;
@@ -502,25 +517,22 @@ export function SettingsPage() {
         : data.lastImport
       : undefined;
 
-  // Unsaved edits are saved before starting live tracking so the poller never
-  // silently runs on stale config; a failed save aborts the start.
-  const handleLiveToggle = async () => {
-    if (data.liveRunning) {
-      stopLiveMutation.mutate();
-      return;
-    }
-    if (hasLocalEdits) {
-      try {
-        await saveMutation.mutateAsync();
-      } catch {
-        return;
-      }
-    }
-    startLiveMutation.mutate();
+  const handleLiveToggle = () => {
+    if (data.liveRunning) stopLiveMutation.mutate();
+    else if (!settingsPending) startLiveMutation.mutate();
   };
 
   return (
     <div className="stack-lg">
+      <div className="settings-save-status" role="status" aria-live="polite">
+        {saving || autostartMutation.isPending ? "Saving…" : savedFlash ? "Saved" : pathDirty ? "Finish editing the log path to save." : ""}
+      </div>
+      {saveError ? (
+        <StatusMessage tone="error">
+          Settings could not be saved: {saveError}{" "}
+          <button type="button" className="settings-text-button" onClick={() => void drainSaves()} disabled={saving}>Retry</button>
+        </StatusMessage>
+      ) : null}
       <section className="panel" aria-label="Runtime status">
         {data.lastError && data.lastError !== dismissedError ? (
           <div className="settings-last-error" role="alert">
@@ -562,7 +574,7 @@ export function SettingsPage() {
         <div className="panel-head panel-head--stacked">
           <h3>Tracking</h3>
           <p>
-            {hasLocalEdits ? <span className="settings-unsaved-chip">Unsaved changes</span> : null}
+
             Ponder checks Arena&apos;s retained logs, then records new matches while tracking is active.
           </p>
         </div>
@@ -578,27 +590,19 @@ export function SettingsPage() {
             </small>
           </div>
 
-          <label className="settings-checkbox">
-            <input
-              type="checkbox"
-              checked={form.autoStartLive}
-              onChange={(event) => {
-                setForm((current) => ({ ...current, autoStartLive: event.target.checked }));
-                setHasLocalEdits(true);
-              }}
-            />
-            <span>Start tracking automatically whenever Ponder opens.</span>
-          </label>
+          <SettingToggle checked={form.autoStartLive ?? true} onChange={(autoStartLive) => savePatch({ autoStartLive })}>
+            Start tracking automatically whenever Ponder opens.
+          </SettingToggle>
         </div>
 
         <div className="settings-action-row">
           <button
             type="button"
             className={`control-button${
-              data.liveRunning ? " control-button--quiet" : hasLocalEdits ? "" : " control-button--primary"
+              data.liveRunning ? " control-button--quiet" : " control-button--primary"
             }`}
             onClick={() => void handleLiveToggle()}
-            disabled={liveMutationPending || saveMutation.isPending}
+            disabled={liveMutationPending || (!data.liveRunning && settingsPending)}
           >
             {liveMutationPending
               ? data.liveRunning
@@ -608,26 +612,7 @@ export function SettingsPage() {
                 ? "Stop Tracking"
                 : "Start Tracking"}
           </button>
-          <button
-            type="button"
-            className={`control-button${hasLocalEdits ? " control-button--primary" : ""}${
-              savedFlash ? " is-flash" : ""
-            }`}
-            onClick={() => saveMutation.mutate()}
-            disabled={saveDisabled}
-          >
-            {saveMutation.isPending ? "Saving…" : savedFlash ? "Saved ✓" : "Save Settings"}
-          </button>
-          {hasLocalEdits ? (
-            <button
-              type="button"
-              className="control-button control-button--quiet"
-              onClick={discardEdits}
-              disabled={saveMutation.isPending}
-            >
-              Discard
-            </button>
-          ) : null}
+
         </div>
 
         <details className="settings-advanced" open={!data.activeLogPathExists}>
@@ -650,8 +635,7 @@ export function SettingsPage() {
                         className="settings-text-button"
                         onClick={(event) => {
                           event.preventDefault();
-                          setForm((current) => ({ ...current, logPath: "" }));
-                          setHasLocalEdits(true);
+                          commitLogPath("");
                         }}
                       >
                         Use default
@@ -664,9 +648,18 @@ export function SettingsPage() {
                       type="text"
                       value={form.logPath}
                       onChange={(event) => {
+                        logDraft.current = event.target.value;
+                        setPathDirty(true);
                         setForm((current) => ({ ...current, logPath: event.target.value }));
-                        setHasLocalEdits(true);
                       }}
+                      onBlur={(event) => commitLogPath(event.currentTarget.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          commitLogPath(event.currentTarget.value);
+                        }
+                      }}
+                      aria-invalid={Boolean(pathError)}
                       placeholder={data.defaultLogPath}
                       spellCheck={false}
                     />
@@ -690,21 +683,12 @@ export function SettingsPage() {
                   </small>
                 </label>
 
+                {pathError ? <StatusMessage tone="error">{pathError}</StatusMessage> : null}
                 <div className="settings-option">
-                  <label className="settings-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={form.includePrev}
-                      onChange={(event) => {
-                        setForm((current) => ({ ...current, includePrev: event.target.checked }));
-                        setHasLocalEdits(true);
-                      }}
-                      disabled={form.logPath.trim().length > 0}
-                    />
-                    <span>
-                      Include <code>Player-prev.log</code> when checking retained logs.
-                    </span>
-                  </label>
+                  <SettingToggle checked={form.includePrev} onChange={(includePrev) => savePatch({ includePrev })}
+                    disabled={form.logPath.trim().length > 0}>
+                    Include <code>Player-prev.log</code> when checking retained logs.
+                  </SettingToggle>
                   {form.logPath.trim().length > 0 ? (
                     <p className="settings-checkbox-hint">Disabled while a custom log path is set.</p>
                   ) : (
@@ -731,11 +715,7 @@ export function SettingsPage() {
                     className="settings-input"
                     value={String(form.pollIntervalSeconds)}
                     onChange={(event) => {
-                      setForm((current) => ({
-                        ...current,
-                        pollIntervalSeconds: normalizePollInterval(event.target.value),
-                      }));
-                      setHasLocalEdits(true);
+                      savePatch({ pollIntervalSeconds: normalizePollInterval(event.target.value) });
                     }}
                   >
                     {pollOptions.map((seconds) => (
@@ -762,8 +742,8 @@ export function SettingsPage() {
                   onClick={() => importMutation.mutate()}
                   disabled={importDisabled}
                   title={
-                    hasLocalEdits
-                      ? "Save tracking settings before checking the configured logs."
+                    settingsPending
+                      ? "Wait for settings to save before checking the configured logs."
                       : data.liveRunning
                         ? "Stop tracking before running a manual check."
                         : undefined
@@ -784,9 +764,7 @@ export function SettingsPage() {
           </div>
         </details>
 
-        {saveMutation.error ? (
-          <StatusMessage tone="error">Save failed: {(saveMutation.error as Error).message}</StatusMessage>
-        ) : null}
+
         {liveError ? <StatusMessage tone="error">Tracking: {liveError.message}</StatusMessage> : null}
         {pickLogMutation.error ? (
           <StatusMessage tone="error">File picker: {(pickLogMutation.error as Error).message}</StatusMessage>
@@ -797,7 +775,7 @@ export function SettingsPage() {
         <div className="panel-head panel-head--stacked">
           <h3>AI</h3>
           <p>
-            {hasLocalEdits ? <span className="settings-unsaved-chip">Unsaved changes</span> : null}
+
             Generate deck primers and replay game reviews through a local CLI and your existing subscription.
             Credentials remain managed by Claude Code or Codex and are never stored by {APP_NAME}.
           </p>
@@ -817,12 +795,8 @@ export function SettingsPage() {
                   const provider =
                     aiProviders.find((candidate) => candidate.id === aiProvider) ??
                     fallbackAIProviders.find((candidate) => candidate.id === aiProvider);
-                  setForm((current) => ({
-                    ...current,
-                    aiProvider,
-                    aiModel: provider?.models[0]?.id ?? (aiProvider === "openai" ? "default" : "opus"),
-                  }));
-                  setHasLocalEdits(true);
+                  savePatch({ aiProvider,
+                    aiModel: provider?.models[0]?.id ?? (aiProvider === "openai" ? "default" : "opus") });
                 }}
               >
                 {aiProviders.map((provider) => (
@@ -844,8 +818,7 @@ export function SettingsPage() {
                 className="settings-input"
                 value={form.aiModel}
                 onChange={(event) => {
-                  setForm((current) => ({ ...current, aiModel: event.target.value }));
-                  setHasLocalEdits(true);
+                  savePatch({ aiModel: event.target.value });
                 }}
               >
                 {aiModels.map((model) => (
@@ -960,26 +933,7 @@ export function SettingsPage() {
         </div>
 
         <div className="settings-action-row">
-          <button
-            type="button"
-            className={`control-button${hasLocalEdits ? " control-button--primary" : ""}${
-              savedFlash ? " is-flash" : ""
-            }`}
-            onClick={() => saveMutation.mutate()}
-            disabled={saveDisabled}
-          >
-            {saveMutation.isPending ? "Saving…" : savedFlash ? "Saved ✓" : "Save Settings"}
-          </button>
-          {hasLocalEdits ? (
-            <button
-              type="button"
-              className="control-button control-button--quiet"
-              onClick={discardEdits}
-              disabled={saveMutation.isPending}
-            >
-              Discard
-            </button>
-          ) : null}
+
           <button
             type="button"
             className="control-button control-button--quiet"
@@ -990,9 +944,7 @@ export function SettingsPage() {
           </button>
         </div>
 
-        {saveMutation.error ? (
-          <StatusMessage tone="error">Save failed: {(saveMutation.error as Error).message}</StatusMessage>
-        ) : null}
+
         {aiStatusQuery.error ? (
           <StatusMessage tone="error">AI status: {(aiStatusQuery.error as Error).message}</StatusMessage>
         ) : null}
@@ -1081,19 +1033,18 @@ export function SettingsPage() {
         </div>
 
         {autostartMutation.error ? (
-          <StatusMessage tone="error">{(autostartMutation.error as Error).message}</StatusMessage>
+          <StatusMessage tone="error">
+            Launch at login could not be saved: {(autostartMutation.error as Error).message}{" "}
+            <button type="button" className="settings-text-button" disabled={autostartMutation.isPending}
+              onClick={() => autostartDraft !== null && autostartMutation.mutate(autostartDraft)}>Retry</button>
+          </StatusMessage>
         ) : null}
 
         {autostartQuery.data?.supported ? (
-          <label className="settings-checkbox">
-            <input
-              type="checkbox"
-              checked={autostartQuery.data.enabled}
-              onChange={(event) => autostartMutation.mutate(event.target.checked)}
-              disabled={autostartMutation.isPending}
-            />
-            <span>Launch {APP_NAME} at login.</span>
-          </label>
+          <SettingToggle checked={autostartDraft ?? autostartQuery.data.enabled}
+            onChange={(enabled) => { setAutostartDraft(enabled); autostartMutation.mutate(enabled); }} disabled={autostartMutation.isPending}>
+            Launch {APP_NAME} at login.
+          </SettingToggle>
         ) : (
           <p className="settings-note">{autostartQuery.data?.note || "Launch at login is unavailable."}</p>
         )}
@@ -1101,18 +1052,11 @@ export function SettingsPage() {
           <p className="settings-note">{autostartQuery.data.note}</p>
         ) : null}
 
-        <label className="settings-checkbox">
-          <input
-            type="checkbox"
-            checked={data.config.autoCheckUpdates ?? false}
-            onChange={(event) => autoCheckUpdatesMutation.mutate(event.target.checked)}
-            disabled={autoCheckUpdatesMutation.isPending}
-          />
-          <span>Check for updates automatically once a day.</span>
-        </label>
-        {autoCheckUpdatesMutation.error ? (
-          <StatusMessage tone="error">{(autoCheckUpdatesMutation.error as Error).message}</StatusMessage>
-        ) : null}
+        <SettingToggle checked={form.autoCheckUpdates ?? false} onChange={(autoCheckUpdates) => {
+          savePatch({ autoCheckUpdates });
+        }}>
+          Check for updates automatically once a day.
+        </SettingToggle>
 
         <div className="settings-action-row">
           <button

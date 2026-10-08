@@ -248,6 +248,10 @@ mode starts the development-only localhost API on
 against `ponder serve` on port 8080, continue to use `bun run dev` from `web/`.
 
 Desktop behaviors:
+- On macOS, a menu bar icon remains visible while Ponder runs, even with its
+  window hidden. Click it to check live tracking status, open Ponder, or quit.
+  A pause indicator means tracking is off; an exclamation mark means tracking
+  needs attention. Hover for details. Status refreshes every two seconds.
 - Closing the window hides it and keeps the app (and live log tailing)
   running; reopen from the Dock, quit with Cmd+Q.
 - A second launch focuses the existing window instead of starting another

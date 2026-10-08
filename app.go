@@ -56,9 +56,11 @@ type App struct {
 	mainWindow    application.Window
 	overlayWindow application.Window
 
-	mu         sync.RWMutex
-	apiHandler http.Handler
-	startupErr string
+	mu             sync.RWMutex
+	apiHandler     http.Handler
+	startupErr     string
+	runtimeService *appstate.Service
+	trayCancel     context.CancelFunc
 
 	overlayHidden     bool
 	overlayWake       chan struct{}
@@ -269,6 +271,7 @@ func (a *App) startup() {
 	a.cancel = cancel
 	a.mu.Lock()
 	a.apiHandler = server.Handler()
+	a.runtimeService = runtimeService
 	a.mu.Unlock()
 	a.startOverlayMonitor(bgCtx, store)
 
@@ -506,6 +509,9 @@ func desktopDatabasePath(supportDir string) string {
 }
 
 func (a *App) shutdown() {
+	if a.trayCancel != nil {
+		a.trayCancel()
+	}
 	if a.cancel != nil {
 		a.cancel()
 	}

@@ -27,6 +27,7 @@ func main() {
 	wailsApp := application.New(application.Options{
 		Name:        appDisplayName,
 		Description: "Private, local-first MTG Arena match tracking and analytics.",
+		Icon:        developmentAppIcon,
 		Assets: application.AssetOptions{
 			Handler:    api.SPAFileServer(assets),
 			Middleware: desktop.APIMiddleware,
@@ -90,6 +91,7 @@ func main() {
 		FullscreenButtonState: application.ButtonHidden,
 	})
 	desktop.setDesktopRuntime(wailsApp, mainWindow, overlayWindow)
+	startMenuBar := desktop.prepareMenuBar()
 
 	// Closing the main window keeps the log tailer running. The Dock icon or a
 	// second launch restores the existing window; Cmd+Q still quits the app.
@@ -116,6 +118,7 @@ func main() {
 		windowState.restore(wailsApp, mainWindow)
 		mainWindow.Show()
 		desktop.startup()
+		startMenuBar()
 		desktop.showStartupError()
 		application.InvokeSync(func() {
 			menu := wailsApp.Menu.GetApplicationMenu()

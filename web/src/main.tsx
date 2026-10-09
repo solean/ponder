@@ -23,6 +23,12 @@ import "./styles.css";
 // Apply transparency before React's first overlay paint to avoid an opaque
 // flash while the dedicated Wails window loads.
 document.documentElement.classList.toggle("overlay-document", window.location.pathname === "/overlay");
+// The Wails window uses an inset unified titlebar; the web titlebar reserves
+// room for the native traffic lights only there (not in a plain browser).
+document.documentElement.classList.toggle(
+  "is-mac-desktop",
+  window.location.protocol === "wails:" && navigator.platform.startsWith("Mac"),
+);
 
 // Wails' host-side ExecJS silently queues every script until the page reports
 // "wails:runtime:ready", and only the framework runtime sends that. Without it

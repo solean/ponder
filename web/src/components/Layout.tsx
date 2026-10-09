@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigationType } from "react-router-dom";
 
 import {
@@ -85,6 +85,9 @@ function readSystemTheme(): ThemeMode {
 export function Layout() {
   const location = useLocation();
   const navigationType = useNavigationType();
+  // The content pane, not the document, scrolls so the titlebar and scrollbar
+  // never overlap.
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [modePreference, setModePreference] = useState<ModePreference>(readStoredModePreference);
   const [scheme, setScheme] = useState<ColorScheme>(readStoredScheme);
   const [systemTheme, setSystemTheme] = useState<ThemeMode>(readSystemTheme);
@@ -115,18 +118,15 @@ export function Layout() {
   }, [mode, modePreference, scheme]);
 
   useEffect(() => {
+    const scroller = scrollRef.current;
     return () => {
-      scrollPositions.set(location.key, window.scrollY);
+      if (scroller) scrollPositions.set(location.key, scroller.scrollTop);
     };
   }, [location.key]);
 
   useEffect(() => {
-    if (navigationType === "POP") {
-      const top = scrollPositions.get(location.key) ?? 0;
-      window.scrollTo({ top, left: 0, behavior: "auto" });
-      return;
-    }
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    const top = navigationType === "POP" ? (scrollPositions.get(location.key) ?? 0) : 0;
+    scrollRef.current?.scrollTo({ top, left: 0, behavior: "auto" });
   }, [location.key, navigationType]);
 
   return (
@@ -144,13 +144,12 @@ export function Layout() {
             />
           </div>
         ) : null}
-        <div className={`app-shell${location.pathname === "/matches" ? " is-viewport-page" : ""}`}>
-          <header className="topbar">
-          <div className="brand">
-            <span className="title-sigil" aria-hidden="true" />
-            <h1>{APP_NAME}</h1>
-          </div>
-          <div className="topbar-controls">
+        <div className="app-frame">
+          <header className="titlebar">
+            <div className="brand">
+              <span className="title-sigil" aria-hidden="true" />
+              <h1>{APP_NAME}</h1>
+            </div>
             <nav className="tabs" aria-label="Primary">
               {tabs.map((tab) => (
                 <NavLink
@@ -163,25 +162,28 @@ export function Layout() {
                 </NavLink>
               ))}
             </nav>
-          </div>
-        </header>
-          <main id="main-content" className="content" tabIndex={-1}>
-            <div className="page-context-bar">
-              {location.pathname === "/" || location.pathname === "/settings" ? null : (
-                <ErrorBoundary label="LiveMatchBanner">
-                  <LiveMatchBanner />
+          </header>
+          <div ref={scrollRef} className="app-scroll">
+            <div className={`app-shell${location.pathname === "/matches" ? " is-viewport-page" : ""}`}>
+              <main id="main-content" className="content" tabIndex={-1}>
+                <div className="page-context-bar">
+                  {location.pathname === "/" || location.pathname === "/settings" ? null : (
+                    <ErrorBoundary label="LiveMatchBanner">
+                      <LiveMatchBanner />
+                    </ErrorBoundary>
+                  )}
+                  <Breadcrumbs />
+                </div>
+                <ErrorBoundary
+                  key={location.pathname}
+                  label="page"
+                  fallback={(error, reset) => <AppErrorFallback error={error} onRetry={reset} scope="page" />}
+                >
+                  <Outlet />
                 </ErrorBoundary>
-              )}
-              <Breadcrumbs />
+              </main>
             </div>
-            <ErrorBoundary
-              key={location.pathname}
-              label="page"
-              fallback={(error, reset) => <AppErrorFallback error={error} onRetry={reset} scope="page" />}
-            >
-              <Outlet />
-            </ErrorBoundary>
-          </main>
+          </div>
         </div>
       </BreadcrumbProvider>
     </ThemeContext.Provider>

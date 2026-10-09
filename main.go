@@ -56,8 +56,9 @@ func main() {
 		BackgroundColour: application.NewRGBA(8, 12, 21, 255),
 		URL:              "/",
 		Mac: application.MacWindow{
-			TitleBar:                application.MacTitleBarHidden,
-			InvisibleTitleBarHeight: 32,
+			// Unified toolbar height centers the traffic lights in the web
+			// titlebar; the titlebar's --wails-draggable region moves the window.
+			TitleBar: application.MacTitleBarHiddenInsetUnified,
 		},
 	})
 

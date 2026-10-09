@@ -19,7 +19,6 @@ const tabs = [
   { to: "/matches", label: "Matches" },
   { to: "/decks", label: "Decks" },
   { to: "/drafts", label: "Drafts" },
-  { to: "/ranked", label: "Ranked" },
   { to: "/economy", label: "Economy" },
   { to: "/settings", label: "Settings" },
 ];

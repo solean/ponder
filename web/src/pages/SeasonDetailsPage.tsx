@@ -1,11 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, type KeyboardEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 
-import { ContextualLink } from "../components/Breadcrumbs";
-import { RankProgressPanel } from "../components/RankProgressPanel";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
-import { formatDuration, pct, winRateTone } from "../lib/format";
+import { pct, winRateTone } from "../lib/format";
 import {
   formatRankLabel,
   fillMissingRankClasses,
@@ -20,10 +19,6 @@ import {
 import type { RankHistoryPoint, RankState } from "../lib/types";
 
 const integerFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
-const paceFormatter = new Intl.NumberFormat(undefined, {
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 1,
-});
 
 type LadderMatch = {
   point: RankHistoryPoint;
@@ -65,29 +60,7 @@ type RecordSummary = {
   losses: number;
   unknown: number;
   netSteps: number;
-  stepsMeasured: number;
 };
-
-function summarizeMatches(matches: LadderMatch[]): RecordSummary {
-  const summary: RecordSummary = {
-    matches: matches.length,
-    wins: 0,
-    losses: 0,
-    unknown: 0,
-    netSteps: 0,
-    stepsMeasured: 0,
-  };
-  for (const match of matches) {
-    if (match.point.result === "win") summary.wins += 1;
-    else if (match.point.result === "loss") summary.losses += 1;
-    else summary.unknown += 1;
-    if (match.stepDelta != null) {
-      summary.netSteps += match.stepDelta;
-      summary.stepsMeasured += 1;
-    }
-  }
-  return summary;
-}
 
 function recordLabel(summary: RecordSummary): string {
   return `${summary.wins}W–${summary.losses}L`;
@@ -112,8 +85,7 @@ function WinRateCell({ summary }: { summary: RecordSummary }) {
   );
 }
 
-// Unlike the trend chart's label, this never guesses a tier: when Arena's
-// responses omitted the class and no anchor exists, the label says so.
+// Never guess a tier when Arena omitted the class and no anchor exists.
 function strictRankLabel(rank: RankState): string {
   if (rank.level == null || rank.seasonOrdinal == null) return "Unranked";
   const rankClass = rank.rankClass.trim();
@@ -165,15 +137,18 @@ function handleSegmentedKeyDown<T extends string>(
   }
 }
 
-export function RankedPage() {
-  // Follow the most recently played ladder until the user picks one.
-  const [pickedLadder, setLadder] = useState<Ladder | null>(null);
-  const [seasonView, setSeasonView] = useState<SeasonView>("current");
+export function SeasonDetailsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedLadder = searchParams.get("ladder");
+  const requestedSeason = searchParams.get("season");
   const { data, isLoading, error } = useQuery({
     queryKey: ["rank-history"],
     queryFn: api.rankHistory,
   });
-  const ladder = pickedLadder ?? (data ? preferredLadder(data) : "constructed");
+  const ladder: Ladder =
+    requestedLadder === "constructed" || requestedLadder === "limited"
+      ? requestedLadder
+      : data ? preferredLadder(data) : "constructed";
   const ladderOptions = ["constructed", "limited"] as const satisfies readonly Ladder[];
 
   const allMatches = useMemo(() => (data ? buildLadderMatches(data, ladder) : []), [data, ladder]);
@@ -189,9 +164,38 @@ export function RankedPage() {
   const currentSeasonOrdinal = seasonOrdinals[seasonOrdinals.length - 1];
   const previousSeasonOrdinal = seasonOrdinals[seasonOrdinals.length - 2];
 
+  const seasonView: SeasonView =
+    requestedSeason === "all"
+      ? "all"
+      : requestedSeason === "previous" && hasPreviousSeason ? "previous" : "current";
+
   useEffect(() => {
-    if (seasonView === "previous" && !hasPreviousSeason) setSeasonView("current");
-  }, [hasPreviousSeason, seasonView]);
+    if (!data || (requestedLadder === ladder && requestedSeason === seasonView)) return;
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      next.set("ladder", ladder);
+      next.set("season", seasonView);
+      return next;
+    }, { replace: true });
+  }, [data, ladder, requestedLadder, requestedSeason, seasonView, setSearchParams]);
+
+  function setLadder(value: Ladder) {
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      next.set("ladder", value);
+      next.set("season", seasonView);
+      return next;
+    }, { replace: true });
+  }
+
+  function setSeasonView(value: SeasonView) {
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      next.set("ladder", ladder);
+      next.set("season", value);
+      return next;
+    }, { replace: true });
+  }
 
   const selectedSeason =
     seasonView === "all"
@@ -208,30 +212,12 @@ export function RankedPage() {
     [allMatches, selectedSeason],
   );
 
-  const summary = useMemo(() => summarizeMatches(matches), [matches]);
-  const firstRankLabel = matches.length > 0 ? strictRankLabel(matches[0].rank) : null;
-  const lastRankLabel = matches.length > 0 ? strictRankLabel(matches[matches.length - 1].rank) : null;
-
-  const pace = useMemo(() => {
-    let steps = 0;
-    let seconds = 0;
-    let timedMatches = 0;
-    for (const match of matches) {
-      if (match.stepDelta == null || match.point.secondsCount == null) continue;
-      steps += match.stepDelta;
-      seconds += match.point.secondsCount;
-      timedMatches += 1;
-    }
-    if (timedMatches === 0 || seconds === 0) return null;
-    return { stepsPerHour: (steps / seconds) * 3600, seconds, timedMatches };
-  }, [matches]);
-
   const tierRows = useMemo(() => {
     const byTier = new Map<string, RecordSummary & { tier: string }>();
     for (const match of matches) {
       let row = byTier.get(match.tierAtPlay);
       if (!row) {
-        row = { tier: match.tierAtPlay, matches: 0, wins: 0, losses: 0, unknown: 0, netSteps: 0, stepsMeasured: 0 };
+        row = { tier: match.tierAtPlay, matches: 0, wins: 0, losses: 0, unknown: 0, netSteps: 0 };
         byTier.set(match.tierAtPlay, row);
       }
       row.matches += 1;
@@ -240,7 +226,6 @@ export function RankedPage() {
       else row.unknown += 1;
       if (match.stepDelta != null) {
         row.netSteps += match.stepDelta;
-        row.stepsMeasured += 1;
       }
     }
     const tierOrder = LADDER_CONFIG[ladder].tiers;
@@ -249,52 +234,19 @@ export function RankedPage() {
     );
   }, [ladder, matches]);
 
-  const deckRows = useMemo(() => {
-    type DeckRow = RecordSummary & { deckId: number | null; deckName: string };
-    const byDeck = new Map<string, DeckRow>();
-    for (const match of matches) {
-      const key = match.point.deckId != null ? `deck-${match.point.deckId}` : "unknown";
-      let row = byDeck.get(key);
-      if (!row) {
-        row = {
-          deckId: match.point.deckId,
-          deckName: match.point.deckName || "Unknown deck",
-          matches: 0,
-          wins: 0,
-          losses: 0,
-          unknown: 0,
-          netSteps: 0,
-          stepsMeasured: 0,
-        };
-        byDeck.set(key, row);
-      }
-      row.matches += 1;
-      if (match.point.result === "win") row.wins += 1;
-      else if (match.point.result === "loss") row.losses += 1;
-      else row.unknown += 1;
-      if (match.stepDelta != null) {
-        row.netSteps += match.stepDelta;
-        row.stepsMeasured += 1;
-      }
-    }
-    return [...byDeck.values()].sort(
-      (left, right) => right.matches - left.matches || right.netSteps - left.netSteps,
-    );
-  }, [matches]);
-
   const seasonRows = useMemo(() => {
-    type SeasonRow = RecordSummary & { season: number; endRank: string };
+    type SeasonRow = RecordSummary & { season: number; lastRecordedRank: string };
     const bySeason = new Map<number, SeasonRow>();
     for (const match of allMatches) {
       const ordinal = match.rank.seasonOrdinal;
       if (ordinal == null) continue;
       let row = bySeason.get(ordinal);
       if (!row) {
-        row = { season: ordinal, endRank: "", matches: 0, wins: 0, losses: 0, unknown: 0, netSteps: 0, stepsMeasured: 0 };
+        row = { season: ordinal, lastRecordedRank: "", matches: 0, wins: 0, losses: 0, unknown: 0, netSteps: 0 };
         bySeason.set(ordinal, row);
       }
       row.matches += 1;
-      row.endRank = strictRankLabel(match.rank);
+      row.lastRecordedRank = strictRankLabel(match.rank);
       if (match.point.result === "win") row.wins += 1;
       else if (match.point.result === "loss") row.losses += 1;
       else row.unknown += 1;
@@ -303,20 +255,20 @@ export function RankedPage() {
     return [...bySeason.values()].sort((left, right) => right.season - left.season);
   }, [allMatches]);
 
-  if (isLoading) return <StatusMessage>Loading ranked analytics…</StatusMessage>;
+  if (isLoading) return <StatusMessage>Loading season details…</StatusMessage>;
   if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
 
   const seasonScopeLabel =
     selectedSeason == null ? "all seasons" : `season ${selectedSeason}`;
 
   return (
-    <div className="stack-lg ranked-page">
+    <div className="stack-lg season-details-page">
       <header className="page-heading">
         <div>
-          <p className="eyebrow">Ladder efficiency</p>
-          <h2>Ranked</h2>
+          <p className="eyebrow">{LADDER_CONFIG[ladder].label} · {seasonScopeLabel}</p>
+          <h2>Season details</h2>
         </div>
-        <div className="rank-controls" role="group" aria-label="Ranked analytics filters">
+        <div className="rank-controls" role="group" aria-label="Season details filters">
           <div className="tabs rank-toggle" role="group" aria-label="Ladder">
             {ladderOptions.map((value) => (
               <button
@@ -360,55 +312,11 @@ export function RankedPage() {
         </section>
       ) : (
         <>
-          <section className="metrics-grid" aria-label="Ranked efficiency summary">
-            <article className="metric-card">
-              <p>Ranked matches</p>
-              <div className="metric-value">{integerFormatter.format(summary.matches)}</div>
-              <small className="metric-sub">
-                {recordLabel(summary)}
-                {summary.unknown > 0 ? ` · ${summary.unknown} unknown` : ""} · {seasonScopeLabel}
-              </small>
-            </article>
-            <article className={`metric-card metric-card--toned metric-card--${winRateTone(winRateValue(summary))}`}>
-              <p>Win rate</p>
-              <div className="metric-value">{winRateLabel(summary)}</div>
-              <small className="metric-sub">
-                {summary.wins + summary.losses} decided matches
-                {summary.unknown > 0 ? `, ${summary.unknown} excluded` : ""}
-              </small>
-            </article>
-            <article className="metric-card">
-              <p>Net movement</p>
-              <div className="metric-value">
-                {formatSteps(summary.netSteps)} steps
-              </div>
-              <small className="metric-sub">
-                {firstRankLabel && lastRankLabel && firstRankLabel !== lastRankLabel
-                  ? `${firstRankLabel} → ${lastRankLabel}`
-                  : lastRankLabel ?? ""}
-                {summary.stepsMeasured < summary.matches
-                  ? ` · measured over ${summary.stepsMeasured} of ${summary.matches} matches`
-                  : ""}
-              </small>
-            </article>
-            <article className="metric-card">
-              <p>Climb pace</p>
-              <div className="metric-value">
-                {pace ? `${paceFormatter.format(pace.stepsPerHour)} steps/hr` : "—"}
-              </div>
-              <small className="metric-sub">
-                {pace
-                  ? `${formatDuration(pace.seconds)} across ${pace.timedMatches} timed matches`
-                  : "no match durations captured yet"}
-              </small>
-            </article>
-          </section>
-
           <section className="panel" aria-labelledby="tier-winrate-heading">
             <div className="panel-head">
               <div>
                 <h3 id="tier-winrate-heading">Win rate by tier</h3>
-                <p>Matches grouped by the rank tier you held going into them ({seasonScopeLabel})</p>
+                <p>Tracked matches grouped by the rank tier you held going into them ({seasonScopeLabel})</p>
               </div>
             </div>
             <div className="table-wrap">
@@ -438,53 +346,9 @@ export function RankedPage() {
                 </tbody>
               </table>
             </div>
-          </section>
-
-          <section className="panel" aria-labelledby="deck-impact-heading">
-            <div className="panel-head">
-              <div>
-                <h3 id="deck-impact-heading">Rank impact by deck</h3>
-                <p>Net ladder movement attributed to each deck ({seasonScopeLabel})</p>
-              </div>
-            </div>
-            <div className="table-wrap">
-              <table className="data-table compact">
-                <thead>
-                  <tr>
-                    <th scope="col">Deck</th>
-                    <th scope="col">Matches</th>
-                    <th scope="col">Record</th>
-                    <th scope="col">Win rate</th>
-                    <th scope="col">Net steps</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deckRows.map((row) => (
-                    <tr key={row.deckId ?? "unknown"}>
-                      <td>
-                        {row.deckId != null ? (
-                          <ContextualLink to={`/decks/${row.deckId}`}>
-                            {row.deckName}
-                          </ContextualLink>
-                        ) : (
-                          row.deckName
-                        )}
-                      </td>
-                      <td>{integerFormatter.format(row.matches)}</td>
-                      <td>
-                        {recordLabel(row)}
-                        {row.unknown > 0 ? ` (+${row.unknown} unknown)` : ""}
-                      </td>
-                      <WinRateCell summary={row} />
-                      <td className={stepsTone(row.netSteps)}>{formatSteps(row.netSteps)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
             <p className="state">
               Steps are Arena ladder pips; movement across a season reset or within Mythic is not
-              counted. Small samples say more about variance than about the deck.
+              counted. Records include tracked matches only, not necessarily the full season.
             </p>
           </section>
 
@@ -492,8 +356,8 @@ export function RankedPage() {
             <section className="panel" aria-labelledby="season-over-season-heading">
               <div className="panel-head">
                 <div>
-                  <h3 id="season-over-season-heading">Season over season</h3>
-                  <p>Every tracked {LADDER_CONFIG[ladder].label.toLowerCase()} season</p>
+                  <h3 id="season-over-season-heading">Season history</h3>
+                  <p>Tracked matches from every {LADDER_CONFIG[ladder].label.toLowerCase()} season</p>
                 </div>
               </div>
               <div className="table-wrap">
@@ -504,7 +368,7 @@ export function RankedPage() {
                       <th scope="col">Matches</th>
                       <th scope="col">Record</th>
                       <th scope="col">Win rate</th>
-                      <th scope="col">Final rank</th>
+                      <th scope="col">Last recorded rank</th>
                       <th scope="col">Net steps</th>
                     </tr>
                   </thead>
@@ -518,7 +382,7 @@ export function RankedPage() {
                           {row.unknown > 0 ? ` (+${row.unknown} unknown)` : ""}
                         </td>
                         <WinRateCell summary={row} />
-                        <td>{row.endRank}</td>
+                        <td>{row.lastRecordedRank}</td>
                         <td className={stepsTone(row.netSteps)}>{formatSteps(row.netSteps)}</td>
                       </tr>
                     ))}
@@ -529,8 +393,6 @@ export function RankedPage() {
           ) : null}
         </>
       )}
-
-      <RankProgressPanel ladder={ladder} seasonView={seasonView} />
     </div>
   );
 }

@@ -8,6 +8,12 @@ This MVP includes:
 - Local HTTP API
 - React/Vite frontend for overview, match history, decks, drafts, and economy tracking
 
+Rank progress lives on Overview. Its **Season details** link opens tier win rates
+and season history for the selected ladder and season; browser Back restores the
+Overview selection. Detail records count tracked matches, which may differ from
+Arena's season totals shown in the Overview rank panel. Season history reports
+the last recorded rank, not a guaranteed end-of-season finish.
+
 ## Project Layout
 
 - `cmd/ponder` - CLI entrypoint (`parse`, `tail`, `serve`)

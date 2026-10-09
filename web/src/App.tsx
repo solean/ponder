@@ -11,7 +11,7 @@ import { MatchDetailPage } from "./pages/MatchDetailPage";
 import { MatchesPage } from "./pages/MatchesPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { OverlayPage } from "./pages/OverlayPage";
-import { RankedPage } from "./pages/RankedPage";
+import { SeasonDetailsPage } from "./pages/SeasonDetailsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
 export function App() {
@@ -23,7 +23,7 @@ export function App() {
         <Route path="matches" element={<MatchesPage />} />
         <Route path="matches/:matchId" element={<MatchDetailPage />} />
         <Route path="decks" element={<DecksPage />} />
-        <Route path="ranked" element={<RankedPage />} />
+        <Route path="seasons" element={<SeasonDetailsPage />} />
         <Route path="economy" element={<EconomyPage />} />
         <Route path="decks/:deckId" element={<DeckDetailPage />} />
         <Route path="drafts" element={<DraftsPage />} />

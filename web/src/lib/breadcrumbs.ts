@@ -15,7 +15,7 @@ const sectionLabels = {
   matches: "Matches",
   decks: "Decks",
   drafts: "Drafts",
-  ranked: "Ranked",
+  seasons: "Season details",
   economy: "Economy",
   settings: "Settings",
 } as const;

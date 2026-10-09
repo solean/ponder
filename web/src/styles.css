@@ -10084,6 +10084,10 @@ select option {
   min-width: 0;
 }
 
+.season-details-page .page-heading {
+  flex-wrap: wrap;
+}
+
 .page-heading h2 {
   margin: 0;
   font-family: var(--font-display);

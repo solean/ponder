@@ -113,6 +113,6 @@ describe("breadcrumbsForPath", () => {
 
   test("returns no trail for routes the app does not own", () => {
     expect(breadcrumbsForPath("/not-a-route")).toEqual([]);
-    expect(breadcrumbsForPath("/ranked/extra")).toEqual([]);
+    expect(breadcrumbsForPath("/seasons/extra")).toEqual([]);
   });
 });

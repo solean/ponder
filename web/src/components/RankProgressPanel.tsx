@@ -1,6 +1,7 @@
 import ReactECharts from "echarts-for-react";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
+import { useId, useMemo, type KeyboardEvent } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { api } from "../lib/api";
 import { eventDisplayName, parseEventName } from "../lib/events";
@@ -90,23 +91,20 @@ function emptyStateMessage(seasonView: SeasonView): string {
   }
 }
 
-type RankProgressPanelProps =
-  | { ladder?: never; seasonView?: never }
-  | { ladder: Ladder; seasonView: SeasonView };
-
-export function RankProgressPanel(props: RankProgressPanelProps = {}) {
+export function RankProgressPanel() {
   const tabBaseId = useId();
   const { mode, scheme } = useTheme();
-  // Follow the most recently played ladder until the user picks one.
-  const [pickedLadder, setLocalLadder] = useState<Ladder | null>(null);
-  const [localSeasonView, setLocalSeasonView] = useState<SeasonView>("current");
-  const isControlled = props.ladder != null;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedLadder = searchParams.get("ladder");
+  const requestedSeason = searchParams.get("season");
   const { data, isLoading, error } = useQuery({
     queryKey: ["rank-history"],
     queryFn: api.rankHistory,
   });
-  const ladder = props.ladder ?? pickedLadder ?? (data ? preferredLadder(data) : "constructed");
-  const seasonView = props.seasonView ?? localSeasonView;
+  const ladder: Ladder =
+    requestedLadder === "constructed" || requestedLadder === "limited"
+      ? requestedLadder
+      : data ? preferredLadder(data) : "constructed";
   const { lookup: setLookup } = useEventSets((data ?? []).map((point) => point.eventName));
   const panelId = `${tabBaseId}-panel`;
   const headingId = `${tabBaseId}-heading`;
@@ -124,11 +122,24 @@ export function RankProgressPanel(props: RankProgressPanelProps = {}) {
   const currentSeasonOrdinal = availableSeasons[availableSeasons.length - 1];
   const previousSeasonOrdinal = availableSeasons[availableSeasons.length - 2];
 
-  useEffect(() => {
-    if (!isControlled && localSeasonView === "previous" && !hasPreviousSeason) {
-      setLocalSeasonView("current");
-    }
-  }, [hasPreviousSeason, isControlled, localSeasonView]);
+  const seasonView: SeasonView =
+    requestedSeason === "all"
+      ? "all"
+      : requestedSeason === "previous" && hasPreviousSeason ? "previous" : "current";
+
+  function updateSelection(nextLadder: Ladder, nextSeason: SeasonView) {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("ladder", nextLadder);
+      next.set("season", nextSeason);
+      return next;
+    }, { replace: true });
+  }
+
+  function setLadder(nextLadder: Ladder) {
+    const hasPrevious = filledData && seasonOrdinalsFor(filledData, nextLadder).length > 1;
+    updateSelection(nextLadder, seasonView === "previous" && !hasPrevious ? "current" : seasonView);
+  }
 
   const series = useMemo(
     () => (filledData ? buildGraphPoints(filledData, ladder, seasonView) : null),
@@ -355,43 +366,44 @@ export function RankProgressPanel(props: RankProgressPanelProps = {}) {
           <h3 id={headingId}>Rank Progress</h3>
           <p>{series ? describeSeries(series) : describeSelection(seasonView)}</p>
         </div>
-        {!isControlled ? (
-          <div className="rank-controls" role="group" aria-label="Rank trend filters">
-            <div className="tabs rank-toggle" role="group" aria-label="Trend ladder">
-              {ladderOptions.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={ladder === value}
-                  className={`tab rank-toggle-button ${ladder === value ? "is-active" : ""}`}
-                  onClick={() => setLocalLadder(value)}
-                  onKeyDown={(event) =>
-                    handleSegmentedKeyDown(event, value, ladderOptions, setLocalLadder)
-                  }
-                >
-                  {LADDER_CONFIG[value].label}
-                </button>
-              ))}
-            </div>
-            <label className="rank-season-select">
-              <span>Season</span>
-              <select
-                value={seasonView}
-                onChange={(event) => setLocalSeasonView(event.target.value as SeasonView)}
+        <div className="rank-controls" role="group" aria-label="Rank trend filters">
+          <div className="tabs rank-toggle" role="group" aria-label="Trend ladder">
+            {ladderOptions.map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={ladder === value}
+                className={`tab rank-toggle-button ${ladder === value ? "is-active" : ""}`}
+                onClick={() => setLadder(value)}
+                onKeyDown={(event) =>
+                  handleSegmentedKeyDown(event, value, ladderOptions, setLadder)
+                }
               >
-                <option value="all">All seasons</option>
-                <option value="current">
-                  {currentSeasonOrdinal == null
-                    ? "Current season"
-                    : `Season ${currentSeasonOrdinal}`}
-                </option>
-                {hasPreviousSeason ? (
-                  <option value="previous">Season {previousSeasonOrdinal}</option>
-                ) : null}
-              </select>
-            </label>
+                {LADDER_CONFIG[value].label}
+              </button>
+            ))}
           </div>
-        ) : null}
+          <label className="rank-season-select">
+            <span>Season</span>
+            <select
+              value={seasonView}
+              onChange={(event) => updateSelection(ladder, event.target.value as SeasonView)}
+            >
+              <option value="all">All seasons</option>
+              <option value="current">
+                {currentSeasonOrdinal == null
+                  ? "Current season"
+                  : `Season ${currentSeasonOrdinal}`}
+              </option>
+              {hasPreviousSeason ? (
+                <option value="previous">Season {previousSeasonOrdinal}</option>
+              ) : null}
+            </select>
+          </label>
+          <Link className="text-link" to={`/seasons?ladder=${ladder}&season=${seasonView}`}>
+            Season details
+          </Link>
+        </div>
       </div>
 
       {readyState ? (

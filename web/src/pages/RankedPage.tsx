@@ -11,6 +11,7 @@ import {
   fillMissingRankClasses,
   LADDER_CONFIG,
   ladderMatchPoints,
+  preferredLadder,
   rankStateFor,
   rankStepIndex,
   type Ladder,
@@ -165,12 +166,14 @@ function handleSegmentedKeyDown<T extends string>(
 }
 
 export function RankedPage() {
-  const [ladder, setLadder] = useState<Ladder>("constructed");
+  // Follow the most recently played ladder until the user picks one.
+  const [pickedLadder, setLadder] = useState<Ladder | null>(null);
   const [seasonView, setSeasonView] = useState<SeasonView>("current");
   const { data, isLoading, error } = useQuery({
     queryKey: ["rank-history"],
     queryFn: api.rankHistory,
   });
+  const ladder = pickedLadder ?? (data ? preferredLadder(data) : "constructed");
   const ladderOptions = ["constructed", "limited"] as const satisfies readonly Ladder[];
 
   const allMatches = useMemo(() => (data ? buildLadderMatches(data, ladder) : []), [data, ladder]);

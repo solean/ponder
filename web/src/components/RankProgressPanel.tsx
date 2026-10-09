@@ -12,6 +12,7 @@ import {
   buildGraphPoints,
   fillMissingRankClasses,
   LADDER_CONFIG,
+  preferredLadder,
   rankPromotionsFor,
   seasonOrdinalsFor,
   tierLabelAt,
@@ -96,15 +97,16 @@ type RankProgressPanelProps =
 export function RankProgressPanel(props: RankProgressPanelProps = {}) {
   const tabBaseId = useId();
   const { mode, scheme } = useTheme();
-  const [localLadder, setLocalLadder] = useState<Ladder>("constructed");
+  // Follow the most recently played ladder until the user picks one.
+  const [pickedLadder, setLocalLadder] = useState<Ladder | null>(null);
   const [localSeasonView, setLocalSeasonView] = useState<SeasonView>("current");
   const isControlled = props.ladder != null;
-  const ladder = props.ladder ?? localLadder;
-  const seasonView = props.seasonView ?? localSeasonView;
   const { data, isLoading, error } = useQuery({
     queryKey: ["rank-history"],
     queryFn: api.rankHistory,
   });
+  const ladder = props.ladder ?? pickedLadder ?? (data ? preferredLadder(data) : "constructed");
+  const seasonView = props.seasonView ?? localSeasonView;
   const { lookup: setLookup } = useEventSets((data ?? []).map((point) => point.eventName));
   const panelId = `${tabBaseId}-panel`;
   const headingId = `${tabBaseId}-heading`;

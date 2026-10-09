@@ -1,3 +1,4 @@
+import { isLimitedEvent } from "./overviewStats";
 import type { RankHistoryPoint, RankState } from "./types";
 
 export type Ladder = "constructed" | "limited";
@@ -184,6 +185,34 @@ export function rankStepIndex(rank: RankState, ladder: Ladder): number | null {
  */
 export function ladderMatchPoints(history: RankHistoryPoint[], ladder: Ladder): RankHistoryPoint[] {
   return changedPointsFor(history, ladder);
+}
+
+const PREFERRED_LADDER_WINDOW = 10;
+
+/**
+ * The ladder the player has mostly been playing lately, used as the default
+ * view so limited-focused players aren't greeted by a stale constructed
+ * chart. Majority of the last few ranked matches, so one off-format game
+ * doesn't flip it; ties go to the most recent match. A point can change both
+ * ladders at once (first snapshot, season rollover); the event name decides
+ * which ladder it was played on. No ranked history → constructed.
+ */
+export function preferredLadder(history: RankHistoryPoint[]): Ladder {
+  const recent: Ladder[] = [];
+  for (let index = history.length - 1; index >= 0 && recent.length < PREFERRED_LADDER_WINDOW; index -= 1) {
+    const previous = index > 0 ? history[index - 1] : null;
+    const point = history[index];
+    const constructed = ladderStateChanged(previous, point, "constructed");
+    const limited = ladderStateChanged(previous, point, "limited");
+    if (constructed && limited) recent.push(isLimitedEvent(point.eventName) ? "limited" : "constructed");
+    else if (limited) recent.push("limited");
+    else if (constructed) recent.push("constructed");
+  }
+  if (recent.length === 0) return "constructed";
+  const limitedCount = recent.filter((ladder) => ladder === "limited").length;
+  const constructedCount = recent.length - limitedCount;
+  if (limitedCount === constructedCount) return recent[0];
+  return limitedCount > constructedCount ? "limited" : "constructed";
 }
 
 export function normalizedRankClass(rank: RankState): string {

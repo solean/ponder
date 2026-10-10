@@ -115,6 +115,26 @@ func TestListDecksByScopeOrdersResultsNewestFirst(t *testing.T) {
 		t.Fatalf("Commit: %v", err)
 	}
 
+	// m-new went to three games: won on the play, lost on the draw, then a
+	// win with unknown play/draw. Unknown results never count.
+	games := []struct {
+		number           int
+		result, playDraw string
+	}{
+		{1, "win", "play"},
+		{2, "loss", "draw"},
+		{3, "win", ""},
+		{4, "unknown", "play"},
+	}
+	for _, g := range games {
+		if _, err := database.ExecContext(ctx, `
+			INSERT INTO games (match_id, game_number, result, play_draw, derived_at)
+			SELECT id, ?, ?, NULLIF(?, ''), '2026-10-01T11:00:00Z' FROM matches WHERE arena_match_id = 'm-new'
+		`, g.number, g.result, g.playDraw); err != nil {
+			t.Fatalf("insert game %d: %v", g.number, err)
+		}
+	}
+
 	rows, err := store.ListDecksByScope(ctx, "constructed")
 	if err != nil {
 		t.Fatalf("ListDecksByScope: %v", err)
@@ -134,10 +154,29 @@ func TestListDecksByScopeOrdersResultsNewestFirst(t *testing.T) {
 	if played.LastPlayedAt != "2026-10-01T10:00:00Z" {
 		t.Fatalf("LastPlayedAt = %q, want newest match start", played.LastPlayedAt)
 	}
+	newest := played.Results[0]
+	if newest.GameWins != 2 || newest.GameLosses != 1 {
+		t.Fatalf("game record = %d-%d, want 2-1", newest.GameWins, newest.GameLosses)
+	}
+	if newest.PlayWins != 1 || newest.PlayLosses != 0 || newest.DrawWins != 0 || newest.DrawLosses != 1 {
+		t.Fatalf("play/draw = %+v, want play 1-0, draw 0-1", newest)
+	}
+	if older := played.Results[1]; older.GameWins != 0 || older.GameLosses != 0 {
+		t.Fatalf("match without games has game record %d-%d, want 0-0", older.GameWins, older.GameLosses)
+	}
+	if played.VersionCount != 1 || played.LatestVersion == nil || played.LatestVersion.VersionNumber != 1 {
+		t.Fatalf("versions = %d, latest %+v; want 1 version, v1 latest", played.VersionCount, played.LatestVersion)
+	}
+	if newest.DeckVersionID != played.LatestVersion.ID {
+		t.Fatalf("newest match version = %d, want latest version %d", newest.DeckVersionID, played.LatestVersion.ID)
+	}
 
 	unplayed := rows[byName["Brewing"]]
 	if unplayed.Results == nil || len(unplayed.Results) != 0 {
 		t.Fatalf("unplayed Results = %#v, want empty non-nil slice", unplayed.Results)
+	}
+	if unplayed.VersionCount != 0 || unplayed.LatestVersion != nil {
+		t.Fatalf("cardless deck versions = %d, %+v; want none", unplayed.VersionCount, unplayed.LatestVersion)
 	}
 
 	quantities, err := store.ListDeckMainCardQuantities(ctx, []int64{deckID})

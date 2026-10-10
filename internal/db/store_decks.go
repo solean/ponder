@@ -370,8 +370,8 @@ func (s *Store) ListDecksByScope(ctx context.Context, scope string) ([]model.Dec
 		if !deckInScope(scope, r.Format, r.EventName) {
 			continue
 		}
-		if r.Matches > 0 {
-			r.WinRate = float64(r.Wins) / float64(r.Matches)
+		if decided := r.Wins + r.Losses; decided > 0 {
+			r.WinRate = float64(r.Wins) / float64(decided)
 		}
 		out = append(out, r)
 	}
@@ -384,11 +384,64 @@ func (s *Store) ListDecksByScope(ctx context.Context, scope string) ([]model.Dec
 	if err != nil {
 		return nil, err
 	}
+	versionsByDeck, err := s.listLatestDeckVersions(ctx)
+	if err != nil {
+		return nil, err
+	}
 	for i := range out {
 		out[i].Results = resultsByDeck[out[i].DeckID]
 		if out[i].Results == nil {
 			out[i].Results = []model.DeckMatchResult{}
 		}
+		if v, ok := versionsByDeck[out[i].DeckID]; ok {
+			out[i].VersionCount = v.count
+			out[i].LatestVersion = &v.latest
+		}
+	}
+	return out, nil
+}
+
+type deckVersionSummary struct {
+	count  int64
+	latest model.DeckVersionBrief
+}
+
+// listLatestDeckVersions returns each deck's version count and its latest
+// version, ordered the same way currentDeckVersionID picks one.
+func (s *Store) listLatestDeckVersions(ctx context.Context) (map[int64]deckVersionSummary, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT deck_id, version_count, id, version_number, effective
+		FROM (
+			SELECT
+				deck_id,
+				COUNT(*) OVER (PARTITION BY deck_id) AS version_count,
+				id,
+				version_number,
+				COALESCE(effective_at, created_at) AS effective,
+				ROW_NUMBER() OVER (
+					PARTITION BY deck_id
+					ORDER BY COALESCE(effective_at, created_at) DESC, version_number DESC
+				) AS rn
+			FROM deck_versions
+		)
+		WHERE rn = 1
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list latest deck versions: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[int64]deckVersionSummary)
+	for rows.Next() {
+		var deckID int64
+		var v deckVersionSummary
+		if err := rows.Scan(&deckID, &v.count, &v.latest.ID, &v.latest.VersionNumber, &v.latest.EffectiveAt); err != nil {
+			return nil, fmt.Errorf("scan latest deck version: %w", err)
+		}
+		out[deckID] = v
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate latest deck versions: %w", err)
 	}
 	return out, nil
 }
@@ -400,9 +453,28 @@ func (s *Store) listDeckMatchResults(ctx context.Context) (map[int64][]model.Dec
 			md.deck_id,
 			COALESCE(m.event_name, ''),
 			COALESCE(m.started_at, m.ended_at, '') AS played_at,
-			COALESCE(m.result, '')
+			COALESCE(m.result, ''),
+			COALESCE(md.deck_version_id, 0),
+			COALESCE(g.game_wins, 0),
+			COALESCE(g.game_losses, 0),
+			COALESCE(g.play_wins, 0),
+			COALESCE(g.play_losses, 0),
+			COALESCE(g.draw_wins, 0),
+			COALESCE(g.draw_losses, 0)
 		FROM match_decks md
 		JOIN matches m ON m.id = md.match_id
+		LEFT JOIN (
+			SELECT
+				match_id,
+				SUM(result = 'win') AS game_wins,
+				SUM(result = 'loss') AS game_losses,
+				SUM(result = 'win' AND play_draw = 'play') AS play_wins,
+				SUM(result = 'loss' AND play_draw = 'play') AS play_losses,
+				SUM(result = 'win' AND play_draw = 'draw') AS draw_wins,
+				SUM(result = 'loss' AND play_draw = 'draw') AS draw_losses
+			FROM games
+			GROUP BY match_id
+		) g ON g.match_id = m.id
 		ORDER BY md.deck_id, played_at DESC, m.id DESC
 	`)
 	if err != nil {
@@ -414,7 +486,10 @@ func (s *Store) listDeckMatchResults(ctx context.Context) (map[int64][]model.Dec
 	for rows.Next() {
 		var deckID int64
 		var r model.DeckMatchResult
-		if err := rows.Scan(&deckID, &r.EventName, &r.PlayedAt, &r.Result); err != nil {
+		if err := rows.Scan(
+			&deckID, &r.EventName, &r.PlayedAt, &r.Result, &r.DeckVersionID,
+			&r.GameWins, &r.GameLosses, &r.PlayWins, &r.PlayLosses, &r.DrawWins, &r.DrawLosses,
+		); err != nil {
 			return nil, fmt.Errorf("scan deck match result: %w", err)
 		}
 		out[deckID] = append(out[deckID], r)

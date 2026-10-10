@@ -9017,6 +9017,11 @@ select option {
   color: var(--muted);
 }
 
+.deck-list-table th,
+.deck-list-table td {
+  padding-inline: 0.55rem;
+}
+
 .deck-list-table th button {
   border: 0;
   padding: 0;
@@ -9085,6 +9090,89 @@ select option {
   text-decoration: underline dotted;
   text-underline-offset: 3px;
   cursor: help;
+}
+
+.deck-list-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.deck-list-version {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.08rem 0.32rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--track-sm);
+  cursor: help;
+}
+
+.deck-list-version.is-edited {
+  border-color: var(--tab-active-border);
+  color: var(--accent);
+}
+
+.deck-list-version.is-edited::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.deck-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: help;
+}
+
+.deck-form-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.deck-form-dot--win {
+  background: var(--metric-positive-text);
+}
+
+.deck-form-dot--loss {
+  background: var(--metric-negative-text);
+}
+
+.deck-list-sub {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 400;
+  letter-spacing: var(--track-sm);
+}
+
+.deck-list-split {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.deck-list-metrics .metric-card--deck .metric-value {
+  display: block;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  font-size: var(--display-md);
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .deck-list-scope-note {

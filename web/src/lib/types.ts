@@ -387,12 +387,28 @@ export type DeckSummary = {
   colorsKnown?: boolean;
   /** Every linked match, newest first. */
   results?: DeckMatchResult[];
+  versionCount?: number;
+  latestVersion?: DeckVersionBrief | null;
 };
 
+export type DeckVersionBrief = {
+  id: number;
+  versionNumber: number;
+  effectiveAt: string;
+};
+
+/** Game counts include only games with a known result (and play/draw for the split). */
 export type DeckMatchResult = {
   eventName: string;
   playedAt: string;
   result: string;
+  deckVersionId?: number;
+  gameWins?: number;
+  gameLosses?: number;
+  playWins?: number;
+  playLosses?: number;
+  drawWins?: number;
+  drawLosses?: number;
 };
 
 export type DeckCard = {

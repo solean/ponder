@@ -12,10 +12,13 @@ import type { DeckMatchResult, DeckSummary } from "./types";
 
 export const DECK_FILTER_COLORS = ["W", "U", "B", "R", "G"] as const;
 
-/** Below this many decided matches a win rate is flagged as a small sample. */
+/** Below this many decided matches (or games) a win rate is flagged as a small sample. */
 export const SMALL_SAMPLE_MATCHES = 10;
 
-export type DeckSortKey = "name" | "colors" | "format" | "lastPlayed" | "matches" | "record" | "winRate";
+/** How many of the most recent results the form column shows. */
+export const FORM_LENGTH = 10;
+
+export type DeckSortKey = "name" | "colors" | "format" | "lastPlayed" | "matches" | "winRate";
 export type DeckPeriod = "" | "7d" | "30d" | "90d";
 
 export const DECK_PERIODS: Array<{ value: DeckPeriod; label: string; days: number }> = [
@@ -46,7 +49,7 @@ export const EMPTY_DECK_FILTERS: DeckListFilters = {
 
 export const DEFAULT_DECK_SORT: DeckListSort = { key: "lastPlayed", desc: true };
 
-const SORT_KEYS: DeckSortKey[] = ["name", "colors", "format", "lastPlayed", "matches", "record", "winRate"];
+const SORT_KEYS: DeckSortKey[] = ["name", "colors", "format", "lastPlayed", "matches", "winRate"];
 
 /** Text-like columns start ascending; numeric and date columns start descending. */
 export function defaultSortDesc(key: DeckSortKey): boolean {
@@ -54,6 +57,18 @@ export function defaultSortDesc(key: DeckSortKey): boolean {
 }
 
 export type DeckEventCount = { category: string; matches: number };
+
+export type WinLoss = { wins: number; losses: number; rate: number | null };
+
+export type DeckVersionStatus = {
+  versionNumber: number;
+  versionCount: number;
+  effectiveAt: string;
+  /** Matches (all-time, unscoped) played on the latest version. */
+  matchesOnLatest: number;
+  /** The list changed after the most recent match, so no stats cover it yet. */
+  editedSinceLastPlayed: boolean;
+};
 
 export type DeckListRow = {
   deck: DeckSummary;
@@ -66,7 +81,13 @@ export type DeckListRow = {
   wins: number;
   losses: number;
   winRate: number | null;
+  games: WinLoss;
+  play: WinLoss;
+  draw: WinLoss;
+  /** Up to FORM_LENGTH most recent results in scope, oldest first. */
+  form: string[];
   lastPlayedAt: string;
+  version: DeckVersionStatus | null;
 };
 
 export function parseDeckListParams(params: URLSearchParams): { filters: DeckListFilters; sort: DeckListSort } {
@@ -153,6 +174,24 @@ function deckEvents(results: DeckMatchResult[]): DeckEventCount[] {
     .sort((a, b) => b.matches - a.matches || a.category.localeCompare(b.category));
 }
 
+export function winLoss(wins: number, losses: number): WinLoss {
+  const decided = wins + losses;
+  return { wins, losses, rate: decided > 0 ? wins / decided : null };
+}
+
+function deckVersionStatus(deck: DeckSummary, results: DeckMatchResult[]): DeckVersionStatus | null {
+  const latest = deck.latestVersion;
+  if (!latest) return null;
+  const lastVersionId = results[0]?.deckVersionId;
+  return {
+    versionNumber: latest.versionNumber,
+    versionCount: deck.versionCount ?? latest.versionNumber,
+    effectiveAt: latest.effectiveAt,
+    matchesOnLatest: results.filter((result) => result.deckVersionId === latest.id).length,
+    editedSinceLastPlayed: lastVersionId != null && lastVersionId !== 0 && lastVersionId !== latest.id,
+  };
+}
+
 export function buildDeckRow(deck: DeckSummary, filters: DeckListFilters, now: number): DeckListRow {
   const results = deck.results ?? [];
   const since = periodStart(filters.period, now);
@@ -162,11 +201,17 @@ export function buildDeckRow(deck: DeckSummary, filters: DeckListFilters, now: n
 
   let wins = 0;
   let losses = 0;
+  const totals = { gameWins: 0, gameLosses: 0, playWins: 0, playLosses: 0, drawWins: 0, drawLosses: 0 };
   for (const result of scoped) {
     if (result.result === "win") wins += 1;
     else if (result.result === "loss") losses += 1;
+    totals.gameWins += result.gameWins ?? 0;
+    totals.gameLosses += result.gameLosses ?? 0;
+    totals.playWins += result.playWins ?? 0;
+    totals.playLosses += result.playLosses ?? 0;
+    totals.drawWins += result.drawWins ?? 0;
+    totals.drawLosses += result.drawLosses ?? 0;
   }
-  const decided = wins + losses;
 
   return {
     deck,
@@ -176,9 +221,55 @@ export function buildDeckRow(deck: DeckSummary, filters: DeckListFilters, now: n
     matches: scoped.length,
     wins,
     losses,
-    winRate: decided > 0 ? wins / decided : null,
+    winRate: winLoss(wins, losses).rate,
+    games: winLoss(totals.gameWins, totals.gameLosses),
+    play: winLoss(totals.playWins, totals.playLosses),
+    draw: winLoss(totals.drawWins, totals.drawLosses),
     // Results arrive newest first.
+    form: scoped.slice(0, FORM_LENGTH).map((result) => result.result).reverse(),
     lastPlayedAt: scoped[0]?.playedAt ?? "",
+    version: deckVersionStatus(deck, results),
+  };
+}
+
+export type DeckListSummary = {
+  decks: number;
+  matches: number;
+  record: WinLoss;
+  games: WinLoss;
+  mostPlayed: DeckListRow | null;
+  /** Highest win rate among decks with at least SMALL_SAMPLE_MATCHES decided matches. */
+  best: DeckListRow | null;
+};
+
+export function summarizeDeckRows(rows: DeckListRow[]): DeckListSummary {
+  let matches = 0;
+  let wins = 0;
+  let losses = 0;
+  let gameWins = 0;
+  let gameLosses = 0;
+  let mostPlayed: DeckListRow | null = null;
+  let best: DeckListRow | null = null;
+  for (const row of rows) {
+    matches += row.matches;
+    wins += row.wins;
+    losses += row.losses;
+    gameWins += row.games.wins;
+    gameLosses += row.games.losses;
+    if (row.matches > 0 && (!mostPlayed || row.matches > mostPlayed.matches)) mostPlayed = row;
+    if (row.winRate != null && row.wins + row.losses >= SMALL_SAMPLE_MATCHES) {
+      if (!best || row.winRate > best.winRate! || (row.winRate === best.winRate && row.matches > best.matches)) {
+        best = row;
+      }
+    }
+  }
+  return {
+    decks: rows.length,
+    matches,
+    record: winLoss(wins, losses),
+    games: winLoss(gameWins, gameLosses),
+    mostPlayed,
+    best,
   };
 }
 
@@ -228,8 +319,6 @@ function sortValue(row: DeckListRow, key: DeckSortKey): number | string | null {
     }
     case "matches":
       return row.matches;
-    case "record":
-      return row.matches > 0 ? row.wins - row.losses : null;
     case "winRate":
       return row.winRate;
   }

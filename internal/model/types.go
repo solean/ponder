@@ -493,12 +493,31 @@ type DeckSummaryRow struct {
 	// Results lists every linked match, newest first, so the client can scope
 	// the record by event and period without another round trip.
 	Results []DeckMatchResult `json:"results"`
+	// VersionCount and LatestVersion describe the deck's list history; the
+	// latest version is the one new matches would link to.
+	VersionCount  int64             `json:"versionCount"`
+	LatestVersion *DeckVersionBrief `json:"latestVersion,omitempty"`
 }
 
+type DeckVersionBrief struct {
+	ID            int64  `json:"id"`
+	VersionNumber int64  `json:"versionNumber"`
+	EffectiveAt   string `json:"effectiveAt"`
+}
+
+// DeckMatchResult is one match played with a deck. Game counts only include
+// games with a known result; play/draw counts also need a known play/draw.
 type DeckMatchResult struct {
-	EventName string `json:"eventName"`
-	PlayedAt  string `json:"playedAt"`
-	Result    string `json:"result"`
+	EventName     string `json:"eventName"`
+	PlayedAt      string `json:"playedAt"`
+	Result        string `json:"result"`
+	DeckVersionID int64  `json:"deckVersionId,omitempty"`
+	GameWins      int64  `json:"gameWins"`
+	GameLosses    int64  `json:"gameLosses"`
+	PlayWins      int64  `json:"playWins"`
+	PlayLosses    int64  `json:"playLosses"`
+	DrawWins      int64  `json:"drawWins"`
+	DrawLosses    int64  `json:"drawLosses"`
 }
 
 type DeckCardRow struct {

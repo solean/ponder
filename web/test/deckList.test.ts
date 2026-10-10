@@ -8,6 +8,7 @@ import {
   filterDeckRows,
   parseDeckListParams,
   sortDeckRows,
+  summarizeDeckRows,
   type DeckListFilters,
 } from "../src/lib/deckList";
 import type { DeckSummary } from "../src/lib/types";
@@ -165,5 +166,130 @@ describe("deck row sorting", () => {
   test("win rate keeps decks without a rate last", () => {
     expect(sorted("winRate", true).slice(0, 2)).toEqual(["Pioneer Golgari", "Izzet Prowess"]);
     expect(sorted("winRate", false).slice(0, 2)).toEqual(["Izzet Prowess", "Pioneer Golgari"]);
+  });
+});
+
+describe("game-level stats", () => {
+  const bo3 = deck({
+    deckId: 10,
+    results: [
+      {
+        eventName: "Traditional_Ladder",
+        playedAt: "2026-10-08T00:00:00Z",
+        result: "win",
+        gameWins: 2,
+        gameLosses: 1,
+        playWins: 1,
+        playLosses: 0,
+        drawWins: 1,
+        drawLosses: 1,
+      },
+      {
+        eventName: "Ladder",
+        playedAt: "2026-09-01T00:00:00Z",
+        result: "loss",
+        gameWins: 0,
+        gameLosses: 1,
+        playWins: 0,
+        playLosses: 1,
+        drawWins: 0,
+        drawLosses: 0,
+      },
+    ],
+  });
+
+  test("sums games and play/draw across scoped matches", () => {
+    const row = buildDeckRow(bo3, EMPTY_DECK_FILTERS, NOW);
+    expect(row.games).toEqual({ wins: 2, losses: 2, rate: 0.5 });
+    expect(row.play).toEqual({ wins: 1, losses: 1, rate: 0.5 });
+    expect(row.draw).toEqual({ wins: 1, losses: 1, rate: 0.5 });
+
+    const scoped = buildDeckRow(bo3, { ...EMPTY_DECK_FILTERS, event: "Traditional Ladder" }, NOW);
+    expect(scoped.games).toEqual({ wins: 2, losses: 1, rate: 2 / 3 });
+    expect(scoped.play.rate).toBe(1);
+  });
+
+  test("missing game data yields no rate", () => {
+    const row = buildDeckRow(izzet, EMPTY_DECK_FILTERS, NOW);
+    expect(row.games.rate).toBeNull();
+    expect(row.play.rate).toBeNull();
+  });
+});
+
+describe("form", () => {
+  test("keeps the most recent results, oldest first", () => {
+    const results = Array.from({ length: 12 }, (_, index) => ({
+      eventName: "Ladder",
+      playedAt: new Date(NOW - index * 60_000).toISOString(),
+      result: index === 0 ? "loss" : index === 11 ? "loss" : "win",
+    }));
+    const row = buildDeckRow(deck({ results }), EMPTY_DECK_FILTERS, NOW);
+    expect(row.form).toHaveLength(10);
+    expect(row.form.at(-1)).toBe("loss");
+    expect(row.form.slice(0, -1).every((result) => result === "win")).toBe(true);
+  });
+});
+
+describe("version status", () => {
+  const versioned = (lastVersionId: number) =>
+    deck({
+      versionCount: 3,
+      latestVersion: { id: 30, versionNumber: 3, effectiveAt: "2026-10-05T00:00:00Z" },
+      results: [
+        { eventName: "Ladder", playedAt: "2026-10-04T00:00:00Z", result: "win", deckVersionId: lastVersionId },
+        { eventName: "Ladder", playedAt: "2026-10-01T00:00:00Z", result: "win", deckVersionId: 20 },
+      ],
+    });
+
+  test("flags a list edited after the last match", () => {
+    const status = buildDeckRow(versioned(20), EMPTY_DECK_FILTERS, NOW).version;
+    expect(status).toMatchObject({ versionNumber: 3, versionCount: 3, matchesOnLatest: 0, editedSinceLastPlayed: true });
+  });
+
+  test("not edited when the last match used the latest list", () => {
+    const status = buildDeckRow(versioned(30), EMPTY_DECK_FILTERS, NOW).version;
+    expect(status).toMatchObject({ matchesOnLatest: 1, editedSinceLastPlayed: false });
+  });
+
+  test("no version info without a latest version", () => {
+    expect(buildDeckRow(brew, EMPTY_DECK_FILTERS, NOW).version).toBeNull();
+  });
+});
+
+describe("summary", () => {
+  test("totals the listed rows and picks most played and best deck", () => {
+    const winner = deck({
+      deckId: 20,
+      deckName: "Winner",
+      results: Array.from({ length: 10 }, (_, index) => ({
+        eventName: "Ladder",
+        playedAt: new Date(NOW - index * 60_000).toISOString(),
+        result: index < 8 ? "win" : "loss",
+      })),
+    });
+    const grinder = deck({
+      deckId: 21,
+      deckName: "Grinder",
+      results: Array.from({ length: 14 }, (_, index) => ({
+        eventName: "Ladder",
+        playedAt: new Date(NOW - index * 60_000).toISOString(),
+        result: index % 2 === 0 ? "win" : "loss",
+      })),
+    });
+    const summary = summarizeDeckRows(
+      [winner, grinder, izzet, brew].map((d) => buildDeckRow(d, EMPTY_DECK_FILTERS, NOW)),
+    );
+    expect(summary.decks).toBe(4);
+    expect(summary.matches).toBe(27);
+    expect(summary.record).toMatchObject({ wins: 17, losses: 10 });
+    expect(summary.mostPlayed?.deck.deckName).toBe("Grinder");
+    // Izzet (2–1) is under the sample floor, so it can't be best.
+    expect(summary.best?.deck.deckName).toBe("Winner");
+  });
+
+  test("no best deck below the sample floor", () => {
+    const summary = summarizeDeckRows([buildDeckRow(izzet, EMPTY_DECK_FILTERS, NOW)]);
+    expect(summary.best).toBeNull();
+    expect(summary.mostPlayed?.deck.deckName).toBe("Izzet Prowess");
   });
 });

@@ -74,6 +74,37 @@ func (s *Server) enrichMatchDeckColors(ctx context.Context, matches []model.Matc
 	}
 }
 
+func (s *Server) enrichDeckSummaryColors(ctx context.Context, decks []model.DeckSummaryRow) {
+	if len(decks) == 0 {
+		return
+	}
+
+	deckIDs := make([]int64, 0, len(decks))
+	for i := range decks {
+		deckIDs = append(deckIDs, decks[i].DeckID)
+		decks[i].Colors = nil
+		decks[i].ColorsKnown = false
+	}
+
+	quantitiesByDeck, err := s.store.ListDeckMainCardQuantities(ctx, deckIDs)
+	if err != nil {
+		log.Printf("deck list color lookup failed: %v", err)
+		return
+	}
+
+	allCardIDs := make([]int64, 0)
+	for _, cardQuantities := range quantitiesByDeck {
+		for cardID := range cardQuantities {
+			allCardIDs = append(allCardIDs, cardID)
+		}
+	}
+
+	colorIdentityByCardID := s.resolveCardColorIdentities(ctx, allCardIDs)
+	for i := range decks {
+		decks[i].Colors, decks[i].ColorsKnown = matchColorsForCardQuantities(quantitiesByDeck[decks[i].DeckID], colorIdentityByCardID)
+	}
+}
+
 func matchColorsForCardQuantities(cardQuantities map[int64]int64, colorIdentityByCardID map[int64][]string) ([]string, bool) {
 	if len(cardQuantities) == 0 {
 		return nil, false

@@ -9017,6 +9017,82 @@ select option {
   color: var(--muted);
 }
 
+.deck-list-table th button {
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.deck-list-table th button:hover,
+.deck-list-table th button:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
+
+.deck-list-table th[aria-sort="ascending"] button,
+.deck-list-table th[aria-sort="descending"] button {
+  color: var(--text);
+}
+
+.deck-list-table .deck-list-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.deck-list-table .match-deck-color-symbols .mana-symbol-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.deck-list-events {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.deck-list-event {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.16rem 0.42rem;
+  color: var(--muted-strong);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.deck-list-event--more {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.deck-list-date {
+  white-space: nowrap;
+}
+
+.deck-list-muted {
+  color: var(--muted);
+}
+
+.deck-list-table .win-rate.is-small-sample {
+  opacity: 0.55;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+.deck-list-scope-note {
+  margin: -0.4rem 0 0.8rem;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
 .data-table tbody tr.match-group-row {
   cursor: default;
 }

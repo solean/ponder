@@ -484,7 +484,21 @@ type DeckSummaryRow struct {
 	Losses        int64   `json:"losses"`
 	WinRate       float64 `json:"winRate"`
 	FirstPlayedAt string  `json:"firstPlayedAt,omitempty"`
+	LastPlayedAt  string  `json:"lastPlayedAt,omitempty"`
 	LastUpdatedAt string  `json:"lastUpdatedAt,omitempty"`
+	// Colors is the current mainboard's color identity; ColorsKnown is false
+	// when no mainboard card could be resolved.
+	Colors      []string `json:"colors"`
+	ColorsKnown bool     `json:"colorsKnown"`
+	// Results lists every linked match, newest first, so the client can scope
+	// the record by event and period without another round trip.
+	Results []DeckMatchResult `json:"results"`
+}
+
+type DeckMatchResult struct {
+	EventName string `json:"eventName"`
+	PlayedAt  string `json:"playedAt"`
+	Result    string `json:"result"`
 }
 
 type DeckCardRow struct {

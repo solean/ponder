@@ -337,6 +337,7 @@ func (s *Store) ListDecksByScope(ctx context.Context, scope string) ([]model.Dec
 			SUM(CASE WHEN m.result = 'win' THEN 1 ELSE 0 END) AS wins,
 			SUM(CASE WHEN m.result = 'loss' THEN 1 ELSE 0 END) AS losses,
 			COALESCE(MIN(COALESCE(m.started_at, m.ended_at)), '') AS first_played_at,
+			COALESCE(MAX(COALESCE(m.started_at, m.ended_at)), '') AS last_played_at,
 			COALESCE(d.last_updated, d.created_at, '') AS last_updated_at
 		FROM decks d
 		LEFT JOIN match_decks md ON md.deck_id = d.id
@@ -361,6 +362,7 @@ func (s *Store) ListDecksByScope(ctx context.Context, scope string) ([]model.Dec
 			&r.Wins,
 			&r.Losses,
 			&r.FirstPlayedAt,
+			&r.LastPlayedAt,
 			&r.LastUpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan deck summary: %w", err)
@@ -375,6 +377,91 @@ func (s *Store) ListDecksByScope(ctx context.Context, scope string) ([]model.Dec
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate decks: %w", err)
+	}
+	rows.Close()
+
+	resultsByDeck, err := s.listDeckMatchResults(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		out[i].Results = resultsByDeck[out[i].DeckID]
+		if out[i].Results == nil {
+			out[i].Results = []model.DeckMatchResult{}
+		}
+	}
+	return out, nil
+}
+
+// listDeckMatchResults returns every deck-linked match, newest first per deck.
+func (s *Store) listDeckMatchResults(ctx context.Context) (map[int64][]model.DeckMatchResult, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT
+			md.deck_id,
+			COALESCE(m.event_name, ''),
+			COALESCE(m.started_at, m.ended_at, '') AS played_at,
+			COALESCE(m.result, '')
+		FROM match_decks md
+		JOIN matches m ON m.id = md.match_id
+		ORDER BY md.deck_id, played_at DESC, m.id DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list deck match results: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[int64][]model.DeckMatchResult)
+	for rows.Next() {
+		var deckID int64
+		var r model.DeckMatchResult
+		if err := rows.Scan(&deckID, &r.EventName, &r.PlayedAt, &r.Result); err != nil {
+			return nil, fmt.Errorf("scan deck match result: %w", err)
+		}
+		out[deckID] = append(out[deckID], r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate deck match results: %w", err)
+	}
+	return out, nil
+}
+
+// ListDeckMainCardQuantities returns each deck's current mainboard as
+// card ID → quantity.
+func (s *Store) ListDeckMainCardQuantities(ctx context.Context, deckIDs []int64) (map[int64]map[int64]int64, error) {
+	out := make(map[int64]map[int64]int64)
+	for _, batch := range int64Batches(deckIDs, sqliteInClauseBatchSize) {
+		placeholders := make([]string, 0, len(batch))
+		args := make([]any, 0, len(batch))
+		for _, deckID := range batch {
+			placeholders = append(placeholders, "?")
+			args = append(args, deckID)
+		}
+
+		rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
+			SELECT deck_id, card_id, SUM(quantity)
+			FROM deck_cards
+			WHERE section = 'main' AND deck_id IN (%s)
+			GROUP BY deck_id, card_id
+		`, strings.Join(placeholders, ",")), args...)
+		if err != nil {
+			return nil, fmt.Errorf("list deck main card quantities: %w", err)
+		}
+		for rows.Next() {
+			var deckID, cardID, quantity int64
+			if err := rows.Scan(&deckID, &cardID, &quantity); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("scan deck main card quantity: %w", err)
+			}
+			if out[deckID] == nil {
+				out[deckID] = make(map[int64]int64)
+			}
+			out[deckID][cardID] = quantity
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("iterate deck main card quantities: %w", err)
+		}
+		rows.Close()
 	}
 	return out, nil
 }

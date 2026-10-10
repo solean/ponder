@@ -742,6 +742,7 @@ func (s *Server) handleDecks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.enrichDeckSummaryColors(r.Context(), rows)
 	writeJSON(w, http.StatusOK, rows)
 }
 

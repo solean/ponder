@@ -381,7 +381,18 @@ export type DeckSummary = {
   losses: number;
   winRate: number;
   firstPlayedAt?: string;
+  lastPlayedAt?: string;
   lastUpdatedAt?: string;
+  colors?: string[] | null;
+  colorsKnown?: boolean;
+  /** Every linked match, newest first. */
+  results?: DeckMatchResult[];
+};
+
+export type DeckMatchResult = {
+  eventName: string;
+  playedAt: string;
+  result: string;
 };
 
 export type DeckCard = {

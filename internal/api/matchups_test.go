@@ -89,7 +89,7 @@ func TestLimitedSetCode(t *testing.T) {
 		"":                          "",
 	}
 	for eventName, want := range cases {
-		if got := limitedSetCode(eventName); got != want {
+		if got := model.LimitedSetCode(eventName); got != want {
 			t.Errorf("limitedSetCode(%q) = %q, want %q", eventName, got, want)
 		}
 	}

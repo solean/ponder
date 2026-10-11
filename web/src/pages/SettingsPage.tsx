@@ -311,6 +311,8 @@ async function refreshDataQueries(queryClient: ReturnType<typeof useQueryClient>
     queryClient.invalidateQueries({ queryKey: ["match-replay-status"] }),
     queryClient.invalidateQueries({ queryKey: ["decks"] }),
     queryClient.invalidateQueries({ queryKey: ["drafts"] }),
+    queryClient.invalidateQueries({ queryKey: ["draft-analytics"] }),
+    queryClient.invalidateQueries({ queryKey: ["analytics-games"] }),
   ]);
 }
 

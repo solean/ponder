@@ -570,6 +570,13 @@ export type DeckAnalyticsGamesParams = {
   landDrops?: "missed" | "clean";
 };
 
+export type DraftAnalyticsResponse = {
+  analytics: DeckAnalytics;
+  sets: string[];
+};
+
+export type DraftAnalyticsGamesParams = Omit<DeckAnalyticsGamesParams, "version">;
+
 export type MatchupObservedCard = {
   cardId: number;
   cardName?: string;

@@ -16,7 +16,15 @@ export function useEventSets(eventNames: Array<string | null | undefined>): {
   lookup: SetLookup;
   isLoading: boolean;
 } {
-  const codes = collectSetCodes(eventNames).sort();
+  return useSetCodes(collectSetCodes(eventNames));
+}
+
+/** Resolves the same cached metadata for explicit set filters. */
+export function useSetCodes(setCodes: string[]): {
+  lookup: SetLookup;
+  isLoading: boolean;
+} {
+  const codes = [...new Set(setCodes.filter(Boolean).map((code) => code.toLowerCase()))].sort();
   const query = useQuery({
     queryKey: ["sets", codes],
     queryFn: () => api.sets(codes),

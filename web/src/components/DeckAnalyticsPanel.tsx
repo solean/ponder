@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import { ContextualLink } from "./Breadcrumbs";
 import { CardPreviewName } from "./CardPreviewName";
@@ -15,6 +15,7 @@ import { formatDateTime, pct } from "../lib/format";
 import { useEventSets } from "../lib/useEventSets";
 import type {
   AnalyticsBucket,
+  DeckAnalytics,
   DeckAnalyticsCoverage,
   DeckAnalyticsCardFacet,
   DeckAnalyticsGamesParams,
@@ -34,6 +35,10 @@ type DrillDown = {
   label: string;
   params: DeckAnalyticsGamesParams;
 };
+
+type AnalyticsScope =
+  | { kind: "deck"; deckId: number; versionId: number }
+  | { kind: "drafts"; set?: string };
 
 type CardSortKey =
   | "name"
@@ -468,24 +473,23 @@ function DeckGameShapeSection({
 }
 
 function DrillDownSection({
-  deckId,
-  versionId,
+  scope,
   drillDown,
   onClose,
 }: {
-  deckId: number;
-  versionId: number;
+  scope: AnalyticsScope;
   drillDown: DrillDown;
   onClose: () => void;
 }) {
-  const params = useMemo<DeckAnalyticsGamesParams>(() => {
-    return versionId > 0 ? { ...drillDown.params, version: versionId } : drillDown.params;
-  }, [drillDown.params, versionId]);
-
   const query = useQuery({
-    queryKey: ["deck-analytics-games", deckId, params],
-    queryFn: () => api.deckAnalyticsGames(deckId, params),
-    placeholderData: keepPreviousData,
+    queryKey: ["analytics-games", scope, drillDown.params],
+    queryFn: () =>
+      scope.kind === "deck"
+        ? api.deckAnalyticsGames(scope.deckId, {
+            ...drillDown.params,
+            version: scope.versionId || undefined,
+          })
+        : api.draftAnalyticsGames(scope.set, drillDown.params),
   });
   const rows = query.data ?? [];
   const { lookup: setLookup } = useEventSets(rows.map((row) => row.eventName));
@@ -516,7 +520,7 @@ function DrillDownSection({
                 <th>Result</th>
                 <th>Initiative</th>
                 <th>Hand</th>
-                {params.card ? <th>Copies</th> : null}
+                {drillDown.params.card ? <th>Copies</th> : null}
                 <th>Details</th>
               </tr>
             </thead>
@@ -538,7 +542,7 @@ function DrillDownSection({
                       ? `${row.keptHandSize} kept${row.mulliganCount ? ` · ${row.mulliganCount} mull` : ""}`
                       : "—"}
                   </td>
-                  {params.card ? (
+                  {drillDown.params.card ? (
                     <td>
                       {[
                         row.openingKeptCopies ? `${row.openingKeptCopies} kept` : "",
@@ -572,17 +576,43 @@ function DrillDownSection({
 
 export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versions: DeckVersion[] }) {
   const [versionId, setVersionId] = useState(0);
-  const [sortKey, setSortKey] = useState<CardSortKey>("seen");
-  const [sortAscending, setSortAscending] = useState(false);
-  const [drillDown, setDrillDown] = useState<DrillDown | null>(null);
-
   const query = useQuery({
     queryKey: ["deck-analytics", deckId, versionId],
     queryFn: () => api.deckAnalytics(deckId, versionId || undefined),
     enabled: Number.isFinite(deckId),
-    placeholderData: keepPreviousData,
   });
-  const data = query.data;
+  return (
+    <PerformanceAnalyticsPanel
+      key={`${deckId}-${versionId}`}
+      scope={{ kind: "deck", deckId, versionId }}
+      data={query.data}
+      isLoading={query.isLoading}
+      error={query.error}
+      versions={versions}
+      onVersionChange={setVersionId}
+    />
+  );
+}
+
+export function PerformanceAnalyticsPanel({
+  scope,
+  data,
+  isLoading,
+  error,
+  versions = [],
+  onVersionChange,
+}: {
+  scope: AnalyticsScope;
+  data?: DeckAnalytics;
+  isLoading: boolean;
+  error: Error | null;
+  versions?: DeckVersion[];
+  onVersionChange?: (versionId: number) => void;
+}) {
+  const versionId = scope.kind === "deck" ? scope.versionId : 0;
+  const [sortKey, setSortKey] = useState<CardSortKey>("seen");
+  const [sortAscending, setSortAscending] = useState(false);
+  const [drillDown, setDrillDown] = useState<DrillDown | null>(null);
   const baseline = data ? winRate(data.gameRecord) : null;
 
   const sortedCards = useMemo(() => {
@@ -618,23 +648,23 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
     });
   };
 
-  if (query.isLoading) {
+  if (isLoading) {
     return (
       <section className="panel deck-analytics-panel">
         <div className="panel-head">
           <h3>Performance Analytics</h3>
         </div>
-        <StatusMessage>Deriving deck analytics…</StatusMessage>
+        <StatusMessage>Deriving performance analytics…</StatusMessage>
       </section>
     );
   }
-  if (query.error) {
+  if (error) {
     return (
       <section className="panel deck-analytics-panel">
         <div className="panel-head">
           <h3>Performance Analytics</h3>
         </div>
-        <StatusMessage tone="error">{(query.error as Error).message}</StatusMessage>
+        <StatusMessage tone="error">{error.message}</StatusMessage>
       </section>
     );
   }
@@ -659,11 +689,11 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
           <p>
             {coverage.gameCount > 0
               ? `${coverage.gameCount.toLocaleString()} ${coverage.gameCount === 1 ? "game" : "games"} · ${coverage.matches.toLocaleString()} ${coverage.matches === 1 ? "match" : "matches"}`
-              : "No games recorded with this deck yet"}
+              : "No games recorded for this selection yet"}
           </p>
         </div>
         <div className="deck-analytics-controls">
-          {versions.length > 1 || coveragePresentation.versionNote ? (
+          {scope.kind === "deck" && (versions.length > 1 || coveragePresentation.versionNote) ? (
             <div className="deck-analytics-version-control">
               {versions.length > 1 ? (
                 <label className="deck-analytics-version-select">
@@ -671,7 +701,7 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
                   <select
                     value={versionId}
                     onChange={(event) => {
-                      setVersionId(Number(event.target.value));
+                      onVersionChange?.(Number(event.target.value));
                       setDrillDown(null);
                     }}
                   >
@@ -727,7 +757,7 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
 
       {coverage.gameCount === 0 ? (
         <StatusMessage>
-          Play matches with this deck (or run an import) and per-card analytics will appear here.
+          Play matches (or run an import) and analytics for this selection will appear here.
         </StatusMessage>
       ) : (
         <>
@@ -737,7 +767,7 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
               {playDrawSample ? <span className="deck-analytics-sample">Play/draw splits: {playDrawSample}</span> : null}
             </div>
           ) : null}
-          <dl className="deck-analytics-tiles" aria-label="Deck record summary">
+          <dl className="deck-analytics-tiles" aria-label="Game and match record summary">
             <RecordTile
               label="Games"
               record={data.gameRecord}
@@ -835,7 +865,7 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
               />
             </div>
             <p>
-              Win rates are game-scoped and compared against the deck baseline of{" "}
+              Win rates are game-scoped and compared against the selection baseline of{" "}
               {baseline == null ? "—" : pct(baseline)}. Rates under {MIN_SAMPLE_GAMES} games are dimmed. Click a value to
               see the games behind it.
             </p>
@@ -980,8 +1010,7 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
 
           {drillDown ? (
             <DrillDownSection
-              deckId={deckId}
-              versionId={versionId}
+              scope={scope}
               drillDown={drillDown}
               onClose={() => setDrillDown(null)}
             />

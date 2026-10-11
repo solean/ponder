@@ -340,6 +340,11 @@ type DeckAnalytics struct {
 	Shape                 DeckGameShape         `json:"shape"`
 }
 
+type DraftAnalyticsResponse struct {
+	Analytics DeckAnalytics `json:"analytics"`
+	Sets      []string      `json:"sets"`
+}
+
 // DeckAnalyticsGameRef links one aggregated statistic back to a concrete game
 // so the UI can navigate to the match detail and replay it came from.
 type DeckAnalyticsGameRef struct {

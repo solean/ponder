@@ -118,6 +118,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/decks", s.handleDecks)
 	mux.HandleFunc("/api/decks/", s.handleDeckDetail)
 	mux.HandleFunc("/api/drafts", s.handleDrafts)
+	mux.HandleFunc("/api/drafts/analytics", s.handleDraftAnalytics)
+	mux.HandleFunc("/api/drafts/analytics/games", s.handleDraftAnalyticsGames)
 	mux.HandleFunc("/api/drafts/", s.handleDraftPicks)
 	mux.HandleFunc("/api/sets", s.handleSets)
 	mux.HandleFunc("/api/ai/status", s.handleAIStatus)
@@ -585,7 +587,7 @@ func (s *Server) handleEconomy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for index := range eventRuns {
-		eventRuns[index].SetCode = limitedSetCode(eventRuns[index].EventName)
+		eventRuns[index].SetCode = model.LimitedSetCode(eventRuns[index].EventName)
 	}
 	out := model.EconomyHistory{History: history, Transactions: transactions, EventRuns: eventRuns}
 	if len(history) > 0 {

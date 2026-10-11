@@ -10,6 +10,8 @@ import type {
   DeckDetail,
   DeckPrimer,
   DeckSummary,
+  DraftAnalyticsResponse,
+  DraftAnalyticsGamesParams,
   DraftPick,
   DraftSession,
   DailyActivityTotals,
@@ -59,6 +61,20 @@ async function postJSON<T>(path: string, body?: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
+function analyticsGamesSearch(params: DeckAnalyticsGamesParams): URLSearchParams {
+  const search = new URLSearchParams();
+  if (params.version) search.set("version", String(params.version));
+  if (params.card) search.set("card", String(params.card));
+  if (params.facet) search.set("facet", params.facet);
+  if (params.keptSize != null) search.set("keptSize", String(params.keptSize));
+  if (params.mulligans != null) search.set("mulligans", String(params.mulligans));
+  if (params.turns != null) search.set("turns", String(params.turns));
+  if (params.game) search.set("game", params.game);
+  if (params.playDraw) search.set("playDraw", params.playDraw);
+  if (params.landDrops) search.set("landDrops", params.landDrops);
+  return search;
+}
+
 export const api = {
   waitForStartup: (signal: AbortSignal) => waitForBackend(`${API_BASE}/api/health`, signal),
   overview: () => getJSON<Overview>("/api/overview"),
@@ -92,17 +108,7 @@ export const api = {
       versionId ? `/api/decks/${deckId}/analytics?version=${versionId}` : `/api/decks/${deckId}/analytics`,
     ),
   deckAnalyticsGames: (deckId: number, params: DeckAnalyticsGamesParams) => {
-    const search = new URLSearchParams();
-    if (params.version) search.set("version", String(params.version));
-    if (params.card) search.set("card", String(params.card));
-    if (params.facet) search.set("facet", params.facet);
-    if (params.keptSize != null) search.set("keptSize", String(params.keptSize));
-    if (params.mulligans != null) search.set("mulligans", String(params.mulligans));
-    if (params.turns != null) search.set("turns", String(params.turns));
-    if (params.game) search.set("game", params.game);
-    if (params.playDraw) search.set("playDraw", params.playDraw);
-    if (params.landDrops) search.set("landDrops", params.landDrops);
-    const query = search.toString();
+    const query = analyticsGamesSearch(params).toString();
     return getJSON<DeckAnalyticsGameRef[]>(
       query ? `/api/decks/${deckId}/analytics/games?${query}` : `/api/decks/${deckId}/analytics/games`,
     );
@@ -122,6 +128,16 @@ export const api = {
   setOpponentArchetype: (matchId: number, archetype: string) =>
     postJSON<{ status: string; archetype: string }>(`/api/matches/${matchId}/opponent-archetype`, { archetype }),
   drafts: () => getJSON<DraftSession[]>("/api/drafts"),
+  draftAnalytics: (set?: string) => {
+    const search = new URLSearchParams();
+    if (set !== undefined) search.set("set", set);
+    return getJSON<DraftAnalyticsResponse>(`/api/drafts/analytics?${search.toString()}`);
+  },
+  draftAnalyticsGames: (set: string | undefined, params: DraftAnalyticsGamesParams) => {
+    const search = analyticsGamesSearch(params);
+    if (set !== undefined) search.set("set", set);
+    return getJSON<DeckAnalyticsGameRef[]>(`/api/drafts/analytics/games?${search.toString()}`);
+  },
   draftPicks: (draftId: number) => getJSON<DraftPick[]>(`/api/drafts/${draftId}/picks`),
   sets: (codes: string[]) =>
     getJSON<Record<string, SetInfo>>(`/api/sets?codes=${encodeURIComponent(codes.join(","))}`),

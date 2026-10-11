@@ -1,11 +1,14 @@
+import { useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { ContextualLink } from "../components/Breadcrumbs";
+import { DraftAnalyticsPanel } from "../components/DraftAnalyticsPanel";
 import { DraftPerformancePanel } from "../components/DraftPerformancePanel";
 import { DraftWins } from "../components/DraftWins";
 import { LimitedMatchupsPanel } from "../components/MatchupPanels";
 import { SetSymbol } from "../components/SetSymbol";
+import { SectionTabs, sectionPanelID, sectionTabID } from "../components/SectionTabs";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { draftSessionDateValue } from "../lib/draftPerformance";
@@ -101,7 +104,37 @@ function DraftSessionRow({ draft, setLookup }: { draft: DraftSession; setLookup:
   );
 }
 
+const DRAFT_SECTIONS = [
+  { id: "overview", label: "Overview" },
+  { id: "performance", label: "Performance" },
+] as const;
+
 export function DraftsPage() {
+  const [activeSection, setActiveSection] = useState<"overview" | "performance">("overview");
+  const sectionTabBaseId = useId();
+
+  return (
+    <div className="stack-lg">
+      <SectionTabs
+        sections={DRAFT_SECTIONS}
+        activeSection={activeSection}
+        baseId={sectionTabBaseId}
+        label="Draft sections"
+        onSelect={setActiveSection}
+      />
+      <div
+        role="tabpanel"
+        id={sectionPanelID(sectionTabBaseId, activeSection)}
+        aria-labelledby={sectionTabID(sectionTabBaseId, activeSection)}
+        tabIndex={0}
+      >
+        {activeSection === "overview" ? <DraftsOverview /> : <DraftAnalyticsPanel />}
+      </div>
+    </div>
+  );
+}
+
+function DraftsOverview() {
   const draftsQuery = useQuery({
     queryKey: ["drafts"],
     queryFn: api.drafts,

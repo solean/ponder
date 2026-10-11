@@ -65,6 +65,11 @@ func arenaTurnAsFullTurnSQL(column string) string {
 // GetDeckAnalytics aggregates the derived per-game and per-card facts for one
 // deck, optionally restricted to a single immutable deck version.
 func (s *Store) GetDeckAnalytics(ctx context.Context, deckID, deckVersionID int64) (model.DeckAnalytics, error) {
+	scope, scopeArgs := deckScopeClause(deckID, deckVersionID)
+	return s.getScopedAnalytics(ctx, deckID, deckVersionID, scope, scopeArgs)
+}
+
+func (s *Store) getScopedAnalytics(ctx context.Context, deckID, deckVersionID int64, scope string, scopeArgs []any) (model.DeckAnalytics, error) {
 	out := model.DeckAnalytics{
 		DeckID:         deckID,
 		HandSizes:      []model.AnalyticsBucket{},
@@ -75,7 +80,6 @@ func (s *Store) GetDeckAnalytics(ctx context.Context, deckID, deckVersionID int6
 	if deckVersionID > 0 {
 		out.DeckVersionID = pointerInt64(deckVersionID)
 	}
-	scope, scopeArgs := deckScopeClause(deckID, deckVersionID)
 
 	if err := s.loadDeckMatchRecord(ctx, &out, scope, scopeArgs); err != nil {
 		return out, err
@@ -135,7 +139,8 @@ func (s *Store) loadDeckGameShape(ctx context.Context, out *model.DeckAnalytics,
 			MIN(CASE WHEN g.result = 'win' THEN g.min_self_life END),
 			SUM(CASE WHEN EXISTS (SELECT 1 FROM game_turn_stats ts WHERE ts.game_id = g.id) THEN 1 ELSE 0 END)
 		FROM games g
-		JOIN match_decks md ON md.match_id = g.match_id
+		JOIN matches m ON m.id = g.match_id
+		LEFT JOIN match_decks md ON md.match_id = m.id
 		WHERE %[2]s
 	`, fullTurnCount, scope)
 	if err := s.db.QueryRowContext(ctx, query, scopeArgs...).Scan(
@@ -168,7 +173,8 @@ func (s *Store) loadDeckMissedDropSplit(ctx context.Context, out *model.DeckAnal
 			MAX(CASE WHEN %[1]s AND ts.lands_played = 0 AND ts.land_in_hand IS NULL THEN 1 ELSE 0 END),
 			MAX(CASE WHEN ts.is_player_turn IS NOT NULL THEN 1 ELSE 0 END)
 		FROM games g
-		JOIN match_decks md ON md.match_id = g.match_id
+		JOIN matches m ON m.id = g.match_id
+		LEFT JOIN match_decks md ON md.match_id = m.id
 		JOIN game_turn_stats ts ON ts.game_id = g.id
 		WHERE %[2]s
 		GROUP BY g.id, g.result
@@ -232,7 +238,8 @@ func (s *Store) loadDeckTurnCurve(ctx context.Context, out *model.DeckAnalytics,
 		SELECT g.id, g.result, COALESCE(g.turn_count, 0), ts.turn_number, ts.lands_played, ts.spells_cast
 		FROM game_turn_stats ts
 		JOIN games g ON g.id = ts.game_id
-		JOIN match_decks md ON md.match_id = g.match_id
+		JOIN matches m ON m.id = g.match_id
+		LEFT JOIN match_decks md ON md.match_id = m.id
 		WHERE %s AND g.result IN ('win', 'loss')
 		ORDER BY g.id, ts.turn_number
 	`, scope)
@@ -337,7 +344,7 @@ func (s *Store) loadDeckMatchRecord(ctx context.Context, out *model.DeckAnalytic
 			SUM(CASE WHEN m.result = 'loss' THEN 1 ELSE 0 END),
 			SUM(CASE WHEN m.result = 'draw' THEN 1 ELSE 0 END)
 		FROM matches m
-		JOIN match_decks md ON md.match_id = m.id
+		LEFT JOIN match_decks md ON md.match_id = m.id
 		WHERE %s
 	`, scope)
 	if err := s.db.QueryRowContext(ctx, query, scopeArgs...).Scan(
@@ -373,7 +380,8 @@ func (s *Store) loadDeckGameRecord(ctx context.Context, out *model.DeckAnalytics
 			SUM(CASE WHEN COALESCE(g.play_draw, '') != '' THEN 1 ELSE 0 END),
 			SUM(CASE WHEN EXISTS (SELECT 1 FROM game_card_stats s WHERE s.game_id = g.id) THEN 1 ELSE 0 END)
 		FROM games g
-		JOIN match_decks md ON md.match_id = g.match_id
+		JOIN matches m ON m.id = g.match_id
+		LEFT JOIN match_decks md ON md.match_id = m.id
 		WHERE %s
 	`,
 		resultRecordColumns("1=1"),
@@ -419,7 +427,8 @@ func (s *Store) loadDeckGameBuckets(ctx context.Context, column, scope string, s
 			%[2]s,
 			SUM(CASE WHEN g.result NOT IN ('win', 'loss', 'draw') THEN 1 ELSE 0 END)
 		FROM games g
-		JOIN match_decks md ON md.match_id = g.match_id
+		JOIN matches m ON m.id = g.match_id
+		LEFT JOIN match_decks md ON md.match_id = m.id
 		WHERE %[3]s AND %[1]s IS NOT NULL
 		GROUP BY %[1]s
 		ORDER BY %[1]s DESC
@@ -463,7 +472,8 @@ func (s *Store) loadDeckLandBuckets(ctx context.Context, out *model.DeckAnalytic
 			SUM(CASE WHEN ct.type_line IS NULL THEN 1 ELSE 0 END),
 			SUM(CASE WHEN LOWER(COALESCE(ct.type_line, '')) LIKE '%%land%%' THEN s.opening_kept_copies ELSE 0 END)
 		FROM games g
-		JOIN match_decks md ON md.match_id = g.match_id
+		JOIN matches m ON m.id = g.match_id
+		LEFT JOIN match_decks md ON md.match_id = m.id
 		JOIN game_card_stats s ON s.game_id = g.id AND s.opening_kept_copies > 0
 		LEFT JOIN card_types ct ON ct.arena_id = s.card_id
 		WHERE %s
@@ -562,7 +572,8 @@ func (s *Store) loadDeckCardPerformance(ctx context.Context, scope string, scope
 			AVG(CASE WHEN s.played_copies > 0 THEN CAST(s.played_copies AS REAL) END)
 		FROM game_card_stats s
 		JOIN games g ON g.id = s.game_id
-		JOIN match_decks md ON md.match_id = s.match_id
+		JOIN matches m ON m.id = g.match_id
+		LEFT JOIN match_decks md ON md.match_id = m.id
 		LEFT JOIN card_catalog cc ON cc.arena_id = s.card_id
 		WHERE %[12]s
 		GROUP BY s.card_id
@@ -642,12 +653,18 @@ func (s *Store) loadDeckCardPerformance(ctx context.Context, scope string, scope
 // opening hand for the deck, so callers can resolve their type lines before
 // computing land distributions.
 func (s *Store) ListDeckKeptHandCardIDs(ctx context.Context, deckID int64) ([]int64, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	scope, args := deckScopeClause(deckID, 0)
+	return s.listScopedKeptHandCardIDs(ctx, scope, args)
+}
+
+func (s *Store) listScopedKeptHandCardIDs(ctx context.Context, scope string, args []any) ([]int64, error) {
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT DISTINCT s.card_id
 		FROM game_card_stats s
-		JOIN match_decks md ON md.match_id = s.match_id
-		WHERE md.deck_id = ? AND s.opening_kept_copies > 0
-	`, deckID)
+		JOIN matches m ON m.id = s.match_id
+		LEFT JOIN match_decks md ON md.match_id = m.id
+		WHERE %s AND s.opening_kept_copies > 0
+	`, scope), args...)
 	if err != nil {
 		return nil, fmt.Errorf("list deck kept-hand cards: %w", err)
 	}
@@ -706,10 +723,14 @@ func cardFacetCondition(facet string) (string, error) {
 }
 
 func (s *Store) ListDeckAnalyticsGames(ctx context.Context, q DeckAnalyticsGamesQuery) ([]model.DeckAnalyticsGameRef, error) {
+	scope, scopeArgs := deckScopeClause(q.DeckID, q.DeckVersionID)
+	return s.listScopedAnalyticsGames(ctx, q, scope, scopeArgs)
+}
+
+func (s *Store) listScopedAnalyticsGames(ctx context.Context, q DeckAnalyticsGamesQuery, scope string, scopeArgs []any) ([]model.DeckAnalyticsGameRef, error) {
 	if q.Limit <= 0 || q.Limit > 500 {
 		q.Limit = 200
 	}
-	scope, scopeArgs := deckScopeClause(q.DeckID, q.DeckVersionID)
 
 	// Placeholder order in the final SQL is: JOIN args, then WHERE args (scope
 	// first), then LIMIT.
@@ -797,7 +818,7 @@ func (s *Store) ListDeckAnalyticsGames(ctx context.Context, q DeckAnalyticsGames
 			%s
 		FROM games g
 		JOIN matches m ON m.id = g.match_id
-		JOIN match_decks md ON md.match_id = g.match_id
+		LEFT JOIN match_decks md ON md.match_id = m.id
 		%s
 		WHERE %s
 		ORDER BY COALESCE(m.started_at, m.ended_at, m.updated_at) DESC, g.game_number ASC

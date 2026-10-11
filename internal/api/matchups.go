@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -40,28 +39,6 @@ func eventLooksLimited(format, eventName string) bool {
 	combined := strings.ToLower(format + " " + eventName)
 	return strings.Contains(combined, "draft") || strings.Contains(combined, "sealed") ||
 		strings.Contains(combined, "limited")
-}
-
-var (
-	// Arena event names embed dates as bare YYYYMMDD tokens.
-	eventDateToken = regexp.MustCompile(`^\d{8}$`)
-	// Set codes are short all-caps alphanumerics (TMT, FIN, Y25); mixed-case
-	// type words like "QuickDraft" never match. Mirrors web/src/lib/events.ts.
-	eventSetCodeToken = regexp.MustCompile(`^[A-Z0-9]{2,5}$`)
-)
-
-// limitedSetCode extracts the set code from an Arena event name like
-// "QuickDraft_TMT_20260313" or "FIN_Quick_Draft"; empty when there is none.
-func limitedSetCode(eventName string) string {
-	for _, token := range strings.Split(eventName, "_") {
-		if eventDateToken.MatchString(token) {
-			continue
-		}
-		if eventSetCodeToken.MatchString(token) {
-			return token
-		}
-	}
-	return ""
 }
 
 // opponentCardFacts is everything classification knows about one card.
@@ -965,7 +942,7 @@ func buildLimitedMatchupsResponse(
 		if !eventLooksLimited(matchRow.Format, matchRow.EventName) {
 			continue
 		}
-		setCode := limitedSetCode(matchRow.EventName)
+		setCode := model.LimitedSetCode(matchRow.EventName)
 		classification := classifyMatchupRow(matchRow, observedByMatch, facts, overrides)
 
 		state, ok := setsByCode[setCode]

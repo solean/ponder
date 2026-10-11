@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/solean/ponder/internal/db"
+	"github.com/solean/ponder/internal/model"
 )
 
 func queryInt64(r *http.Request, name string) int64 {
@@ -84,7 +85,11 @@ func (s *Server) handleDeckAnalytics(w http.ResponseWriter, r *http.Request, dec
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.enrichAnalyticsCardNames(ctx, &out)
+	writeJSON(w, http.StatusOK, out)
+}
 
+func (s *Server) enrichAnalyticsCardNames(ctx context.Context, out *model.DeckAnalytics) {
 	missingNameCardIDs := make([]int64, 0, len(out.Cards))
 	for _, card := range out.Cards {
 		if strings.TrimSpace(card.CardName) == "" {
@@ -99,8 +104,6 @@ func (s *Server) handleDeckAnalytics(w http.ResponseWriter, r *http.Request, dec
 			}
 		}
 	}
-
-	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleDeckAnalyticsGames(w http.ResponseWriter, r *http.Request, deckID int64) {
@@ -109,9 +112,15 @@ func (s *Server) handleDeckAnalyticsGames(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	rows, err := s.store.ListDeckAnalyticsGames(r.Context(), db.DeckAnalyticsGamesQuery{
-		DeckID:        deckID,
-		DeckVersionID: queryInt64(r, "version"),
+	q := analyticsGamesQuery(r)
+	q.DeckID = deckID
+	q.DeckVersionID = queryInt64(r, "version")
+	rows, err := s.store.ListDeckAnalyticsGames(r.Context(), q)
+	writeAnalyticsGames(w, rows, err)
+}
+
+func analyticsGamesQuery(r *http.Request) db.DeckAnalyticsGamesQuery {
+	return db.DeckAnalyticsGamesQuery{
 		CardID:        queryInt64(r, "card"),
 		Facet:         strings.TrimSpace(r.URL.Query().Get("facet")),
 		KeptHandSize:  queryOptionalInt64(r, "keptSize"),
@@ -121,7 +130,10 @@ func (s *Server) handleDeckAnalyticsGames(w http.ResponseWriter, r *http.Request
 		PlayDraw:      strings.TrimSpace(r.URL.Query().Get("playDraw")),
 		LandDrops:     strings.TrimSpace(r.URL.Query().Get("landDrops")),
 		Limit:         queryInt64(r, "limit"),
-	})
+	}
+}
+
+func writeAnalyticsGames(w http.ResponseWriter, rows []model.DeckAnalyticsGameRef, err error) {
 	if err != nil {
 		if strings.Contains(err.Error(), "unknown") || strings.Contains(err.Error(), "requires") {
 			writeError(w, http.StatusBadRequest, err.Error())

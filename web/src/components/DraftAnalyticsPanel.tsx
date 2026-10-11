@@ -17,8 +17,16 @@ export function DraftAnalyticsPanel() {
     queryKey: ["draft-analytics", set ?? null],
     queryFn: () => api.draftAnalytics(set),
   });
-  const sets = query.data?.sets ?? allQuery.data?.sets ?? [];
-  const { lookup } = useSetCodes(sets);
+  const setCodes = query.data?.sets ?? allQuery.data?.sets ?? [];
+  const { lookup } = useSetCodes(setCodes);
+  // Newest release first; sets without a known release date follow by code, and
+  // the unknown-set group ("") stays last. Dates are ISO strings, so they compare lexically.
+  const sets = [...setCodes].sort((a, b) => {
+    if (!a || !b) return Number(!a) - Number(!b);
+    const aReleased = lookup(a)?.releasedAt ?? "";
+    const bReleased = lookup(b)?.releasedAt ?? "";
+    return bReleased.localeCompare(aReleased) || a.localeCompare(b);
+  });
 
   return (
     <div className="stack-lg">

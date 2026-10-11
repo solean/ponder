@@ -796,10 +796,10 @@ export function PerformanceAnalyticsPanel({
               onDrill={() => setDrillDown({ label: "Games on the draw", params: { playDraw: "draw" } })}
             />
             <div className="deck-analytics-tile">
-              <dt>Avg mulligans</dt>
+              <dt>Mulligan %</dt>
               <dd>
-                <strong>{data.averageMulligans != null ? data.averageMulligans.toFixed(2) : "—"}</strong>
-                <span>per game</span>
+                <strong>{data.mulliganRate != null ? pct(data.mulliganRate) : "—"}</strong>
+                <span>of games</span>
               </dd>
             </div>
           </dl>

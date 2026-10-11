@@ -523,7 +523,8 @@ export type DeckAnalytics = {
   postBoard: RecordAgg;
   onPlay: RecordAgg;
   onDraw: RecordAgg;
-  averageMulligans?: number;
+  /** Share (0–1) of games with a captured mulligan count where the player mulliganed at least once. */
+  mulliganRate?: number;
   handSizes: AnalyticsBucket[];
   mulliganCounts: AnalyticsBucket[];
   landCounts: AnalyticsBucket[];

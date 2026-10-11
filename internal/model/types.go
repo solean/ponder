@@ -331,7 +331,7 @@ type DeckAnalytics struct {
 	PostBoard             RecordAgg             `json:"postBoard"`
 	OnPlay                RecordAgg             `json:"onPlay"`
 	OnDraw                RecordAgg             `json:"onDraw"`
-	AverageMulligans      *float64              `json:"averageMulligans,omitempty"`
+	MulliganRate          *float64              `json:"mulliganRate,omitempty"`
 	HandSizes             []AnalyticsBucket     `json:"handSizes"`
 	MulliganCounts        []AnalyticsBucket     `json:"mulliganCounts"`
 	LandCounts            []AnalyticsBucket     `json:"landCounts"`

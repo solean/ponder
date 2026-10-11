@@ -126,8 +126,8 @@ func TestDeckAnalyticsAggregatesCardAndHandFacts(t *testing.T) {
 	if out.OnPlay.Wins != 1 {
 		t.Fatalf("on-play record = %+v, want the game-one win", out.OnPlay)
 	}
-	if out.AverageMulligans == nil || *out.AverageMulligans != 0.5 {
-		t.Fatalf("average mulligans = %#v, want 0.5", out.AverageMulligans)
+	if out.MulliganRate == nil || *out.MulliganRate != 0.5 {
+		t.Fatalf("mulligan rate = %#v, want 0.5", out.MulliganRate)
 	}
 	if out.Coverage.GameCount != 2 || out.Coverage.GamesWithCardStats != 2 || out.Coverage.GamesWithOpeningHand != 2 {
 		t.Fatalf("coverage = %+v, want 2 games with card stats and opening hands", out.Coverage)

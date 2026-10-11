@@ -363,7 +363,7 @@ func (s *Store) loadDeckGameRecord(ctx context.Context, out *model.DeckAnalytics
 	var gameOne, postBoard, onPlay, onDraw recordScanner
 	var gameCount, unknownGames sql.NullInt64
 	var withResult, withOpeningHand, withPlayDraw, withCardStats sql.NullInt64
-	var averageMulligans sql.NullFloat64
+	var mulliganRate sql.NullFloat64
 
 	query := fmt.Sprintf(`
 		SELECT
@@ -374,7 +374,7 @@ func (s *Store) loadDeckGameRecord(ctx context.Context, out *model.DeckAnalytics
 			%s,
 			%s,
 			%s,
-			AVG(CASE WHEN g.mulligan_count IS NOT NULL THEN CAST(g.mulligan_count AS REAL) END),
+			AVG(CASE WHEN g.mulligan_count IS NOT NULL THEN (CASE WHEN g.mulligan_count > 0 THEN 1.0 ELSE 0.0 END) END),
 			SUM(CASE WHEN g.result IN ('win', 'loss', 'draw') THEN 1 ELSE 0 END),
 			SUM(CASE WHEN g.kept_hand_size IS NOT NULL THEN 1 ELSE 0 END),
 			SUM(CASE WHEN COALESCE(g.play_draw, '') != '' THEN 1 ELSE 0 END),
@@ -397,7 +397,7 @@ func (s *Store) loadDeckGameRecord(ctx context.Context, out *model.DeckAnalytics
 	dests = append(dests, postBoard.dests()...)
 	dests = append(dests, onPlay.dests()...)
 	dests = append(dests, onDraw.dests()...)
-	dests = append(dests, &averageMulligans, &withResult, &withOpeningHand, &withPlayDraw, &withCardStats)
+	dests = append(dests, &mulliganRate, &withResult, &withOpeningHand, &withPlayDraw, &withCardStats)
 
 	if err := s.db.QueryRowContext(ctx, query, scopeArgs...).Scan(dests...); err != nil {
 		return fmt.Errorf("load deck game record: %w", err)
@@ -409,7 +409,7 @@ func (s *Store) loadDeckGameRecord(ctx context.Context, out *model.DeckAnalytics
 	out.PostBoard = postBoard.agg()
 	out.OnPlay = onPlay.agg()
 	out.OnDraw = onDraw.agg()
-	out.AverageMulligans = nullableFloat(averageMulligans)
+	out.MulliganRate = nullableFloat(mulliganRate)
 	out.Coverage.GameCount = gameCount.Int64
 	out.Coverage.GamesWithResult = withResult.Int64
 	out.Coverage.GamesWithOpeningHand = withOpeningHand.Int64

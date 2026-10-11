@@ -75,11 +75,11 @@ func TestDraftAnalyticsScopesPoolFactsWithoutDeckOrSessionRequirements(t *testin
 		name                       string
 		set                        *string
 		games, wins, losses, draws int64
-		mulligans, copies          float64
+		mulliganRate, copies       float64
 	}{
-		{"all", nil, 5, 2, 2, 1, 0.6, 1.75},
+		{"all", nil, 5, 2, 2, 1, 0.4, 1.75},
 		{"TMT", stringPointer("TMT"), 3, 2, 1, 0, 1.0 / 3, 1.5},
-		{"FIN", stringPointer("FIN"), 1, 0, 1, 0, 2, 3},
+		{"FIN", stringPointer("FIN"), 1, 0, 1, 0, 1, 3},
 		{"unknown", stringPointer(""), 1, 0, 0, 1, 0, 1},
 		{"missing", stringPointer("XYZ"), 0, 0, 0, 0, 0, 0},
 	} {
@@ -113,8 +113,8 @@ func TestDraftAnalyticsScopesPoolFactsWithoutDeckOrSessionRequirements(t *testin
 				t.Fatalf("pooled turn averages = %+v", out.Shape)
 			}
 			if tc.games > 0 {
-				if out.AverageMulligans == nil || math.Abs(*out.AverageMulligans-tc.mulligans) > 1e-9 {
-					t.Fatalf("average mulligans = %v, want %v", out.AverageMulligans, tc.mulligans)
+				if out.MulliganRate == nil || math.Abs(*out.MulliganRate-tc.mulliganRate) > 1e-9 {
+					t.Fatalf("mulligan rate = %v, want %v", out.MulliganRate, tc.mulliganRate)
 				}
 				card := findCardPerformance(t, out.Cards, 101)
 				if card.AvgCopiesSeen == nil || math.Abs(*card.AvgCopiesSeen-tc.copies) > 1e-9 || card.Played.Wins != tc.wins {
@@ -123,7 +123,7 @@ func TestDraftAnalyticsScopesPoolFactsWithoutDeckOrSessionRequirements(t *testin
 				if out.LandCountUnknownHands != 0 || len(out.LandCounts) == 0 {
 					t.Fatalf("land distribution = %+v, unknown %d", out.LandCounts, out.LandCountUnknownHands)
 				}
-			} else if out.AverageMulligans != nil || len(out.Cards) != 0 || out.Cards == nil || out.HandSizes == nil || out.Shape.TurnCurve == nil {
+			} else if out.MulliganRate != nil || len(out.Cards) != 0 || out.Cards == nil || out.HandSizes == nil || out.Shape.TurnCurve == nil {
 				t.Fatalf("empty analytics = %+v", out)
 			}
 			for _, q := range []DeckAnalyticsGamesQuery{{}, {CardID: 101, Facet: "played"}, {KeptHandSize: pointerInt64(7)}, {GameFilter: "post"}, {PlayDraw: "draw"}, {TurnCount: pointerInt64(3)}} {

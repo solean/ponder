@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -85,11 +86,14 @@ func (s *Server) handleDeckAnalytics(w http.ResponseWriter, r *http.Request, dec
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	s.enrichAnalyticsCardNames(ctx, &out)
+	s.finalizeAnalyticsCards(ctx, &out)
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) enrichAnalyticsCardNames(ctx context.Context, out *model.DeckAnalytics) {
+// finalizeAnalyticsCards fills in missing card names, then drops basic lands:
+// they appear in nearly every game, so their per-card performance only echoes
+// the overall record. Filtering by name needs the resolved names.
+func (s *Server) finalizeAnalyticsCards(ctx context.Context, out *model.DeckAnalytics) {
 	missingNameCardIDs := make([]int64, 0, len(out.Cards))
 	for _, card := range out.Cards {
 		if strings.TrimSpace(card.CardName) == "" {
@@ -104,6 +108,9 @@ func (s *Server) enrichAnalyticsCardNames(ctx context.Context, out *model.DeckAn
 			}
 		}
 	}
+	out.Cards = slices.DeleteFunc(out.Cards, func(card model.DeckCardPerformance) bool {
+		return isBasicLandName(card.CardName)
+	})
 }
 
 func (s *Server) handleDeckAnalyticsGames(w http.ResponseWriter, r *http.Request, deckID int64) {

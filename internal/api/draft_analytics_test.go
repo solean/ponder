@@ -42,7 +42,15 @@ func TestDraftAnalyticsEndpoints(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Every game sees a basic land and a spell; only the spell is a card to rate.
+	if _, err := tx.ExecContext(ctx, `INSERT INTO game_card_stats (game_id, match_id, card_id, opening_kept_copies, played_copies)
+		SELECT g.id, g.match_id, card.card_id, 1, 1 FROM games g, (SELECT 101 AS card_id UNION ALL SELECT 102) card`); err != nil {
+		t.Fatal(err)
+	}
 	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertCardNames(ctx, map[int64]string{101: "Snow-Covered Island", 102: "Shock"}); err != nil {
 		t.Fatal(err)
 	}
 	handler := NewServer(store, "", nil).Handler()
@@ -64,6 +72,17 @@ func TestDraftAnalyticsEndpoints(t *testing.T) {
 			}
 			if out.Analytics.GameRecord.Games != tc.games || out.Analytics.DeckID != 0 || !reflect.DeepEqual(out.Sets, []string{"", "FIN", "MKM", "TMT"}) {
 				t.Fatalf("response = %+v", out)
+			}
+			wantCards := []string{}
+			if tc.games > 0 {
+				wantCards = []string{"Shock"}
+			}
+			gotCards := []string{}
+			for _, card := range out.Analytics.Cards {
+				gotCards = append(gotCards, card.CardName)
+			}
+			if !reflect.DeepEqual(gotCards, wantCards) {
+				t.Fatalf("cards = %v, want %v (basic lands excluded)", gotCards, wantCards)
 			}
 			rec = httptest.NewRecorder()
 			handler.ServeHTTP(rec, localRequest(http.MethodGet, "/api/drafts/analytics/games"+tc.query, nil))

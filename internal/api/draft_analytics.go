@@ -33,7 +33,7 @@ func (s *Server) handleDraftAnalytics(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	s.enrichAnalyticsCardNames(ctx, &analytics)
+	s.finalizeAnalyticsCards(ctx, &analytics)
 	writeJSON(w, http.StatusOK, model.DraftAnalyticsResponse{Analytics: analytics, Sets: scope.Sets})
 }
 

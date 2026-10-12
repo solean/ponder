@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,9 +34,10 @@ func isBasicLandName(name string) bool {
 	return ok
 }
 
-// resolveCardTypeLines returns Scryfall type lines for the given cards, reading
-// the local cache first and fetching+caching any misses. Mirrors
-// resolveCardNames so the live banner's land odds work offline after one fetch.
+// resolveCardTypeLines returns type lines for the given cards, reading the
+// local cache first, then the MTGA client's card database, then Scryfall, and
+// caching what it finds. The local MTGA source matters for new sets: Scryfall
+// lists their cards days before it fills in their Arena IDs.
 func (s *Server) resolveCardTypeLines(ctx context.Context, cardIDs []int64) map[int64]string {
 	cardIDs = uniqueCardIDs(cardIDs)
 	if len(cardIDs) == 0 {
@@ -48,35 +50,126 @@ func (s *Server) resolveCardTypeLines(ctx context.Context, cardIDs []int64) map[
 		resolved = map[int64]string{}
 	}
 
-	unresolved := make([]int64, 0, len(cardIDs))
-	for _, id := range cardIDs {
-		if _, ok := resolved[id]; !ok {
-			unresolved = append(unresolved, id)
+	newlyResolved := make(map[int64]string)
+	unresolved := unresolvedCardIDs(cardIDs, resolved)
+	if len(unresolved) > 0 {
+		local, localErr := s.fetchCardTypeLinesFromMTGARaw(ctx, unresolved)
+		if localErr != nil {
+			log.Printf("local MTGA card type lookup failed: %v", localErr)
 		}
-	}
-	if len(unresolved) == 0 {
-		return resolved
+		for id, typeLine := range local {
+			resolved[id] = typeLine
+			newlyResolved[id] = typeLine
+		}
+		unresolved = unresolvedCardIDs(unresolved, resolved)
 	}
 
-	fetched, fetchErr := s.fetchCardTypeLinesFromScryfall(ctx, unresolved)
-	if fetchErr != nil {
-		logScryfallError("scryfall card type lookup failed: %v", fetchErr)
-	}
-	for id, typeLine := range fetched {
-		trimmed := strings.TrimSpace(typeLine)
-		if trimmed == "" {
-			continue
+	if len(unresolved) > 0 {
+		fetched, fetchErr := s.fetchCardTypeLinesFromScryfall(ctx, unresolved)
+		if fetchErr != nil {
+			logScryfallError("scryfall card type lookup failed: %v", fetchErr)
 		}
-		resolved[id] = trimmed
+		for id, typeLine := range fetched {
+			resolved[id] = typeLine
+			newlyResolved[id] = typeLine
+		}
 	}
 
-	if len(fetched) > 0 {
-		if err := s.store.UpsertCardTypeLines(ctx, fetched); err != nil {
+	if len(newlyResolved) > 0 {
+		if err := s.store.UpsertCardTypeLines(ctx, newlyResolved); err != nil {
 			log.Printf("card type cache upsert failed: %v", err)
 		}
 	}
 
 	return resolved
+}
+
+// fetchCardTypeLinesFromMTGARaw builds Scryfall-style type lines ("Legendary
+// Artifact Creature — Dragon Construct") from the MTGA client's card database.
+// Localized strings come in several Formatted variants; 0 is plain text, while
+// higher variants may carry markup such as <nobr>.
+func (s *Server) fetchCardTypeLinesFromMTGARaw(ctx context.Context, cardIDs []int64) (map[int64]string, error) {
+	out := make(map[int64]string, len(cardIDs))
+	cardIDs = uniqueCardIDs(cardIDs)
+	if len(cardIDs) == 0 {
+		return out, nil
+	}
+
+	rawDBPath := discoverMTGARawCardDBPath()
+	if strings.TrimSpace(rawDBPath) == "" {
+		return out, nil
+	}
+
+	rawDB, err := sql.Open("sqlite", rawDBPath)
+	if err != nil {
+		return nil, fmt.Errorf("open MTGA raw card db %q: %w", rawDBPath, err)
+	}
+	defer rawDB.Close()
+	rawDB.SetMaxOpenConns(1)
+	rawDB.SetMaxIdleConns(1)
+
+	if err := rawDB.PingContext(ctx); err != nil {
+		return nil, fmt.Errorf("ping MTGA raw card db %q: %w", rawDBPath, err)
+	}
+
+	for start := 0; start < len(cardIDs); start += rawCardLookupBatchMax {
+		end := min(start+rawCardLookupBatchMax, len(cardIDs))
+		batch := cardIDs[start:end]
+
+		placeholders := make([]string, 0, len(batch))
+		args := make([]any, 0, len(batch))
+		for _, cardID := range batch {
+			placeholders = append(placeholders, "?")
+			args = append(args, cardID)
+		}
+
+		query := fmt.Sprintf(`
+			SELECT
+				c.GrpId,
+				COALESCE((SELECT l.Loc FROM Localizations_enUS l WHERE l.LocId = c.TypeTextId ORDER BY l.Formatted LIMIT 1), ''),
+				COALESCE((SELECT l.Loc FROM Localizations_enUS l WHERE l.LocId = c.SubtypeTextId ORDER BY l.Formatted LIMIT 1), '')
+			FROM Cards c
+			WHERE c.GrpId IN (%s)
+		`, strings.Join(placeholders, ","))
+
+		rows, err := rawDB.QueryContext(ctx, query, args...)
+		if err != nil {
+			return nil, fmt.Errorf("query MTGA raw card types: %w", err)
+		}
+
+		for rows.Next() {
+			var cardID int64
+			var typeText, subtypeText string
+			if err := rows.Scan(&cardID, &typeText, &subtypeText); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("scan MTGA raw card type row: %w", err)
+			}
+			if typeLine := mtgaTypeLine(typeText, subtypeText); cardID > 0 && typeLine != "" {
+				out[cardID] = typeLine
+			}
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("iterate MTGA raw card type rows: %w", err)
+		}
+		rows.Close()
+	}
+
+	return out, nil
+}
+
+// mtgaTypeLine joins MTGA's separate type and subtype strings the way Scryfall
+// formats type_line. A card with no type text is left unresolved.
+func mtgaTypeLine(typeText, subtypeText string) string {
+	typeText = strings.TrimSpace(typeText)
+	subtypeText = strings.TrimSpace(subtypeText)
+	if typeText == "" {
+		return ""
+	}
+	if subtypeText == "" {
+		return typeText
+	}
+	return typeText + " — " + subtypeText
 }
 
 func (s *Server) fetchCardTypeLinesFromScryfall(ctx context.Context, cardIDs []int64) (map[int64]string, error) {

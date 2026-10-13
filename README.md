@@ -21,7 +21,8 @@ hands, game shape, and card performance. Select **All sets**, an individual
 **Draft set**, or **Unknown set** to scope the dashboard and its game drill-downs.
 It pools recorded draft games across decks, including matches without captured
 draft picks or a linked deck; constructed and sealed matches are excluded.
-Coverage indicators distinguish missing game facts from recorded results.
+Coverage indicators distinguish missing game facts from recorded results. The
+card performance table scrolls under a sticky header and filters by card name.
 
 ## Project Layout
 

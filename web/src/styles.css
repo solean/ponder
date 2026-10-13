@@ -3177,7 +3177,8 @@ small.settings-meta,
   max-height: 30rem;
 }
 
-.draft-sessions-table thead th {
+.draft-sessions-table thead th,
+.deck-analytics-card-table thead th {
   position: sticky;
   top: 0;
   z-index: 1;
@@ -11090,6 +11091,19 @@ select option {
   margin: 0.25rem 0 0.6rem;
   color: var(--muted);
   font-size: var(--text-xs);
+}
+
+.deck-analytics-card-filter {
+  margin: 0 0 0.6rem;
+}
+
+.deck-analytics-card-filter .match-filter-search {
+  flex: 0 1 18rem;
+}
+
+/* Roughly ten two-line stat rows; the rest scroll under the sticky header. */
+.deck-analytics-card-scroll {
+  max-height: 36rem;
 }
 
 .deck-analytics-card-table th button {

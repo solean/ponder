@@ -613,6 +613,7 @@ export function PerformanceAnalyticsPanel({
   const [sortKey, setSortKey] = useState<CardSortKey>("seen");
   const [sortAscending, setSortAscending] = useState(false);
   const [drillDown, setDrillDown] = useState<DrillDown | null>(null);
+  const [cardQuery, setCardQuery] = useState("");
   const baseline = data ? winRate(data.gameRecord) : null;
 
   const sortedCards = useMemo(() => {
@@ -630,6 +631,14 @@ export function PerformanceAnalyticsPanel({
     });
     return cards;
   }, [data?.cards, sortKey, sortAscending]);
+
+  const visibleCards = useMemo(() => {
+    const needle = cardQuery.trim().toLocaleLowerCase();
+    if (!needle) {
+      return sortedCards;
+    }
+    return sortedCards.filter((card) => (card.cardName ?? "").toLocaleLowerCase().includes(needle));
+  }, [sortedCards, cardQuery]);
 
   const toggleSort = (key: CardSortKey) => {
     if (key === sortKey) {
@@ -870,12 +879,36 @@ export function PerformanceAnalyticsPanel({
               see the games behind it.
             </p>
           </div>
+          {sortedCards.length > 0 ? (
+            <div className="match-filter-bar deck-analytics-card-filter">
+              <label className="match-filter-field match-filter-search">
+                <span>Card</span>
+                <input
+                  className="settings-input"
+                  type="search"
+                  value={cardQuery}
+                  onChange={(event) => setCardQuery(event.target.value)}
+                  placeholder="Search cards…"
+                  spellCheck={false}
+                />
+              </label>
+              {cardQuery.trim() ? (
+                <span className="deck-analytics-sample">
+                  {visibleCards.length} of {sortedCards.length} cards
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           {sortedCards.length === 0 ? (
             <StatusMessage>
               No per-card data yet. It is derived from match replays during maintenance, shortly after launch.
             </StatusMessage>
+          ) : visibleCards.length === 0 ? (
+            <div className="table-wrap match-table-empty">
+              <span className="match-filter-empty">No cards match “{cardQuery.trim()}”.</span>
+            </div>
           ) : (
-            <div className="table-wrap">
+            <div className="table-wrap deck-analytics-card-scroll">
               <table className="data-table deck-analytics-card-table">
                 <thead>
                   <tr>
@@ -912,7 +945,7 @@ export function PerformanceAnalyticsPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedCards.map((card) => (
+                  {visibleCards.map((card) => (
                     <tr key={card.cardId}>
                       <td className="deck-analytics-card-name">
                         <CardPreviewName cardId={card.cardId} cardName={card.cardName} />

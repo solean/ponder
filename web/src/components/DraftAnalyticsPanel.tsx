@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { PerformanceAnalyticsPanel } from "./DeckAnalyticsPanel";
 import { StatusMessage } from "./StatusMessage";
 import { api } from "../lib/api";
-import { useSetCodes } from "../lib/useEventSets";
+import { setOptionLabel, sortSetCodesByRelease, useSetCodes } from "../lib/useEventSets";
 
 export function DraftAnalyticsPanel() {
   const [set, setSet] = useState<string | undefined>(undefined);
@@ -19,14 +19,7 @@ export function DraftAnalyticsPanel() {
   });
   const setCodes = query.data?.sets ?? allQuery.data?.sets ?? [];
   const { lookup } = useSetCodes(setCodes);
-  // Newest release first; sets without a known release date follow by code, and
-  // the unknown-set group ("") stays last. Dates are ISO strings, so they compare lexically.
-  const sets = [...setCodes].sort((a, b) => {
-    if (!a || !b) return Number(!a) - Number(!b);
-    const aReleased = lookup(a)?.releasedAt ?? "";
-    const bReleased = lookup(b)?.releasedAt ?? "";
-    return bReleased.localeCompare(aReleased) || a.localeCompare(b);
-  });
+  const sets = sortSetCodesByRelease(setCodes, lookup);
 
   return (
     <div className="stack-lg">
@@ -44,7 +37,7 @@ export function DraftAnalyticsPanel() {
               <option value="all">All sets</option>
               {sets.map((code) => (
                 <option key={code} value={`set:${code}`}>
-                  {code ? (lookup(code)?.name ? `${lookup(code)?.name} (${code.toUpperCase()})` : code.toUpperCase()) : "Unknown set"}
+                  {setOptionLabel(code, lookup)}
                 </option>
               ))}
             </select>

@@ -11470,6 +11470,10 @@ select option {
   min-width: 0;
 }
 
+.limited-matchup-set-picker {
+  margin-bottom: 1.1rem;
+}
+
 .matchup-tile-group {
   margin-bottom: 0.4rem;
 }

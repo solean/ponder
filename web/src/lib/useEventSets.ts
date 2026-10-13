@@ -39,3 +39,23 @@ export function useSetCodes(setCodes: string[]): {
 
   return { lookup, isLoading: query.isLoading };
 }
+
+/**
+ * Newest release first; sets without a known release date follow by code, and
+ * the unknown-set group ("") stays last. Dates are ISO strings, so they compare lexically.
+ */
+export function sortSetCodesByRelease(setCodes: string[], lookup: SetLookup): string[] {
+  return [...setCodes].sort((a, b) => {
+    if (!a || !b) return Number(!a) - Number(!b);
+    const aReleased = lookup(a)?.releasedAt ?? "";
+    const bReleased = lookup(b)?.releasedAt ?? "";
+    return bReleased.localeCompare(aReleased) || a.localeCompare(b);
+  });
+}
+
+/** Set picker option text: "Name (CODE)", bare "CODE", or "Unknown set" for "". */
+export function setOptionLabel(code: string, lookup: SetLookup): string {
+  if (!code) return "Unknown set";
+  const name = lookup(code)?.name;
+  return name ? `${name} (${code.toUpperCase()})` : code.toUpperCase();
+}

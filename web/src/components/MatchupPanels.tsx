@@ -11,7 +11,7 @@ import { SetSymbol } from "./SetSymbol";
 import { StatusMessage } from "./StatusMessage";
 import { api } from "../lib/api";
 import { formatDateTime, pct } from "../lib/format";
-import { useEventSets } from "../lib/useEventSets";
+import { setOptionLabel, sortSetCodesByRelease, useEventSets, useSetCodes } from "../lib/useEventSets";
 import type { MatchupRow, RecordAgg } from "../lib/types";
 
 const ARCHETYPE_LABELS: Record<string, string> = {
@@ -385,8 +385,9 @@ export function DeckMatchupsPanel({ deckId }: { deckId: number }) {
  * Opponent color-pair records pooled across every draft/sealed run of a set.
  * In limited the color pair effectively is the archetype, and pooling a whole
  * set's matches is what makes the sample meaningful. Without a setCode it
- * shows every set (Drafts page); with one it scopes to that set (draft and
- * draft-deck detail pages).
+ * shows a set picker (Drafts page) defaulting to the newest release, with an
+ * All option listing every set newest first; with one it scopes to that set
+ * (draft and draft-deck detail pages).
  */
 export function LimitedMatchupsPanel({
   setCode,
@@ -398,6 +399,9 @@ export function LimitedMatchupsPanel({
   description?: string;
 }) {
   const [selection, setSelection] = useState<{ setCode: string; colorsKey: string } | null>(null);
+  // Set picker option value: "all" or `set:${code}` ("" is the unknown-set group).
+  // null follows the newest set until the user picks one.
+  const [pickedSet, setPickedSet] = useState<string | null>(null);
   // Per-set filter by the player's own deck colors; missing key = all decks.
   const [ownColorsFilter, setOwnColorsFilter] = useState<Record<string, string>>({});
   const query = useQuery({
@@ -405,8 +409,18 @@ export function LimitedMatchupsPanel({
     queryFn: api.limitedMatchups,
   });
   const allSets = query.data?.sets ?? [];
-  // null/undefined = every set (Drafts page); "" = the unknown-set group.
-  const sets = setCode == null ? allSets : allSets.filter((set) => set.setCode === setCode);
+  const { lookup: setLookup } = useSetCodes(allSets.map((set) => set.setCode));
+  const showSetPicker = setCode == null;
+  const setChoices = showSetPicker ? sortSetCodesByRelease(allSets.map((set) => set.setCode), setLookup) : [];
+  const setPickerValue =
+    pickedSet === "all" || (pickedSet != null && setChoices.includes(pickedSet.slice(4)))
+      ? pickedSet
+      : `set:${setChoices[0]}`;
+  const sets = showSetPicker
+    ? allSets
+        .filter((set) => setPickerValue === "all" || `set:${set.setCode}` === setPickerValue)
+        .sort((a, b) => setChoices.indexOf(a.setCode) - setChoices.indexOf(b.setCode))
+    : allSets.filter((set) => set.setCode === setCode);
 
   const setOwnColorsSelection = (forSet: string, groupKey: string | null) => {
     setOwnColorsFilter((current) => {
@@ -421,7 +435,6 @@ export function LimitedMatchupsPanel({
     // The opponent drill-down belongs to the previous group's rows.
     setSelection((current) => (current?.setCode === forSet ? null : current));
   };
-  const { lookup: setLookup } = useEventSets(sets.map((set) => set.setCode));
 
   if (query.isLoading) {
     return null;
@@ -448,6 +461,19 @@ export function LimitedMatchupsPanel({
           <p>{description}</p>
         </div>
       </div>
+      {showSetPicker ? (
+        <label className="deck-analytics-version-select limited-matchup-set-picker">
+          <span>Set</span>
+          <select value={setPickerValue} onChange={(event) => setPickedSet(event.target.value)}>
+            <option value="all">All sets</option>
+            {setChoices.map((code) => (
+              <option key={code || "unknown"} value={`set:${code}`}>
+                {setOptionLabel(code, setLookup)}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
 
       <div className="stack-lg">
         {sets.map((set) => {

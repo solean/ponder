@@ -14,11 +14,13 @@ Overview selection. Detail records count tracked matches, which may differ from
 Arena's season totals shown in the Overview rank panel. Season history reports
 the last recorded rank, not a guaranteed end-of-season finish.
 
-Drafts has **Overview** and **Performance** tabs. Overview keeps the event
-win-rate chart, draft sessions, and set matchups. Performance reuses the deck
-analytics dashboard for match/game records, play/draw splits, mulligans, opening
-hands, game shape, and card performance. Select **All sets**, an individual
-**Draft set**, or **Unknown set** to scope the dashboard and its game drill-downs.
+Drafts has **Overview**, **Performance**, and **Matchups** tabs. Overview keeps
+the event win-rate chart and draft sessions; Matchups shows set matchups for
+the newest release by default, or any single set or **All sets** via its picker.
+Performance reuses the deck analytics dashboard for match/game records,
+play/draw splits, mulligans, opening hands, game shape, and card performance.
+Select **All sets**, an individual **Draft set**, or **Unknown set** to scope
+the dashboard and its game drill-downs.
 It pools recorded draft games across decks, including matches without captured
 draft picks or a linked deck; constructed and sealed matches are excluded.
 Coverage indicators distinguish missing game facts from recorded results. The

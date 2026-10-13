@@ -107,10 +107,11 @@ function DraftSessionRow({ draft, setLookup }: { draft: DraftSession; setLookup:
 const DRAFT_SECTIONS = [
   { id: "overview", label: "Overview" },
   { id: "performance", label: "Performance" },
+  { id: "matchups", label: "Matchups" },
 ] as const;
 
 export function DraftsPage() {
-  const [activeSection, setActiveSection] = useState<"overview" | "performance">("overview");
+  const [activeSection, setActiveSection] = useState<(typeof DRAFT_SECTIONS)[number]["id"]>("overview");
   const sectionTabBaseId = useId();
 
   return (
@@ -128,7 +129,13 @@ export function DraftsPage() {
         aria-labelledby={sectionTabID(sectionTabBaseId, activeSection)}
         tabIndex={0}
       >
-        {activeSection === "overview" ? <DraftsOverview /> : <DraftAnalyticsPanel />}
+        {activeSection === "overview" ? (
+          <DraftsOverview />
+        ) : activeSection === "performance" ? (
+          <DraftAnalyticsPanel />
+        ) : (
+          <LimitedMatchupsPanel />
+        )}
       </div>
     </div>
   );
@@ -192,8 +199,6 @@ function DraftsOverview() {
           </table>
         </div>
       </section>
-
-      <LimitedMatchupsPanel />
     </div>
   );
 }

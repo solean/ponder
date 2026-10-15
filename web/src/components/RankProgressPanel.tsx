@@ -15,6 +15,7 @@ import {
   LADDER_CONFIG,
   preferredLadder,
   rankPromotionsFor,
+  seasonBoundariesFor,
   seasonOrdinalsFor,
   tierLabelAt,
   type Ladder,
@@ -154,6 +155,10 @@ export function RankProgressPanel() {
     () => (series ? rankPromotionsFor(series.points, ladder) : []),
     [ladder, series],
   );
+  const seasonBoundaries = useMemo(
+    () => (series?.seasonView === "all" ? seasonBoundariesFor(series.points) : []),
+    [series],
+  );
   const chartTheme = CHART_THEME_TOKENS[`${scheme}-${mode}`];
 
   // A sparse line reads as noise unless it contains a rank-up worth showing.
@@ -284,6 +289,29 @@ export function RankProgressPanel() {
                   ],
                 },
               },
+              markLine: seasonBoundaries.length > 0
+                ? {
+                  silent: true,
+                  animation: false,
+                  symbol: ["none", "none"],
+                  lineStyle: {
+                    color: chartTheme.axisText,
+                    opacity: 0.45,
+                    type: "dashed",
+                    width: 1,
+                  },
+                  label: {
+                    position: "end",
+                    color: chartTheme.axisText,
+                    fontFamily: "IBM Plex Mono, Menlo, monospace",
+                    fontSize: 11,
+                  },
+                  data: seasonBoundaries.map((boundary) => ({
+                    xAxis: boundary.matchNumber,
+                    label: { formatter: `S${boundary.seasonOrdinal}` },
+                  })),
+                }
+                : undefined,
             },
             {
               name: "Current rank",
@@ -346,7 +374,7 @@ export function RankProgressPanel() {
           ],
         }
         : null,
-    [chartTheme, ladder, latestPoint, promotions, series, setLookup],
+    [chartTheme, ladder, latestPoint, promotions, seasonBoundaries, series, setLookup],
   );
 
   const readyState =

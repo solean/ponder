@@ -476,6 +476,24 @@ export function rankPromotionsFor(points: GraphPoint[], ladder: Ladder): GraphPo
   });
 }
 
+/**
+ * Where each season begins on the match axis. The first season starts at the
+ * first point; later seasons start midway between the previous season's last
+ * point and their own first, so the divider doubles as the prior season's end.
+ */
+export function seasonBoundariesFor(
+  points: GraphPoint[],
+): { seasonOrdinal: number; matchNumber: number }[] {
+  return points.flatMap((point, index) => {
+    const previous = points[index - 1];
+    if (previous && previous.seasonOrdinal === point.seasonOrdinal) return [];
+    return [{
+      seasonOrdinal: point.seasonOrdinal,
+      matchNumber: previous ? point.matchNumber - 0.5 : point.matchNumber,
+    }];
+  });
+}
+
 export function tierLabelAt(value: number, ladder: Ladder): string {
   const rounded = Math.round(value);
   if (Math.abs(value - rounded) > 0.001) return "";

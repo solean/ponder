@@ -164,7 +164,7 @@ export function Layout() {
           </header>
           <div ref={scrollRef} className="app-scroll">
             <div className={`app-shell${location.pathname === "/matches" ? " is-viewport-page" : ""}`}>
-              <main id="main-content" className="content" tabIndex={-1}>
+              <main id="main-content" className="content">
                 <div className="page-context-bar">
                   {location.pathname === "/" || location.pathname === "/settings" ? null : (
                     <ErrorBoundary label="LiveMatchBanner">

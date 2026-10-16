@@ -834,6 +834,13 @@ body::before {
   outline-offset: 2px;
 }
 
+/* tabindex="-1" marks script-only focus targets (dialog containers). They hold
+   focus without being a control; this also overrides WebKit's UA focus ring,
+   which it draws on any focused element once a key is pressed. */
+[tabindex="-1"]:focus {
+  outline: none;
+}
+
 a,
 button {
   touch-action: manipulation;

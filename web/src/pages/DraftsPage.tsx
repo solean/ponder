@@ -127,7 +127,6 @@ export function DraftsPage() {
         role="tabpanel"
         id={sectionPanelID(sectionTabBaseId, activeSection)}
         aria-labelledby={sectionTabID(sectionTabBaseId, activeSection)}
-        tabIndex={0}
       >
         {activeSection === "overview" ? (
           <DraftsOverview />

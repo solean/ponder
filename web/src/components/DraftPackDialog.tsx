@@ -79,7 +79,6 @@ export function DraftPackDialog({
   const titleID = useId();
   const descriptionID = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const backdropPressRef = useRef(false);
   const hasPrevious = position > 0;
@@ -119,7 +118,10 @@ export function DraftPackDialog({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     dialog.showModal();
-    closeButtonRef.current?.focus();
+    // Focus the dialog itself, not a button: WebKit shows the focus ring on
+    // whatever holds focus once a key is pressed, so arrow-key paging would
+    // otherwise light up Close.
+    dialog.focus();
 
     return () => {
       dialog.close();
@@ -129,12 +131,13 @@ export function DraftPackDialog({
   }, []);
 
   // Each step starts at the top of the pack. A step button that just became
-  // disabled at either end would drop focus out of the dialog, so hand it to Close.
+  // disabled at either end would drop focus out of the dialog, so return it
+  // to the dialog.
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: 0 });
     const active = document.activeElement;
     if (active instanceof HTMLButtonElement && active.disabled) {
-      closeButtonRef.current?.focus();
+      dialogRef.current?.focus();
     }
   }, [pick]);
 
@@ -143,6 +146,7 @@ export function DraftPackDialog({
       ref={dialogRef}
       className="draft-pack-dialog"
       style={dialogStyle}
+      tabIndex={-1}
       aria-modal="true"
       aria-labelledby={titleID}
       aria-describedby={descriptionID}
@@ -159,7 +163,7 @@ export function DraftPackDialog({
         const focusable = event.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled), a[href]");
         const first = focusable.item(0);
         const last = focusable.item(focusable.length - 1);
-        if (event.shiftKey && document.activeElement === first) {
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) {
           event.preventDefault();
           last?.focus();
         } else if (!event.shiftKey && document.activeElement === last) {
@@ -211,7 +215,7 @@ export function DraftPackDialog({
           >
             Next <span aria-hidden="true">→</span>
           </button>
-          <button ref={closeButtonRef} type="button" className="draft-pack-dialog-button" onClick={onClose}>
+          <button type="button" className="draft-pack-dialog-button" onClick={onClose}>
             Close <span aria-hidden="true">×</span>
           </button>
         </div>

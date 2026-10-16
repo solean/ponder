@@ -168,6 +168,17 @@ CREATE TABLE IF NOT EXISTS set_catalog (
   updated_at TEXT NOT NULL
 );
 
+-- 17Lands card ratings for one expansion and event type (e.g. "FRA",
+-- "PremierDraft"), refreshed at most daily on demand. payload_json holds the
+-- normalized model.CardStat list so readers never re-parse the raw response.
+CREATE TABLE IF NOT EXISTS card_stat_snapshots (
+  expansion TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  fetched_at TEXT NOT NULL,
+  PRIMARY KEY(expansion, event_type)
+);
+
 CREATE TABLE IF NOT EXISTS matches (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   arena_match_id TEXT NOT NULL UNIQUE,

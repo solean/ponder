@@ -20,6 +20,31 @@ export type SetInfo = {
   releasedAt?: string;
 };
 
+/** One card's 17Lands rating; rates are null where 17Lands withholds small samples. */
+export type CardStat = {
+  arenaId: number;
+  seenCount: number;
+  alsa: number | null;
+  pickCount: number;
+  ata: number | null;
+  gameCount: number;
+  gpWinRate: number | null;
+  gihGameCount: number;
+  gihWinRate: number | null;
+  iwd: number | null;
+};
+
+export type CardStatsResponse = {
+  status: "ok" | "unsupported";
+  expansion?: string;
+  format?: string;
+  fetchedAt?: string;
+  stale?: boolean;
+  sourceUrl?: string;
+  meanGihWinRate?: number;
+  cards: CardStat[];
+};
+
 export type Match = {
   id: number;
   arenaMatchId: string;

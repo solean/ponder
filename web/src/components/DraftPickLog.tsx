@@ -2,6 +2,7 @@ import { useId, useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 
 import { CardPreviewName } from "./CardPreviewName";
+import { CardStatLine, CardStatsSource, type DraftCardStats } from "./CardStats";
 import { DraftPackDialog } from "./DraftPackDialog";
 import { StatusMessage } from "./StatusMessage";
 import {
@@ -14,9 +15,11 @@ import type { DraftPick, DraftPickCard } from "../lib/types";
 function DraftCardList({
   cards,
   previews,
+  cardStats,
 }: {
   cards: DraftPickCard[];
   previews: Map<number, CardPreview>;
+  cardStats: DraftCardStats;
 }) {
   if (cards.length === 0) {
     return <span className="draft-card-empty">Selection unavailable</span>;
@@ -29,26 +32,36 @@ function DraftCardList({
         const name = card.cardName?.trim() || preview?.name?.trim() || `Card ${card.cardId}`;
         const artURL = preview?.artCropUrl ?? preview?.imageUrl;
         return (
-          <CardPreviewName
-            cardId={card.cardId}
-            cardName={card.cardName}
-            key={`${card.cardId}-${index}`}
-            label={
-              <>
-                <span className="draft-pick-thumb">
-                  {artURL ? <img src={artURL} alt="" loading="lazy" decoding="async" /> : null}
-                </span>
-                <code>{name}</code>
-              </>
-            }
-            resolveName
-          />
+          <span className="draft-card-entry" key={`${card.cardId}-${index}`}>
+            <CardPreviewName
+              cardId={card.cardId}
+              cardName={card.cardName}
+              label={
+                <>
+                  <span className="draft-pick-thumb">
+                    {artURL ? <img src={artURL} alt="" loading="lazy" decoding="async" /> : null}
+                  </span>
+                  <code>{name}</code>
+                </>
+              }
+              resolveName
+            />
+            <CardStatLine cardId={card.cardId} stats={cardStats} />
+          </span>
         );
       })}
     </div>
   );
 }
-function DraftPackChoices({ pick, displayPack }: { pick: DraftPickLogPick; displayPack: number }) {
+function DraftPackChoices({
+  pick,
+  displayPack,
+  cardStats,
+}: {
+  pick: DraftPickLogPick;
+  displayPack: number;
+  cardStats: DraftCardStats;
+}) {
   const [isOpen, setIsOpen] = useState(false);
 
   if (pick.packCards.length === 0) {
@@ -67,14 +80,14 @@ function DraftPackChoices({ pick, displayPack }: { pick: DraftPickLogPick; displ
         View pack <span aria-hidden="true">·</span> {pick.packCards.length} {pick.packCards.length === 1 ? "card" : "cards"}
       </button>
       {isOpen ? (
-        <DraftPackDialog pick={pick} displayPack={displayPack} onClose={() => setIsOpen(false)} />
+        <DraftPackDialog pick={pick} displayPack={displayPack} cardStats={cardStats} onClose={() => setIsOpen(false)} />
       ) : null}
     </>
   );
 }
 
 
-export function DraftPickLog({ picks }: { picks: DraftPick[] }) {
+export function DraftPickLog({ picks, cardStats }: { picks: DraftPick[]; cardStats: DraftCardStats }) {
   const headingID = useId();
   const packs = useMemo(() => draftPickLogPacks(picks), [picks]);
 
@@ -145,8 +158,8 @@ export function DraftPickLog({ picks }: { picks: DraftPick[] }) {
                       <tr key={`${pack.packNumber}-${pick.pickNumber}`}>
                         <td>{pick.displayPick}</td>
                         <td>
-                          <DraftCardList cards={pick.pickedCards} previews={previewByCardID} />
-                          <DraftPackChoices pick={pick} displayPack={pack.displayPack} />
+                          <DraftCardList cards={pick.pickedCards} previews={previewByCardID} cardStats={cardStats} />
+                          <DraftPackChoices pick={pick} displayPack={pack.displayPack} cardStats={cardStats} />
                         </td>
                       </tr>
                     ))}
@@ -157,6 +170,7 @@ export function DraftPickLog({ picks }: { picks: DraftPick[] }) {
           ))}
         </div>
       )}
+      <CardStatsSource stats={cardStats} />
     </section>
   );
 }

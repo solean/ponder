@@ -28,6 +28,9 @@ func TestRequestWritesWaitForBackgroundWriter(t *testing.T) {
 		{"sets", func(ctx context.Context, s *Store) error {
 			return s.UpsertSets(ctx, map[string]model.SetInfo{"tst": {Name: "Test"}})
 		}, "SELECT COUNT(*) FROM set_catalog"},
+		{"card stat snapshot", func(ctx context.Context, s *Store) error {
+			return s.UpsertCardStatSnapshot(ctx, "TST", "PremierDraft", []model.CardStat{{ArenaID: 1}}, time.Now())
+		}, "SELECT COUNT(*) FROM card_stat_snapshots"},
 		{"match analytics", func(ctx context.Context, s *Store) error { return s.EnsureMatchAnalytics(ctx, 1) }, "SELECT COUNT(*) FROM match_analytics_coverage"},
 	}
 	for _, tc := range cases {

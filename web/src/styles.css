@@ -11787,6 +11787,66 @@ select option {
   text-align: center;
 }
 
+/* 17Lands card ratings beneath pack cards and beside picks. */
+.draft-replay-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+/* Stats sit under the card name, aligned past the art thumbnail, so long
+   names keep the full row width. */
+.draft-card-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.card-stat-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.15rem 0.6rem;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  cursor: help;
+}
+
+.draft-card-entry .card-stat-line {
+  justify-content: flex-start;
+  padding-left: calc(clamp(52px, 4.3vw, 66px) + 0.45rem);
+}
+
+.draft-pack-card .card-stat-line {
+  margin-top: 0.45rem;
+  font-size: var(--text-xs);
+}
+
+.card-stat {
+  white-space: nowrap;
+}
+
+.card-stat-label {
+  color: var(--muted);
+  letter-spacing: var(--track-md);
+}
+
+.card-stats-source {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.card-stats-source .text-link {
+  min-height: 0;
+  font-size: inherit;
+}
+
 /* ══════════════════════════════════════════
    IN-GAME OVERLAY HUD
    ══════════════════════════════════════════ */

@@ -2,17 +2,19 @@ import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 
 import { createPortal } from "react-dom";
 import { useQueries } from "@tanstack/react-query";
 
+import { CardStatLine, CardStatsSource, type DraftCardStats } from "./CardStats";
 import { draftAlternativeCards, type DraftPickLogPick } from "../lib/draftReport";
 import { fetchCardPreview, type CardPreview, type CardRarity } from "../lib/scryfall";
 import type { DraftPickCard } from "../lib/types";
 
 const RARITY_ORDER: Record<CardRarity, number> = { mythic: 0, rare: 1, uncommon: 2, common: 3 };
 
-function DraftPackCard({ card, picked, preview, isPending }: {
+function DraftPackCard({ card, picked, preview, isPending, cardStats }: {
   card: DraftPickCard;
   picked: boolean;
   preview?: CardPreview | null;
   isPending: boolean;
+  cardStats: DraftCardStats;
 }) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
@@ -50,6 +52,7 @@ function DraftPackCard({ card, picked, preview, isPending }: {
         ) : null}
       </a>
       {picked ? <span className="draft-pack-card-picked">✓ Your pick</span> : null}
+      <CardStatLine cardId={card.cardId} stats={cardStats} />
     </li>
   );
 }
@@ -57,10 +60,12 @@ function DraftPackCard({ card, picked, preview, isPending }: {
 export function DraftPackDialog({
   pick,
   displayPack,
+  cardStats,
   onClose,
 }: {
   pick: DraftPickLogPick;
   displayPack: number;
+  cardStats: DraftCardStats;
   onClose: () => void;
 }) {
   const titleID = useId();
@@ -176,9 +181,11 @@ export function DraftPackDialog({
               picked={!alternatives.has(card)}
               preview={query?.data}
               isPending={query?.isPending ?? false}
+              cardStats={cardStats}
             />
           ))}
         </ul>
+        <CardStatsSource stats={cardStats} />
       </div>
     </dialog>,
     document.body,

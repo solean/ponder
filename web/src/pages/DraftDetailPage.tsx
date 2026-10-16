@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { DraftJourneyPanel, DraftPackReplayPanel } from "../components/DraftJourneyPanel";
 import { useBreadcrumbLabel } from "../components/Breadcrumbs";
+import { useDraftCardStats } from "../components/CardStats";
 import { DraftPickLog } from "../components/DraftPickLog";
 import { DraftPoolPanel } from "../components/DraftPoolPanel";
 import { DraftSessionOverview } from "../components/DraftSessionOverview";
@@ -31,6 +32,7 @@ export function DraftDetailPage() {
     ? `Draft #${session.id} · ${parseEventName(session.eventName).kindLabel}`
     : null;
   useBreadcrumbLabel(draftBreadcrumbLabel);
+  const cardStats = useDraftCardStats(session?.eventName ?? "");
 
   if (!isValidDraftID) {
     return <StatusMessage tone="error">Invalid draft id.</StatusMessage>;
@@ -56,9 +58,9 @@ export function DraftDetailPage() {
     <div className="stack-lg">
       <DraftSessionOverview session={session} picks={picks} />
       <DraftPoolPanel eventName={session.eventName} picks={picks} />
-      <DraftPickLog picks={picks} />
+      <DraftPickLog picks={picks} cardStats={cardStats} />
       <DraftJourneyPanel picks={picks} />
-      <DraftPackReplayPanel picks={picks} />
+      <DraftPackReplayPanel picks={picks} cardStats={cardStats} />
       <LimitedMatchupsPanel
         setCode={setCode}
         title="Set Metagame"

@@ -632,6 +632,45 @@ type SetInfo struct {
 	ReleasedAt string `json:"releasedAt,omitempty"`
 }
 
+// CardStat is one card's 17Lands rating for an expansion and event type.
+// Rates are nil where 17Lands withholds them for small samples.
+type CardStat struct {
+	ArenaID int64 `json:"arenaId"`
+	// Packs the card was seen in, and its average last-seen pick (ALSA).
+	SeenCount int64    `json:"seenCount"`
+	ALSA      *float64 `json:"alsa"`
+	// Times the card was picked, and its average pick position (ATA).
+	PickCount int64    `json:"pickCount"`
+	ATA       *float64 `json:"ata"`
+	// Games with the card in the main deck, and the win rate of those games.
+	GameCount int64    `json:"gameCount"`
+	GPWinRate *float64 `json:"gpWinRate"`
+	// Games where the card was in the opening hand or drawn (GIH).
+	GIHGameCount int64    `json:"gihGameCount"`
+	GIHWinRate   *float64 `json:"gihWinRate"`
+	// Improvement when drawn (IWD): GIH win rate minus not-drawn win rate.
+	IWD *float64 `json:"iwd"`
+}
+
+const (
+	CardStatsStatusOK = "ok"
+	// The event is not a draft format 17Lands publishes ratings for.
+	CardStatsStatusUnsupported = "unsupported"
+)
+
+type CardStatsResponse struct {
+	Status    string `json:"status"`
+	Expansion string `json:"expansion,omitempty"`
+	Format    string `json:"format,omitempty"`
+	FetchedAt string `json:"fetchedAt,omitempty"`
+	// True when a refresh failed and an older cached snapshot is served.
+	Stale     bool   `json:"stale,omitempty"`
+	SourceURL string `json:"sourceUrl,omitempty"`
+	// GIH win rate across all cards, weighted by GIH games: the format baseline.
+	MeanGIHWinRate *float64   `json:"meanGihWinRate,omitempty"`
+	Cards          []CardStat `json:"cards"`
+}
+
 type Overview struct {
 	PlayerName   string     `json:"playerName,omitempty"`
 	TotalMatches int64      `json:"totalMatches"`

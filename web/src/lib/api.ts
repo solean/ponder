@@ -4,6 +4,7 @@ import type {
   AiStatus,
   ActivityDayBoundary,
   AutostartStatus,
+  CardStatsResponse,
   DeckAnalytics,
   DeckAnalyticsGameRef,
   DeckAnalyticsGamesParams,
@@ -141,6 +142,8 @@ export const api = {
   draftPicks: (draftId: number) => getJSON<DraftPick[]>(`/api/drafts/${draftId}/picks`),
   sets: (codes: string[]) =>
     getJSON<Record<string, SetInfo>>(`/api/sets?codes=${encodeURIComponent(codes.join(","))}`),
+  cardStats: (eventName: string) =>
+    getJSON<CardStatsResponse>(`/api/card-stats?event=${encodeURIComponent(eventName)}`),
   live: () => getJSON<{ live: LiveMatch | null }>("/api/live"),
   overlaySettings: () => getJSON<OverlaySettings>("/api/overlay/settings"),
   saveOverlaySettings: (settings: OverlaySettings) => postJSON<OverlaySettings>("/api/overlay/settings", settings),

@@ -26,6 +26,17 @@ draft picks or a linked deck; constructed and sealed matches are excluded.
 Coverage indicators distinguish missing game facts from recorded results. The
 card performance table scrolls under a sticky header and filters by card name.
 
+Each draft report annotates the Pick Log, pack dialog, and Pack Replay with
+17Lands card ratings (GIH WR toned against the format average, ATA; hover for
+GP WR, IWD, ALSA, and sample sizes) for Premier, Traditional, Quick, and Pick
+Two drafts. Ratings come from the 17Lands card data endpoint, fetched by the
+backend at most once per set and format per day and cached in
+`card_stat_snapshots`; a failed refresh serves the cached copy and waits 15
+minutes before retrying. 17Lands states this data is for use on 17lands.com;
+this is a personal-use integration, and a public release would need their
+permission or a switch to the CC BY public datasets
+(`research/17lands-card-data-research.md`).
+
 ## Project Layout
 
 - `cmd/ponder` - CLI entrypoint (`parse`, `tail`, `serve`)
@@ -183,6 +194,7 @@ API endpoints:
 - `GET /api/drafts/analytics[?set=BLB]` → `{ "analytics": {...}, "sets": [...] }`; the set list is independent of the filter. Omit `set` for all draft sets, or use `set=` for unknown-set drafts.
 - `GET /api/drafts/analytics/games[?set=BLB]` → games behind a draft statistic; accepts the deck analytics filters `card`, `facet`, `keptSize`, `mulligans`, `turns`, `game`, `playDraw`, `landDrops`, and `limit`.
 - `GET /api/drafts/:id/picks`
+- `GET /api/card-stats?event=PremierDraft_FRA_20260929` → 17Lands ratings for the event's set and draft format: `{ "status": "ok", "expansion", "format", "fetchedAt", "stale", "sourceUrl", "meanGihWinRate", "cards": [...] }`, or `{ "status": "unsupported", "cards": [] }` for formats without draft ratings; 502 when 17Lands is unreachable and nothing is cached.
 - `GET /api/decks/:id/matchups`
 - `GET /api/decks/:id/matchups/refs?colors=UR&archetype=control`
 - `GET /api/limited/matchups`

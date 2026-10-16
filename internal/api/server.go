@@ -39,6 +39,8 @@ type Server struct {
 	scryfallCooldownUntil time.Time
 	aiProvider            *ai.Service
 	aiGenBusy             sync.Mutex
+	cardStatsMu           sync.Mutex
+	cardStats             map[string]*cardStatsEntry
 }
 
 func NewServer(store *db.Store, staticDir string, appState *appstate.Service) *Server {
@@ -122,6 +124,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/drafts/analytics/games", s.handleDraftAnalyticsGames)
 	mux.HandleFunc("/api/drafts/", s.handleDraftPicks)
 	mux.HandleFunc("/api/sets", s.handleSets)
+	mux.HandleFunc("/api/card-stats", s.handleCardStats)
 	mux.HandleFunc("/api/ai/status", s.handleAIStatus)
 	mux.HandleFunc("/api/live", s.handleLive)
 	if s.appState != nil {

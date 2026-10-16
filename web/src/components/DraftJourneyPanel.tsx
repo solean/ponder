@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 
 import { CardPreviewName } from "./CardPreviewName";
+import { CardStatLine, CardStatsSource, type DraftCardStats } from "./CardStats";
 import { ManaSymbol } from "./ManaSymbol";
 import { StatusMessage } from "./StatusMessage";
 import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
@@ -378,7 +379,7 @@ export function DraftJourneyPanel({ picks }: { picks: DraftPick[] }) {
   );
 }
 
-export function DraftPackReplayPanel({ picks }: { picks: DraftPick[] }) {
+export function DraftPackReplayPanel({ picks, cardStats }: { picks: DraftPick[]; cardStats: DraftCardStats }) {
   const ordered = useMemo(() => orderedPicks(picks), [picks]);
   const replayablePicks = useMemo(
     () => ordered.filter((pick) => pick.packCards.length > 0),
@@ -459,17 +460,21 @@ export function DraftPackReplayPanel({ picks }: { picks: DraftPick[] }) {
           const preview = previewByCardID.get(card.cardId);
           const isPicked = pickedIDs.has(card.cardId);
           return (
-            <figure className={`draft-replay-card ${isPicked ? "is-picked" : ""}`} key={card.cardId}>
-              {preview?.imageUrl ? (
-                <img src={preview.imageUrl} alt={preview.name} loading="lazy" width={488} height={680} />
-              ) : (
-                <span className="draft-replay-card-fallback">{card.cardName ?? `Card ${card.cardId}`}</span>
-              )}
-              {isPicked ? <figcaption>Picked</figcaption> : null}
-            </figure>
+            <div className="draft-replay-slot" key={card.cardId}>
+              <figure className={`draft-replay-card ${isPicked ? "is-picked" : ""}`}>
+                {preview?.imageUrl ? (
+                  <img src={preview.imageUrl} alt={preview.name} loading="lazy" width={488} height={680} />
+                ) : (
+                  <span className="draft-replay-card-fallback">{card.cardName ?? `Card ${card.cardId}`}</span>
+                )}
+                {isPicked ? <figcaption>Picked</figcaption> : null}
+              </figure>
+              <CardStatLine cardId={card.cardId} stats={cardStats} />
+            </div>
           );
         })}
       </div>
+      <CardStatsSource stats={cardStats} />
     </section>
   );
 }

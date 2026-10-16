@@ -7,7 +7,6 @@ import { useDraftCardStats } from "../components/CardStats";
 import { DraftPickLog } from "../components/DraftPickLog";
 import { DraftPoolPanel } from "../components/DraftPoolPanel";
 import { DraftSessionOverview } from "../components/DraftSessionOverview";
-import { LimitedMatchupsPanel } from "../components/MatchupPanels";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { parseEventName } from "../lib/events";
@@ -52,7 +51,6 @@ export function DraftDetailPage() {
   }
 
   const picks = picksQuery.data ?? [];
-  const setCode = parseEventName(session.eventName).setCode ?? "";
 
   return (
     <div className="stack-lg">
@@ -61,11 +59,6 @@ export function DraftDetailPage() {
       <DraftPickLog picks={picks} cardStats={cardStats} />
       <DraftJourneyPanel picks={picks} />
       <DraftPackReplayPanel picks={picks} cardStats={cardStats} />
-      <LimitedMatchupsPanel
-        setCode={setCode}
-        title="Set Metagame"
-        description="Your record against opponent color pairs across every locally recorded draft of this set. These results provide set-wide context, not only this session."
-      />
     </div>
   );
 }

@@ -3,11 +3,9 @@ import { createPortal } from "react-dom";
 import { useQueries } from "@tanstack/react-query";
 
 import { CardStatLine, CardStatsSource, type DraftCardStats } from "./CardStats";
-import { draftAlternativeCards, type DraftPickLogPick } from "../lib/draftReport";
-import { fetchCardPreview, type CardPreview, type CardRarity } from "../lib/scryfall";
+import { draftAlternativeCards, sortPackByRarity, type DraftPickLogPick } from "../lib/draftReport";
+import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
 import type { DraftPickCard } from "../lib/types";
-
-const RARITY_ORDER: Record<CardRarity, number> = { mythic: 0, rare: 1, uncommon: 2, common: 3 };
 
 function DraftPackCard({ card, picked, preview, isPending, cardStats }: {
   card: DraftPickCard;
@@ -103,17 +101,12 @@ export function DraftPackDialog({
     })),
   });
   const queryByCardID = new Map(previewCards.map((card, index) => [card.cardId, previewQueries[index]]));
-  const cards = pick.packCards.map((card, index) => ({ card, index, query: queryByCardID.get(card.cardId) }));
+  const packOrder = pick.packCards.map((card, index) => ({ card, index, query: queryByCardID.get(card.cardId) }));
   // Sort once the batch is ready so cards do not shuffle with each response.
   // Original indices keep duplicate copies and their picked state stable.
-  if (previewQueries.every((query) => !query.isPending)) {
-    cards.sort((left, right) => {
-      const leftRarity = left.query?.data?.rarity;
-      const rightRarity = right.query?.data?.rarity;
-      return (leftRarity ? RARITY_ORDER[leftRarity] : 4) -
-        (rightRarity ? RARITY_ORDER[rightRarity] : 4) || left.index - right.index;
-    });
-  }
+  const cards = previewQueries.every((query) => !query.isPending)
+    ? sortPackByRarity(packOrder, (entry) => entry.query?.data?.rarity)
+    : packOrder;
   const dialogStyle = {
     "--draft-pack-width": `${Math.max(420, Math.min(7, maxCards) * 156 + 48)}px`,
   } as CSSProperties;

@@ -5,6 +5,7 @@ import { CardPreviewName } from "./CardPreviewName";
 import { CardStatLine, CardStatsSource, type DraftCardStats } from "./CardStats";
 import { ManaSymbol } from "./ManaSymbol";
 import { StatusMessage } from "./StatusMessage";
+import { sortPackByRarity } from "../lib/draftReport";
 import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
 import type { DraftPick, DraftPickCard } from "../lib/types";
 
@@ -414,6 +415,11 @@ export function DraftPackReplayPanel({ picks, cardStats }: { picks: DraftPick[];
   }
 
   const pickedIDs = new Set(current.pickedCards.map((card) => card.cardId));
+  // Same order as the pack dialog; sorted once every preview has settled so
+  // cards do not shuffle as rarities arrive.
+  const displayedCards = previewQueries.every((query) => !query.isPending)
+    ? sortPackByRarity(packCards, (card) => previewByCardID.get(card.cardId)?.rarity)
+    : packCards;
 
   return (
     <section className="panel draft-replay-panel">
@@ -456,7 +462,7 @@ export function DraftPackReplayPanel({ picks, cardStats }: { picks: DraftPick[];
       </div>
 
       <div className="draft-replay-grid" aria-label={`Pack ${current.displayPack} pick ${current.displayPick} contents`}>
-        {packCards.map((card) => {
+        {displayedCards.map((card) => {
           const preview = previewByCardID.get(card.cardId);
           const isPicked = pickedIDs.has(card.cardId);
           return (

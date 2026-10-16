@@ -193,3 +193,15 @@ export function countRareAndMythicPicks(
   }
   return { rare, mythic };
 }
+
+const PACK_RARITY_RANK: Record<CardRarity, number> = { mythic: 0, rare: 1, uncommon: 2, common: 3 };
+
+/** Orders pack cards mythic → common with unknown rarity last; ties keep pack order. */
+export function sortPackByRarity<T>(cards: readonly T[], rarityOf: (card: T) => CardRarity | undefined): T[] {
+  const rank = (card: T) => {
+    const rarity = rarityOf(card);
+    return rarity ? PACK_RARITY_RANK[rarity] : 4;
+  };
+  // Array.prototype.sort is stable, so equal ranks keep their original order.
+  return [...cards].sort((left, right) => rank(left) - rank(right));
+}

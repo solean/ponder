@@ -269,9 +269,13 @@ against `ponder serve` on port 8080, continue to use `bun run dev` from `web/`.
 
 Desktop behaviors:
 - On macOS, a menu bar icon remains visible while Ponder runs, even with its
-  window hidden. Click it to check live tracking status, open Ponder, or quit.
-  A pause indicator means tracking is off; an exclamation mark means tracking
-  needs attention. Hover for details. Status refreshes every two seconds.
+  window hidden. Its dropdown opens with a Live Tracking switch that starts or
+  stops the tracker, then offers Open Ponder and Quit. Under the switch, the
+  menu shows the opponent, game, turn, and deck during a match; otherwise it
+  shows how long ago MTGA last wrote new log activity. The icon's orbs are
+  filled while tracking runs and hollow while it is off; an exclamation mark
+  means tracking needs attention. Hover for details. Status refreshes every
+  two seconds.
 - Closing the window hides it and keeps the app (and live log tailing)
   running; reopen from the Dock, quit with Cmd+Q.
 - A second launch focuses the existing window instead of starting another

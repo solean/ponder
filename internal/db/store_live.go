@@ -107,6 +107,29 @@ func (s *Store) GetLiveProgress(ctx context.Context, matchID int64) (gameNumber,
 	return gameNumber, turnNumber, nil
 }
 
+// GetLiveMatchHeadline returns a match's opponent and linked deck name without
+// GetMatchDetail's enrichment, so the menu bar can poll it cheaply.
+func (s *Store) GetLiveMatchHeadline(ctx context.Context, matchID int64) (opponent, deckName string, err error) {
+	err = s.db.QueryRowContext(ctx, `
+		SELECT
+			COALESCE(m.opponent_name, ''),
+			COALESCE((
+				SELECT d.name
+				FROM match_decks md
+				JOIN decks d ON d.id = md.deck_id
+				WHERE md.match_id = m.id
+				ORDER BY md.id ASC
+				LIMIT 1
+			), '')
+		FROM matches m
+		WHERE m.id = ?
+	`, matchID).Scan(&opponent, &deckName)
+	if err != nil {
+		return "", "", fmt.Errorf("get live match headline: %w", err)
+	}
+	return opponent, deckName, nil
+}
+
 // ListDeckCards returns every card row for a deck (all sections), with names
 // resolved from the local catalog. Shared by GetDeckDetail and the live match
 // assembler.

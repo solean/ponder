@@ -10,6 +10,7 @@ import (
 
 	"github.com/solean/ponder/internal/ai"
 	"github.com/solean/ponder/internal/db"
+	"github.com/solean/ponder/internal/ingest"
 )
 
 func TestSupportDirPathUsesPonderName(t *testing.T) {
@@ -77,6 +78,41 @@ func TestNewServiceAutoStartsLiveByDefault(t *testing.T) {
 	}
 	if _, err := service.StopLive(); err != nil {
 		t.Fatalf("stop live: %v", err)
+	}
+}
+
+// Stopping live tracking cancels any parse in flight. That cancellation must
+// not surface as a tracking error, or the menu bar and Settings would report
+// "needs attention" right after the user turned tracking off.
+func TestLiveLoopCancellationIsNotAnError(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "ponder.db")
+	database, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+	logPath := filepath.Join(tmpDir, "Player.log")
+	if err := os.WriteFile(logPath, nil, 0o644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+	store := db.NewStore(database)
+	service, err := NewService(Options{Store: store, DBPath: dbPath, SupportDir: filepath.Join(tmpDir, "support"), DefaultLogPath: logPath})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+
+	stopped, cancel := context.WithCancel(ctx)
+	cancel()
+	service.runLiveLoop(stopped, make(chan struct{}), ingest.NewParser(store), []string{logPath}, logPath, time.Hour)
+	if lastError := service.Status().LastError; lastError != "" {
+		t.Fatalf("last error after cancellation = %q", lastError)
 	}
 }
 

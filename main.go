@@ -92,7 +92,6 @@ func main() {
 		FullscreenButtonState: application.ButtonHidden,
 	})
 	desktop.setDesktopRuntime(wailsApp, mainWindow, overlayWindow)
-	startMenuBar := desktop.prepareMenuBar()
 
 	// Closing the main window keeps the log tailer running. The Dock icon or a
 	// second launch restores the existing window; Cmd+Q still quits the app.
@@ -118,8 +117,8 @@ func main() {
 	wailsApp.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		windowState.restore(wailsApp, mainWindow)
 		mainWindow.Show()
+		desktop.startMenuBar()
 		desktop.startup()
-		startMenuBar()
 		desktop.showStartupError()
 		application.InvokeSync(func() {
 			menu := wailsApp.Menu.GetApplicationMenu()

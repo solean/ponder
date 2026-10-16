@@ -43,9 +43,9 @@ const (
 
 	// A live match with no observed game activity for this long is treated as
 	// abandoned (Arena quit mid-match leaves the row in progress forever), so
-	// the overlay stops following it. Well above any in-game stall: every GRE
-	// message, including mulligans and sideboard submissions, counts.
-	overlayLiveActivityWindow = 10 * time.Minute
+	// the overlay and menu bar stop reporting it. Well above any in-game stall:
+	// every GRE message, including mulligans and sideboard submissions, counts.
+	liveMatchActivityWindow = 10 * time.Minute
 )
 
 type App struct {
@@ -60,6 +60,7 @@ type App struct {
 	apiHandler     http.Handler
 	startupErr     string
 	runtimeService *appstate.Service
+	store          *db.Store
 	trayCancel     context.CancelFunc
 
 	overlayHidden     bool
@@ -272,6 +273,7 @@ func (a *App) startup() {
 	a.mu.Lock()
 	a.apiHandler = server.Handler()
 	a.runtimeService = runtimeService
+	a.store = store
 	a.mu.Unlock()
 	a.startOverlayMonitor(bgCtx, store)
 
@@ -439,7 +441,7 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 			log.Printf("overlay window detached")
 		}
 		updateState := func() {
-			_, isLive, err := store.GetLiveMatchIDActiveSince(ctx, time.Now().Add(-overlayLiveActivityWindow))
+			_, isLive, err := store.GetLiveMatchIDActiveSince(ctx, time.Now().Add(-liveMatchActivityWindow))
 			if err != nil {
 				if !hadReadError {
 					log.Printf("overlay live-state check failed: %v", err)

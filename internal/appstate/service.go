@@ -459,6 +459,10 @@ func (s *Service) runLiveLoop(
 		for _, logPath := range logPaths {
 			stats, err := parser.ParseFile(ctx, logPath, true)
 			if err != nil {
+				// StopLive cancels mid-parse; that is not a tracking failure.
+				if ctx.Err() != nil {
+					return false
+				}
 				now := time.Now().UTC()
 				s.mu.Lock()
 				s.liveLastTickAt = now

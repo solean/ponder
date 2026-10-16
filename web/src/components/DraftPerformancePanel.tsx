@@ -231,10 +231,12 @@ export function DraftPerformancePanel({
             <strong>{winRate == null ? "—" : pct(winRate)}</strong>
           </div>
           <div className="rank-chip">
-            <span>Events · Trophies</span>
-            <strong>
-              {points.length} · {performance.trophies}
-            </strong>
+            <span>Events</span>
+            <strong>{points.length}</strong>
+          </div>
+          <div className="rank-chip">
+            <span>Trophy rate</span>
+            <strong>{pct(performance.trophies / points.length)}</strong>
           </div>
           <div className="rank-chip">
             <span>Last 10 events</span>

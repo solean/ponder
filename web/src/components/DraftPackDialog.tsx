@@ -61,18 +61,31 @@ export function DraftPackDialog({
   pick,
   displayPack,
   cardStats,
+  position,
+  total,
+  maxCards,
+  onNavigate,
   onClose,
 }: {
   pick: DraftPickLogPick;
   displayPack: number;
   cardStats: DraftCardStats;
+  /** Zero-based index of this pick among the picks with recorded packs. */
+  position: number;
+  total: number;
+  /** Largest pack in the sequence; sizes the dialog so it holds steady while stepping. */
+  maxCards: number;
+  onNavigate: (step: -1 | 1) => void;
   onClose: () => void;
 }) {
   const titleID = useId();
   const descriptionID = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const backdropPressRef = useRef(false);
+  const hasPrevious = position > 0;
+  const hasNext = position < total - 1;
   // The helper retains each unpicked card object, including duplicate copies.
   const alternatives = new Set(draftAlternativeCards(pick));
   const selectedCount = pick.packCards.length - alternatives.size;
@@ -102,7 +115,7 @@ export function DraftPackDialog({
     });
   }
   const dialogStyle = {
-    "--draft-pack-width": `${Math.max(420, Math.min(7, cards.length) * 156 + 48)}px`,
+    "--draft-pack-width": `${Math.max(420, Math.min(7, maxCards) * 156 + 48)}px`,
   } as CSSProperties;
 
   useEffect(() => {
@@ -122,6 +135,16 @@ export function DraftPackDialog({
     };
   }, []);
 
+  // Each step starts at the top of the pack. A step button that just became
+  // disabled at either end would drop focus out of the dialog, so hand it to Close.
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 });
+    const active = document.activeElement;
+    if (active instanceof HTMLButtonElement && active.disabled) {
+      closeButtonRef.current?.focus();
+    }
+  }, [pick]);
+
   return createPortal(
     <dialog
       ref={dialogRef}
@@ -131,10 +154,18 @@ export function DraftPackDialog({
       aria-labelledby={titleID}
       aria-describedby={descriptionID}
       onKeyDown={(event) => {
+        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+          const step = event.key === "ArrowLeft" ? -1 : 1;
+          if (step === -1 ? hasPrevious : hasNext) {
+            event.preventDefault();
+            onNavigate(step);
+          }
+          return;
+        }
         if (event.key !== "Tab") return;
-        const first = closeButtonRef.current;
-        const links = event.currentTarget.querySelectorAll<HTMLAnchorElement>("a[href]");
-        const last = links.item(links.length - 1) ?? first;
+        const focusable = event.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled), a[href]");
+        const first = focusable.item(0);
+        const last = focusable.item(focusable.length - 1);
         if (event.shiftKey && document.activeElement === first) {
           event.preventDefault();
           last?.focus();
@@ -161,18 +192,38 @@ export function DraftPackDialog({
     >
       <div className="draft-pack-dialog-head">
         <div>
-          <p className="draft-pack-dialog-eyebrow">Pack contents</p>
+          <p className="draft-pack-dialog-eyebrow">Pack contents <span aria-hidden="true">·</span> {position + 1} of {total}</p>
           <h2 id={titleID}>Pack {displayPack} <span aria-hidden="true">·</span> Pick {pick.displayPick}</h2>
           <p id={descriptionID} className="draft-pack-dialog-description">
             {pick.packCards.length} {pick.packCards.length === 1 ? "card" : "cards"}
             {selectedCount > 0 ? ` · Your ${selectedCount === 1 ? "pick is" : "picks are"} highlighted` : " · Selection unavailable"}
           </p>
         </div>
-        <button ref={closeButtonRef} type="button" className="draft-pack-dialog-close" onClick={onClose}>
-          Close <span aria-hidden="true">×</span>
-        </button>
+        <div className="draft-pack-dialog-actions">
+          <button
+            type="button"
+            className="draft-pack-dialog-button"
+            onClick={() => onNavigate(-1)}
+            disabled={!hasPrevious}
+            aria-keyshortcuts="ArrowLeft"
+          >
+            <span aria-hidden="true">←</span> Prev
+          </button>
+          <button
+            type="button"
+            className="draft-pack-dialog-button"
+            onClick={() => onNavigate(1)}
+            disabled={!hasNext}
+            aria-keyshortcuts="ArrowRight"
+          >
+            Next <span aria-hidden="true">→</span>
+          </button>
+          <button ref={closeButtonRef} type="button" className="draft-pack-dialog-button" onClick={onClose}>
+            Close <span aria-hidden="true">×</span>
+          </button>
+        </div>
       </div>
-      <div className="draft-pack-dialog-body">
+      <div ref={bodyRef} className="draft-pack-dialog-body">
         <ul className="draft-pack-card-grid" aria-label="Cards in this pack">
           {cards.map(({ card, index, query }) => (
             <DraftPackCard

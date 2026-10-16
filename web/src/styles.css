@@ -7757,7 +7757,14 @@ button.match-replay-zonechip.is-button {
   font-size: var(--text-sm);
 }
 
-.draft-pack-dialog-close {
+.draft-pack-dialog-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.draft-pack-dialog-button {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
@@ -7773,22 +7780,27 @@ button.match-replay-zonechip.is-button {
   touch-action: manipulation;
 }
 
-.draft-pack-dialog-close span {
+.draft-pack-dialog-button span {
   font-size: var(--text-lg);
   line-height: 1;
 }
 
-.draft-pack-dialog-close:hover {
+.draft-pack-dialog-button:hover:not(:disabled) {
   background: var(--accent-soft);
 }
 
+.draft-pack-dialog-button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
 .draft-pack-trigger:active,
-.draft-pack-dialog-close:active {
+.draft-pack-dialog-button:active:not(:disabled) {
   transform: scale(0.97);
 }
 
 .draft-pack-trigger:focus-visible,
-.draft-pack-dialog-close:focus-visible,
+.draft-pack-dialog-button:focus-visible,
 .draft-pack-card-image:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
@@ -7895,6 +7907,7 @@ button.match-replay-zonechip.is-button {
   }
 
   .draft-pack-dialog-head {
+    flex-wrap: wrap;
     padding: 1rem;
   }
 

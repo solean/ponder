@@ -56,33 +56,26 @@ function DraftCardList({
 function DraftPackChoices({
   pick,
   displayPack,
-  cardStats,
+  onOpen,
 }: {
   pick: DraftPickLogPick;
   displayPack: number;
-  cardStats: DraftCardStats;
+  onOpen: () => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-
   if (pick.packCards.length === 0) {
     return <span className="draft-card-empty">Not recorded</span>;
   }
 
   return (
-    <>
-      <button
-        type="button"
-        className="draft-pack-trigger"
-        aria-haspopup="dialog"
-        aria-label={`View pack ${displayPack}, pick ${pick.displayPick}: ${pick.packCards.length} ${pick.packCards.length === 1 ? "card" : "cards"}`}
-        onClick={() => setIsOpen(true)}
-      >
-        View pack <span aria-hidden="true">·</span> {pick.packCards.length} {pick.packCards.length === 1 ? "card" : "cards"}
-      </button>
-      {isOpen ? (
-        <DraftPackDialog pick={pick} displayPack={displayPack} cardStats={cardStats} onClose={() => setIsOpen(false)} />
-      ) : null}
-    </>
+    <button
+      type="button"
+      className="draft-pack-trigger"
+      aria-haspopup="dialog"
+      aria-label={`View pack ${displayPack}, pick ${pick.displayPick}: ${pick.packCards.length} ${pick.packCards.length === 1 ? "card" : "cards"}`}
+      onClick={onOpen}
+    >
+      View pack <span aria-hidden="true">·</span> {pick.packCards.length} {pick.packCards.length === 1 ? "card" : "cards"}
+    </button>
   );
 }
 
@@ -90,6 +83,16 @@ function DraftPackChoices({
 export function DraftPickLog({ picks, cardStats }: { picks: DraftPick[]; cardStats: DraftCardStats }) {
   const headingID = useId();
   const packs = useMemo(() => draftPickLogPacks(picks), [picks]);
+  // The dialog steps through every pick with recorded pack contents, across packs.
+  const viewablePicks = useMemo(
+    () => packs.flatMap((pack) =>
+      pack.picks.filter((pick) => pick.packCards.length > 0).map((pick) => ({ pick, displayPack: pack.displayPack })),
+    ),
+    [packs],
+  );
+  const maxPackCards = Math.max(0, ...viewablePicks.map(({ pick }) => pick.packCards.length));
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const openPick = openIndex == null ? undefined : viewablePicks[openIndex];
 
   // One deduped batch for the whole log: Scryfall lookups are collection-batched
   // and share React Query keys with the pool/journey panels on this page.
@@ -159,7 +162,11 @@ export function DraftPickLog({ picks, cardStats }: { picks: DraftPick[]; cardSta
                         <td>{pick.displayPick}</td>
                         <td>
                           <DraftCardList cards={pick.pickedCards} previews={previewByCardID} cardStats={cardStats} />
-                          <DraftPackChoices pick={pick} displayPack={pack.displayPack} cardStats={cardStats} />
+                          <DraftPackChoices
+                            pick={pick}
+                            displayPack={pack.displayPack}
+                            onOpen={() => setOpenIndex(viewablePicks.findIndex((entry) => entry.pick === pick))}
+                          />
                         </td>
                       </tr>
                     ))}
@@ -171,6 +178,18 @@ export function DraftPickLog({ picks, cardStats }: { picks: DraftPick[]; cardSta
         </div>
       )}
       <CardStatsSource stats={cardStats} />
+      {openPick && openIndex != null ? (
+        <DraftPackDialog
+          pick={openPick.pick}
+          displayPack={openPick.displayPack}
+          cardStats={cardStats}
+          position={openIndex}
+          total={viewablePicks.length}
+          maxCards={maxPackCards}
+          onNavigate={(step) => setOpenIndex(openIndex + step)}
+          onClose={() => setOpenIndex(null)}
+        />
+      ) : null}
     </section>
   );
 }

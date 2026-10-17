@@ -4,6 +4,8 @@ import (
 	"embed"
 	"io/fs"
 	"log"
+	"net/http"
+	"os"
 
 	"github.com/solean/ponder/internal/api"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -29,7 +31,7 @@ func main() {
 		Description: "Private, local-first MTG Arena match tracking and analytics.",
 		Icon:        developmentAppIcon,
 		Assets: application.AssetOptions{
-			Handler:    api.SPAFileServer(assets),
+			Handler:    assetHandler(assets),
 			Middleware: desktop.APIMiddleware,
 		},
 		Mac: application.MacOptions{
@@ -135,4 +137,15 @@ func main() {
 	if err := wailsApp.Run(); err != nil {
 		log.Fatalf("run wails app: %v", err)
 	}
+}
+
+// assetHandler serves the embedded frontend. Under `wails3 dev`, which sets
+// FRONTEND_DEVSERVER_URL, it defers to Wails' file server instead: in dev builds
+// that proxies to Vite, so frontend edits hot-reload in the native window. Vite
+// does its own SPA fallback for routes like /overlay.
+func assetHandler(assets fs.FS) http.Handler {
+	if os.Getenv("FRONTEND_DEVSERVER_URL") != "" {
+		return application.AssetFileServerFS(assets)
+	}
+	return api.SPAFileServer(assets)
 }

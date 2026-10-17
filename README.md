@@ -269,6 +269,10 @@ before starting the desktop app so two ingestion processes do not write to the
 same database. Running `wails3 dev` directly without the variable uses the
 normal application-support database.
 
+Under `wails3 dev`, the window loads the frontend from the Vite dev server, so
+edits in `web/src` hot-reload in place without restarting the app. Go changes
+trigger a rebuild and relaunch of the native app; Vite keeps running.
+
 `wails3 build` produces the native binary and `wails3 package` creates the
 platform bundle. Both commands use the checked-in `Taskfile.yml` and
 `build/config.yml`; Bun remains the frontend package runner.

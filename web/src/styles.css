@@ -9450,7 +9450,17 @@ select option {
 }
 
 .activity-panel .panel-head {
+  flex-wrap: wrap;
+  align-items: center;
   margin-bottom: 0.7rem;
+}
+
+.activity-head-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
 }
 
 .activity-frame {
@@ -9563,6 +9573,38 @@ select option {
   border-color: var(--accent);
   background: var(--accent);
   box-shadow: 0 0 5px var(--accent-soft);
+}
+
+/* Win-rate view: diverging loss → even → win scale. */
+.activity-cell--loss-2 {
+  border-color: color-mix(in srgb, var(--loss) 70%, transparent);
+  background: color-mix(in srgb, var(--loss) 80%, var(--panel-inner-b));
+}
+
+.activity-cell--loss-1 {
+  border-color: color-mix(in srgb, var(--loss) 36%, transparent);
+  background: color-mix(in srgb, var(--loss) 36%, var(--panel-inner-b));
+}
+
+.activity-cell--even {
+  border-color: color-mix(in srgb, var(--muted-strong) 55%, transparent);
+  background: color-mix(in srgb, var(--muted-strong) 38%, var(--panel-inner-b));
+}
+
+.activity-cell--win-1 {
+  border-color: color-mix(in srgb, var(--win) 36%, transparent);
+  background: color-mix(in srgb, var(--win) 36%, var(--panel-inner-b));
+}
+
+.activity-cell--win-2 {
+  border-color: color-mix(in srgb, var(--win) 70%, transparent);
+  background: color-mix(in srgb, var(--win) 80%, var(--panel-inner-b));
+}
+
+/* Played, but every match is unresolved: no rate to color. */
+.activity-cell--undecided {
+  border-style: dashed;
+  border-color: var(--muted);
 }
 
 .activity-grid .activity-cell:hover,

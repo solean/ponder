@@ -34,6 +34,7 @@ import {
   type ScheduleBucket,
   type WinLossRecord,
 } from "../lib/overviewStats";
+import { usePersistedFlag } from "../lib/persistedFlag";
 import type { DraftSession, RuntimeStatus } from "../lib/types";
 import { useEventSets } from "../lib/useEventSets";
 
@@ -41,6 +42,7 @@ const RECENT_MATCH_COUNT = 8;
 const FORM_WINDOW = 10;
 const MATCH_WINDOW = 500;
 const ACTIVITY_DAYS = 365;
+const ACTIVITY_WIN_RATE_KEY = "ponder.activityColorByWinRate";
 const currentActivityCalendar = () =>
   `${new Date().toDateString()}|${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
 const MTGA_DETAILED_LOGS_HELP_URL =
@@ -153,12 +155,34 @@ function activityDayLabel(day: DailyActivity): string {
   return `${activityFullDate(day.date)}: ${count}, ${record}${unresolved}`;
 }
 
+type ActivityColorMode = "matches" | "winRate";
+
+const ACTIVITY_WIN_RATE_LEVELS = ["loss-2", "loss-1", "even", "win-1", "win-2"] as const;
+
+/**
+ * Daily samples are small (often 1–5 decided matches), so the buckets are
+ * wide and symmetric around an even record: 1–2 is a bad day, 2–3 a slightly
+ * bad one. Days with only unresolved matches get their own neutral marker.
+ */
+function activityWinRateLevel(day: DailyActivity): string {
+  if (day.count === 0) return "0";
+  const rate = recordWinRate(day);
+  if (rate == null) return "undecided";
+  if (day.wins === day.losses) return "even";
+  if (rate < 0.4) return "loss-2";
+  if (rate < 0.5) return "loss-1";
+  if (rate <= 0.6) return "win-1";
+  return "win-2";
+}
+
 function ActivityGraph({
   activity,
   total,
+  colorMode,
 }: {
   activity: DailyActivity[];
   total: number;
+  colorMode: ActivityColorMode;
 }) {
   const firstDate = new Date(`${activity[0]?.date}T00:00:00`);
   const firstWeekday = Number.isNaN(firstDate.getTime()) ? 0 : firstDate.getDay();
@@ -337,7 +361,9 @@ function ActivityGraph({
             }}
           >
             {activity.map((day, index) => {
-              const level = day.count === 0 ? 0 : Math.max(1, Math.ceil((day.count / maxCount) * 4));
+              const level = colorMode === "winRate"
+                ? activityWinRateLevel(day)
+                : day.count === 0 ? 0 : Math.max(1, Math.ceil((day.count / maxCount) * 4));
               const positionInGrid = firstWeekday + index;
               const row = positionInGrid % 7;
               const column = Math.floor(positionInGrid / 7);
@@ -379,13 +405,23 @@ function ActivityGraph({
       </div>
       <div className="activity-footer">
         <span>{activity[0]?.label}</span>
-        <div className="activity-legend" aria-label="Activity intensity from less to more">
-          <span>Less</span>
-          {[0, 1, 2, 3, 4].map((level) => (
-            <span key={level} className={`activity-cell activity-cell--${level}`} aria-hidden="true" />
-          ))}
-          <span>More</span>
-        </div>
+        {colorMode === "winRate" ? (
+          <div className="activity-legend" aria-label="Daily win rate from losing to winning">
+            <span>Loss</span>
+            {ACTIVITY_WIN_RATE_LEVELS.map((level) => (
+              <span key={level} className={`activity-cell activity-cell--${level}`} aria-hidden="true" />
+            ))}
+            <span>Win</span>
+          </div>
+        ) : (
+          <div className="activity-legend" aria-label="Activity intensity from less to more">
+            <span>Less</span>
+            {[0, 1, 2, 3, 4].map((level) => (
+              <span key={level} className={`activity-cell activity-cell--${level}`} aria-hidden="true" />
+            ))}
+            <span>More</span>
+          </div>
+        )}
         <span>Today</span>
       </div>
       {visibleDay && typeof document !== "undefined"
@@ -474,6 +510,7 @@ function draftRecordLabel(draft: DraftSession): string | null {
 }
 
 export function OverviewPage() {
+  const [activityColorByWinRate, setActivityColorByWinRate] = usePersistedFlag(ACTIVITY_WIN_RATE_KEY, false);
   const [activityCalendar, setActivityCalendar] = useState(currentActivityCalendar);
   useEffect(() => {
     const refreshCalendar = () => setActivityCalendar(currentActivityCalendar());
@@ -670,17 +707,41 @@ export function OverviewPage() {
       <section className="panel activity-panel">
         <div className="panel-head">
           <h3>Activity</h3>
-          <p>
-            {activityQuery.data && !activityQuery.error ? `${activityTotal} match${activityTotal === 1 ? "" : "es"} · ` : ""}
-            last {ACTIVITY_DAYS} days
-          </p>
+          <div className="activity-head-meta">
+            <p>
+              {activityQuery.data && !activityQuery.error ? `${activityTotal} match${activityTotal === 1 ? "" : "es"} · ` : ""}
+              last {ACTIVITY_DAYS} days
+            </p>
+            <div className="tabs tabs--sm" role="group" aria-label="Color activity by">
+              <button
+                type="button"
+                className={`tab ${activityColorByWinRate ? "" : "is-active"}`}
+                aria-pressed={!activityColorByWinRate}
+                onClick={() => setActivityColorByWinRate(false)}
+              >
+                Matches
+              </button>
+              <button
+                type="button"
+                className={`tab ${activityColorByWinRate ? "is-active" : ""}`}
+                aria-pressed={activityColorByWinRate}
+                onClick={() => setActivityColorByWinRate(true)}
+              >
+                Win Rate
+              </button>
+            </div>
+          </div>
         </div>
         {activityQuery.isPending ? (
           <StatusMessage>Loading activity…</StatusMessage>
         ) : activityQuery.error ? (
           <StatusMessage tone="error">Unable to load activity: {(activityQuery.error as Error).message}</StatusMessage>
         ) : (
-          <ActivityGraph activity={activity} total={activityTotal} />
+          <ActivityGraph
+            activity={activity}
+            total={activityTotal}
+            colorMode={activityColorByWinRate ? "winRate" : "matches"}
+          />
         )}
         {activityQuery.isSuccess && activityTotal === 0 ? (
           <p className="state activity-empty">

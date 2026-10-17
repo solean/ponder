@@ -4,6 +4,7 @@ import { useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { CardPreviewName } from "../components/CardPreviewName";
+import { CardStatLine, CardStatsSource, useDraftCardStats } from "../components/CardStats";
 import { floatingCardPreviewPosition as floatingPopoverPosition } from "../lib/cardPreviewPosition";
 import { DeckAnalyticsPanel } from "../components/DeckAnalyticsPanel";
 import { ContextualLink, useBreadcrumbLabel } from "../components/Breadcrumbs";
@@ -1211,6 +1212,29 @@ export function DeckDetailPage() {
     data?.eventName,
     ...(data?.matches ?? []).map((match) => match.eventName),
   ]);
+  // Draft events resolve to 17Lands ratings; every other event comes back "unsupported" with no cards.
+  const cardStats = useDraftCardStats(data?.eventName ?? "");
+  const hasCardStats = cardStats.byId.size > 0;
+  const deckCardClassName = (base: string) => (hasCardStats ? `${base} deck-card--rated` : base);
+  // Rated lists label the GIH WR column once, in the card heading row.
+  const renderDeckCardHeading = (heading: string): ReactNode =>
+    hasCardStats ? (
+      <div className="deck-card-head">
+        <h4>{heading}</h4>
+        <span className="deck-card-stat-heading" title="17Lands win rate when the card is in hand">
+          GIH
+        </span>
+      </div>
+    ) : (
+      <h4>{heading}</h4>
+    );
+  // Always rendered when ratings exist so unrated rows (basics) keep the column aligned.
+  const renderCardStat = (cardId: number): ReactNode =>
+    hasCardStats ? (
+      <span className="deck-card-stat">
+        <CardStatLine cardId={cardId} stats={cardStats} compact />
+      </span>
+    ) : null;
   const versions = data?.versions || [];
   const currentVersion = versions[0];
   const requestedVersionNumber = Number(searchParams.get("version"));
@@ -1424,10 +1448,8 @@ export function DeckDetailPage() {
       return null;
     }
     return (
-      <article className="deck-card" key={`main-${category}`}>
-        <h4>
-          {formatSectionLabel(category)} ({sectionTotal(categoryCards)})
-        </h4>
+      <article className={deckCardClassName("deck-card")} key={`main-${category}`}>
+        {renderDeckCardHeading(`${formatSectionLabel(category)} (${sectionTotal(categoryCards)})`)}
         <ul>
           {categoryCards.map((card) => (
             <li key={`main-${category}-${card.cardId}`}>
@@ -1437,6 +1459,7 @@ export function DeckDetailPage() {
                 <ManaCostDisplay manaCost={card.manaCost} />
                 <RarityDot rarity={card.rarity} />
               </span>
+              {renderCardStat(card.cardId)}
             </li>
           ))}
         </ul>
@@ -1464,10 +1487,8 @@ export function DeckDetailPage() {
     return isSideboardMetadataLoading ? (
       <DeckSectionSkeleton rowCount={sideboardSkeletonRows} />
     ) : (
-      <article className="deck-card deck-card-sideboard">
-        <h4>
-          {formatSectionLabel("sideboard")} ({sectionTotal(enrichedSideboardCards)})
-        </h4>
+      <article className={deckCardClassName("deck-card deck-card-sideboard")}>
+        {renderDeckCardHeading(`${formatSectionLabel("sideboard")} (${sectionTotal(enrichedSideboardCards)})`)}
         <ul>
           {enrichedSideboardCards.map((card) => (
             <li key={`sideboard-${card.cardId}`}>
@@ -1477,6 +1498,7 @@ export function DeckDetailPage() {
                 <ManaCostDisplay manaCost={card.manaCost} />
                 <RarityDot rarity={card.rarity} />
               </span>
+              {renderCardStat(card.cardId)}
             </li>
           ))}
         </ul>
@@ -1726,6 +1748,11 @@ export function DeckDetailPage() {
             </>
           ) : null}
         </div>
+        {deckDisplayMode === "list" &&
+        !isCardMetadataLoading &&
+        (cardStats.query.data?.status === "ok" || cardStats.query.isError) ? (
+          <CardStatsSource stats={cardStats} />
+        ) : null}
         {isCardMetadataLoading ? <StatusMessage>Loading deck card details…</StatusMessage> : null}
         </section>
       ) : null}

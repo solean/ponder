@@ -6973,10 +6973,51 @@ button.match-replay-zonechip.is-button {
   font-size: var(--text-base);
 }
 
+/* 17Lands GIH WR rides in a trailing column, right-aligned to the card edge
+   under a single "GIH" heading. Must precede the sideboard li rule, which
+   keeps its subgrid. */
+.deck-card--rated li {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.deck-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.deck-card-stat-heading {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-md);
+  cursor: help;
+}
+
+/* min-width matches one "55.9%" value so unrated rows keep mana aligned. */
+.deck-card-stat {
+  justify-self: end;
+  min-width: 5ch;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.deck-card-stat .card-stat-line {
+  justify-content: flex-end;
+  font-size: inherit;
+}
+
 .deck-card-sideboard ul {
   grid-template-columns: auto fit-content(20rem) auto;
   justify-content: start;
   column-gap: 20px;
+}
+
+/* The stat column takes the leftover width so values sit at the card edge,
+   under the heading, while mana stays next to the name. */
+.deck-card-sideboard.deck-card--rated ul {
+  grid-template-columns: auto fit-content(20rem) auto minmax(5ch, 1fr);
 }
 
 .deck-card-sideboard li {

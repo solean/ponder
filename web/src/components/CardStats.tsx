@@ -63,7 +63,10 @@ function statTooltip(stat: CardStat, mean: number | null): string {
   return lines.join("\n");
 }
 
-/** Compact GIH WR / ATA readout for one card; renders nothing for unrated cards. */
+/**
+ * GIH WR / ATA readout for one card; renders nothing for unrated cards.
+ * `compact` renders the bare GIH WR value for lists that label the column once.
+ */
 export function CardStatLine({
   cardId,
   stats,
@@ -76,17 +79,24 @@ export function CardStatLine({
   const stat = stats.byId.get(cardId);
   if (!stat) return null;
   const tone = gihTone(stat.gihWinRate, stats.mean);
+  const value = (
+    <strong className={`win-rate win-rate--${tone}`}>{stat.gihWinRate == null ? "—" : pct(stat.gihWinRate)}</strong>
+  );
+  if (compact) {
+    return (
+      <span className="card-stat-line" title={statTooltip(stat, stats.mean)}>
+        {value}
+      </span>
+    );
+  }
   return (
     <span className="card-stat-line" title={statTooltip(stat, stats.mean)}>
       <span className="card-stat">
-        <span className="card-stat-label">GIH</span>{" "}
-        <strong className={`win-rate win-rate--${tone}`}>{stat.gihWinRate == null ? "—" : pct(stat.gihWinRate)}</strong>
+        <span className="card-stat-label">GIH</span> {value}
       </span>
-      {compact ? null : (
-        <span className="card-stat">
-          <span className="card-stat-label">ATA</span> {stat.ata == null ? "—" : stat.ata.toFixed(1)}
-        </span>
-      )}
+      <span className="card-stat">
+        <span className="card-stat-label">ATA</span> {stat.ata == null ? "—" : stat.ata.toFixed(1)}
+      </span>
     </span>
   );
 }

@@ -441,7 +441,14 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 			log.Printf("overlay window detached")
 		}
 		updateState := func() {
-			_, isLive, err := store.GetLiveMatchIDActiveSince(ctx, time.Now().Add(-liveMatchActivityWindow))
+			now := time.Now()
+			_, isLive, err := store.GetLiveMatchIDActiveSince(ctx, now.Add(-liveMatchActivityWindow))
+			if err == nil && !isLive {
+				// The overlay also carries 17Lands ratings for the pack on screen.
+				draft, draftErr := store.GetLiveDraft(ctx, now)
+				err = draftErr
+				isLive = draft != nil
+			}
 			if err != nil {
 				if !hadReadError {
 					log.Printf("overlay live-state check failed: %v", err)

@@ -80,3 +80,19 @@ func TestOverlaySettingsRejectInvalidAndUnavailableShortcut(t *testing.T) {
 		t.Fatal("failed registration changed config")
 	}
 }
+
+func TestOverlaySettingsDefaultFieldsMissingFromSavedConfig(t *testing.T) {
+	var saved Config
+	raw := `{"overlay":{"showDeck":false,"showOpponent":true,"panelSize":"large","opacity":0.5,"cardPreviews":true,"hoverDelayMs":100,"shortcut":"Ctrl+Alt+P"}}`
+	if err := json.Unmarshal([]byte(raw), &saved); err != nil {
+		t.Fatal(err)
+	}
+	saved = normalizeConfig(saved, time.Second)
+	got := *saved.Overlay
+	if !got.ShowDraft {
+		t.Fatal("showDraft saved before it existed should default to on")
+	}
+	if got.ShowDeck || got.PanelSize != "large" || got.Shortcut != "Ctrl+Alt+P" {
+		t.Fatalf("saved values lost: %+v", got)
+	}
+}

@@ -1,6 +1,7 @@
 export type OverlaySettings = {
   showDeck: boolean;
   showOpponent: boolean;
+  showDraft: boolean;
   panelSize: "compact" | "default" | "large";
   opacity: number;
   cardPreviews: boolean;
@@ -11,6 +12,7 @@ export type OverlaySettings = {
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showDeck: true,
   showOpponent: true,
+  showDraft: true,
   panelSize: "default",
   opacity: 0.9,
   cardPreviews: true,

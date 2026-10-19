@@ -70,7 +70,7 @@ export function OverlaySettingsPanel() {
     <section className="panel overlay-settings" aria-labelledby="overlay-settings-title">
       <div className="panel-head panel-head--stacked">
         <h3 id="overlay-settings-title">Overlay</h3>
-        <p>Adjust the deck tracker shown during gameplay. Changes save automatically. Apply shortcut changes separately.</p>
+        <p>Adjust the deck tracker shown during gameplay and the pack ratings shown while drafting. Changes save automatically. Apply shortcut changes separately.</p>
       </div>
       {query.isPending ? <StatusMessage>Loading overlay settings…</StatusMessage> : query.isError ? (
         <><StatusMessage tone="error">{(query.error as Error).message}</StatusMessage><button className="control-button" type="button" onClick={() => void query.refetch()}>Try again</button></>
@@ -81,6 +81,7 @@ export function OverlaySettingsPanel() {
               <div>
                 <SettingToggle checked={settings.showDeck} onChange={(value) => change("showDeck", value)}>Show your deck</SettingToggle>
                 <SettingToggle checked={settings.showOpponent} onChange={(value) => change("showOpponent", value)}>Show opponent cards</SettingToggle>
+                <SettingToggle checked={settings.showDraft} onChange={(value) => change("showDraft", value)}>Show 17Lands ratings while drafting</SettingToggle>
               </div>
               <label className="settings-field"><span>Panel size</span><select className="settings-input" value={settings.panelSize} onChange={(event) => change("panelSize", event.target.value as OverlaySettings["panelSize"])}><option value="compact">Compact</option><option value="default">Default</option><option value="large">Large</option></select></label>
               <label className="settings-field"><span>Background opacity · {Math.round(settings.opacity * 100)}%</span><input type="range" min="30" max="100" step="5" value={Math.round(settings.opacity * 100)} onChange={(event) => change("opacity", Number(event.target.value) / 100, false)} onPointerUp={commitSlider} onPointerCancel={commitSlider} onKeyUp={commitSlider} onBlur={commitSlider} /></label>

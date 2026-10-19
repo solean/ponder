@@ -1,6 +1,7 @@
 package appstate
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -9,6 +10,7 @@ import (
 type OverlaySettings struct {
 	ShowDeck     bool    `json:"showDeck"`
 	ShowOpponent bool    `json:"showOpponent"`
+	ShowDraft    bool    `json:"showDraft"`
 	PanelSize    string  `json:"panelSize"`
 	Opacity      float64 `json:"opacity"`
 	CardPreviews bool    `json:"cardPreviews"`
@@ -17,7 +19,28 @@ type OverlaySettings struct {
 }
 
 func DefaultOverlaySettings() OverlaySettings {
-	return OverlaySettings{true, true, "default", 0.9, true, 250, "CmdOrCtrl+Shift+O"}
+	return OverlaySettings{
+		ShowDeck:     true,
+		ShowOpponent: true,
+		ShowDraft:    true,
+		PanelSize:    "default",
+		Opacity:      0.9,
+		CardPreviews: true,
+		HoverDelayMs: 250,
+		Shortcut:     "CmdOrCtrl+Shift+O",
+	}
+}
+
+// UnmarshalJSON fills fields missing from the JSON with their defaults, so a
+// setting added later starts out at its default in configs saved before it.
+func (s *OverlaySettings) UnmarshalJSON(data []byte) error {
+	type plain OverlaySettings
+	settings := plain(DefaultOverlaySettings())
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return err
+	}
+	*s = OverlaySettings(settings)
+	return nil
 }
 
 func ValidateOverlaySettings(settings OverlaySettings) error {

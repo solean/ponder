@@ -4,10 +4,13 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { ManaSymbol } from "../components/ManaSymbol";
 import { CardPreviewName } from "../components/CardPreviewName";
+import { CardStatLine, useDraftCardStats, type DraftCardStats } from "../components/CardStats";
 import { api } from "../lib/api";
+import { pct } from "../lib/format";
 import { DEFAULT_OVERLAY_SETTINGS, overlayPanelWidth, overlayShortcutLabel } from "../lib/overlaySettings";
 import { fetchCardPreview } from "../lib/scryfall";
-import type { LiveMatch } from "../lib/types";
+import { SEVENTEEN_LANDS_FORMAT_LABELS, SEVENTEEN_LANDS_USER_GROUP_LABELS } from "../lib/seventeenLands";
+import type { LiveDraft, LiveMatch } from "../lib/types";
 
 function cardName(card: { cardId: number; cardName?: string }): string {
   return card.cardName?.trim() || `Card ${card.cardId}`;
@@ -263,6 +266,83 @@ function OpponentPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: st
   );
 }
 
+function draftRatingsSource(eventName: string, stats: DraftCardStats): string {
+  const { query } = stats;
+  if (!eventName) return "Event not logged yet · no ratings";
+  if (query.isPending) return "Loading 17Lands ratings…";
+  if (query.isError) return "17Lands ratings unavailable";
+  const data = query.data;
+  if (data.status !== "ok") return "No 17Lands ratings for this event";
+  if (data.cards.length === 0) return `No 17Lands ratings for ${data.expansion} yet`;
+  const format = SEVENTEEN_LANDS_FORMAT_LABELS[data.format as keyof typeof SEVENTEEN_LANDS_FORMAT_LABELS] ?? data.format;
+  const group = data.userGroup ? ` · ${SEVENTEEN_LANDS_USER_GROUP_LABELS[data.userGroup].toLowerCase()}` : "";
+  return `17Lands · ${data.expansion} ${format}${group}${data.stale ? " · cached" : ""}`;
+}
+
+function DraftPackPanel({ draft, hoveredCard, shortcut }: { draft: LiveDraft; hoveredCard: string | null; shortcut: string }) {
+  const stats = useDraftCardStats(draft.eventName);
+  const ordered = useOrderedCards(draft.pack);
+  // Best GIH WR first; unrated cards keep mana-value order at the bottom.
+  const cards = useMemo(() => [...ordered].sort((left, right) => {
+    const leftRate = stats.byId.get(left.cardId)?.gihWinRate ?? null;
+    const rightRate = stats.byId.get(right.cardId)?.gihWinRate ?? null;
+    if (leftRate === rightRate) return 0;
+    if (leftRate == null) return 1;
+    if (rightRate == null) return -1;
+    return rightRate - leftRate;
+  }), [ordered, stats.byId]);
+
+  return (
+    <aside className="overlay-panel overlay-panel-draft" aria-labelledby="overlay-draft-title">
+      <header className="overlay-panel-head">
+        <div className="overlay-panel-heading">
+          <p className="overlay-eyebrow">Draft pick</p>
+          <h1 id="overlay-draft-title">Pack {draft.packNumber} · Pick {draft.pickNumber}</h1>
+          <p className="overlay-panel-meta">{draftRatingsSource(draft.eventName, stats)}</p>
+        </div>
+        <div className="overlay-total" aria-label={draft.waiting ? "Waiting for the next pack" : `${draft.pack.length} cards in pack`}>
+          <strong>{draft.waiting ? "—" : draft.pack.length}</strong>
+          <span>in pack</span>
+        </div>
+      </header>
+
+      <div className="overlay-list-head" aria-hidden="true">
+        <span>Card</span>
+        <span>GIH WR</span>
+      </div>
+      {draft.waiting ? (
+        <p className="overlay-empty">Pick made. Waiting for the next pack.</p>
+      ) : (
+        <ul className="overlay-card-list">
+          {cards.map((card, index) => {
+            // A pack can hold two copies of a card, so rows key on position.
+            const rowId = `draft:${index}:${card.cardId}`;
+            return (
+              <li key={rowId} data-overlay-card={rowId}>
+                <span className="overlay-card-mark" aria-hidden="true" />
+                <div className="overlay-card-name">
+                  <CardPreviewName cardId={card.cardId} cardName={card.cardName} label={<span>{cardName(card)}</span>} passiveHover={hoveredCard === rowId} />
+                </div>
+                <OverlayManaCost cost={card.manaCost} />
+                <span className="overlay-card-count">
+                  {stats.byId.has(card.cardId) ? <CardStatLine cardId={card.cardId} stats={stats} compact /> : "—"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <footer className="overlay-panel-foot">
+        <span className={`overlay-state-dot ${stats.mean == null ? "" : "is-ready"}`} aria-hidden="true" />
+        {stats.mean == null ? "Format average unavailable" : `Format average GIH WR ${pct(stats.mean)}`}
+      </footer>
+      <div className="overlay-panel-foot">
+        {overlayShortcutLabel(shortcut)} · hide/show overlay
+      </div>
+    </aside>
+  );
+}
+
 export function OverlayPage() {
   const hudRef = useRef<HTMLElement | null>(null);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
@@ -355,17 +435,37 @@ export function OverlayPage() {
     refetchIntervalInBackground: true,
   });
 
+  // Packs change every few seconds while drafting, so poll faster then.
+  const draftQuery = useQuery({
+    queryKey: ["live-draft"],
+    queryFn: api.liveDraft,
+    refetchInterval: (query) => (query.state.data?.draft ? 1000 : 5000),
+    refetchIntervalInBackground: true,
+  });
+
   // The native window is ordered out whenever Arena is not frontmost, which
   // can throttle or suspend this webview's timers; refetch on the way back in.
   // The listener needs a stable identity to be removable.
   const refetchLive = liveQuery.refetch;
+  const refetchDraft = draftQuery.refetch;
   const refetchSettings = settingsQuery.refetch;
   useEffect(() => {
-    const onShown = () => { void refetchLive(); void refetchSettings(); };
+    const onShown = () => { void refetchLive(); void refetchDraft(); void refetchSettings(); };
     window.addEventListener("ponder:overlay-shown", onShown);
     return () => window.removeEventListener("ponder:overlay-shown", onShown);
-  }, [refetchLive, refetchSettings]);
+  }, [refetchLive, refetchDraft, refetchSettings]);
   const live = liveQuery.data?.live ?? null;
+  // A live draft is never older than the newest match start, so it wins over
+  // a match row left in progress by quitting Arena mid-game.
+  const draft = draftQuery.data?.draft ?? null;
+
+  if (draft) {
+    return (
+      <main className="overlay-hud" aria-label="Ponder draft overlay" ref={hudRef}>
+        {settings.showDraft && <DraftPackPanel key={draft.sessionId} draft={draft} hoveredCard={activePreview} shortcut={settings.shortcut} />}
+      </main>
+    );
+  }
 
   if (liveQuery.isError) {
     return (

@@ -256,3 +256,65 @@ func TestLiveEndpointUsesSubmittedDeckAndLatestKnownZones(t *testing.T) {
 		t.Fatal("linked-deck card leaked into submitted game deck")
 	}
 }
+
+func TestLiveDraftEndpointNamesTheShownPack(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+	store := db.NewStore(database)
+	server := NewServer(store, "", nil).Handler()
+
+	get := func() *model.LiveDraft {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		server.ServeHTTP(rec, localRequest(http.MethodGet, "/api/live/draft", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d; body: %s", rec.Code, rec.Body.String())
+		}
+		var response struct {
+			Draft *model.LiveDraft `json:"draft"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		return response.Draft
+	}
+
+	if draft := get(); draft != nil {
+		t.Fatalf("draft before any picks = %+v, want nil", draft)
+	}
+
+	if err := store.UpsertCardNames(ctx, map[int64]string{101: "Alpha", 102: "Beta"}); err != nil {
+		t.Fatalf("upsert card names: %v", err)
+	}
+	tx, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+	sessionID, err := store.EnsureDraftSession(ctx, tx, "QuickDraft_TST_20260901", nil, true, "")
+	if err != nil {
+		t.Fatalf("ensure draft session: %v", err)
+	}
+	if err := store.InsertDraftPick(ctx, tx, sessionID, 0, 2, nil, []int64{101, 102}, ""); err != nil {
+		t.Fatalf("insert draft pick: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	draft := get()
+	if draft == nil || draft.EventName != "QuickDraft_TST_20260901" || draft.PackNumber != 1 || draft.PickNumber != 3 {
+		t.Fatalf("draft = %+v", draft)
+	}
+	if len(draft.Pack) != 2 || draft.Pack[0].CardName != "Alpha" || draft.Pack[1].CardName != "Beta" {
+		t.Fatalf("pack = %+v, want named cards", draft.Pack)
+	}
+}

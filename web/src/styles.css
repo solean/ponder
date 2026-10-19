@@ -12116,6 +12116,37 @@ html.overlay-document body::before {
   text-align: right;
 }
 
+.overlay-panel-draft {
+  --overlay-accent: #b9a3f0;
+  --overlay-accent-soft: rgba(185, 163, 240, 0.14);
+}
+
+/* The overlay is always dark, whatever the app theme. */
+.overlay-panel-draft .win-rate--positive {
+  --win-rate-color: #69f0ae;
+}
+
+.overlay-panel-draft .win-rate--negative {
+  --win-rate-color: #ff8a80;
+}
+
+.overlay-panel-draft .win-rate--neutral {
+  --win-rate-color: #d3b49e;
+}
+
+.overlay-panel-draft .overlay-card-count .win-rate {
+  color: var(--win-rate-color, #fff);
+}
+
+.overlay-panel-draft .card-stat-line {
+  font-size: var(--overlay-card-font-size, 0.75rem);
+  cursor: default;
+}
+
+.overlay-panel-draft .overlay-card-list li {
+  grid-template-columns: 0.2rem minmax(0, 1fr) auto 2.6rem;
+}
+
 .overlay-card-list {
   min-height: 0;
   margin: 0;

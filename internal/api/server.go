@@ -127,6 +127,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/card-stats", s.handleCardStats)
 	mux.HandleFunc("/api/ai/status", s.handleAIStatus)
 	mux.HandleFunc("/api/live", s.handleLive)
+	mux.HandleFunc("/api/live/draft", s.handleLiveDraft)
 	if s.appState != nil {
 		mux.HandleFunc("/api/overlay/settings", s.handleOverlaySettings)
 		mux.HandleFunc("/api/runtime/status", s.handleRuntimeStatus)

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/solean/ponder/internal/model"
 )
@@ -140,4 +141,33 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 		TurnNumber:            model.ArenaTurnToFullTurn(arenaTurn),
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"live": live})
+}
+
+// handleLiveDraft returns the pack Arena is showing in a draft in progress.
+// Responds {"draft": null} when no draft is being played.
+func (s *Server) handleLiveDraft(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	ctx := r.Context()
+	draft, err := s.store.GetLiveDraft(ctx, time.Now())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if draft == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"draft": nil})
+		return
+	}
+
+	cardIDs := make([]int64, 0, len(draft.Pack))
+	for _, card := range draft.Pack {
+		cardIDs = append(cardIDs, card.CardID)
+	}
+	names := s.resolveCardNames(ctx, cardIDs)
+	for i := range draft.Pack {
+		draft.Pack[i].CardName = names[draft.Pack[i].CardID]
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"draft": draft})
 }

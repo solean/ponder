@@ -3,14 +3,8 @@ import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
 import { formatRelativeTime, pct } from "../lib/format";
+import { SEVENTEEN_LANDS_FORMAT_LABELS, SEVENTEEN_LANDS_USER_GROUP_LABELS } from "../lib/seventeenLands";
 import type { CardStat, CardStatsResponse } from "../lib/types";
-
-const FORMAT_LABELS: Record<string, string> = {
-  PremierDraft: "Premier Draft",
-  TradDraft: "Traditional Draft",
-  QuickDraft: "Quick Draft",
-  PickTwoDraft: "Pick Two Draft",
-};
 
 // GIH WR within two points of the format average is noise-level for most cards.
 const GIH_TONE_THRESHOLD = 0.02;
@@ -126,14 +120,15 @@ export function CardStatsSource({ stats }: { stats: DraftCardStats }) {
   if (data.cards.length === 0) {
     return <p className="card-stats-source">17Lands has no card ratings for {data.expansion} yet.</p>;
   }
-  const format = FORMAT_LABELS[data.format ?? ""] ?? data.format;
+  const format = SEVENTEEN_LANDS_FORMAT_LABELS[data.format as keyof typeof SEVENTEEN_LANDS_FORMAT_LABELS] ?? data.format;
   return (
     <p className="card-stats-source">
       Card ratings from{" "}
       <a className="text-link" href={data.sourceUrl} target="_blank" rel="noreferrer" onClick={openExternal}>
         17Lands
       </a>{" "}
-      · {data.expansion} {format} · updated {formatRelativeTime(data.fetchedAt ?? "")}
+      · {data.expansion} {format}
+      {data.userGroup ? ` · ${SEVENTEEN_LANDS_USER_GROUP_LABELS[data.userGroup].toLowerCase()}` : ""} · updated {formatRelativeTime(data.fetchedAt ?? "")}
       {data.stale ? " (refresh failed; showing cached ratings)" : ""}
       {data.meanGihWinRate == null ? "" : ` · format GIH WR ${pct(data.meanGihWinRate)}`}
     </p>

@@ -174,9 +174,10 @@ CREATE TABLE IF NOT EXISTS set_catalog (
 CREATE TABLE IF NOT EXISTS card_stat_snapshots (
   expansion TEXT NOT NULL,
   event_type TEXT NOT NULL,
+  user_group TEXT NOT NULL DEFAULT '',
   payload_json TEXT NOT NULL,
   fetched_at TEXT NOT NULL,
-  PRIMARY KEY(expansion, event_type)
+  PRIMARY KEY(expansion, event_type, user_group)
 );
 
 CREATE TABLE IF NOT EXISTS matches (

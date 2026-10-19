@@ -133,6 +133,10 @@ func Init(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 
+	if err := migrateCardStatSnapshots(ctx, conn); err != nil {
+		return err
+	}
+
 	if err := prepareGameShapeBackfill(ctx, conn); err != nil {
 		return err
 	}

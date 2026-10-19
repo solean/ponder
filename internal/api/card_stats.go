@@ -73,13 +73,28 @@ func eventDateToken(token string) bool {
 	return true
 }
 
-func seventeenLandsPageURL(expansion, eventType string) string {
+func seventeenLandsPageURL(expansion, eventType, userGroup string) string {
 	query := url.Values{"expansion": {expansion}, "format": {eventType}}
+	if userGroup != "" {
+		query.Set("user_group", userGroup)
+	}
 	return seventeenLandsCardPageURL + "?" + query.Encode()
 }
 
+// cardStatsSettings returns the 17Lands player group and the event type
+// override chosen in Settings; both are empty by default.
+func (s *Server) cardStatsSettings() (userGroup, format string) {
+	if s.appState == nil {
+		return "", ""
+	}
+	config := s.appState.Config()
+	return config.SeventeenLandsUserGroup, config.SeventeenLandsFormat
+}
+
 // handleCardStats returns 17Lands card ratings for the draft format of
-// ?event=<Arena event name>, keyed by Arena card ID.
+// ?event=<Arena event name>, keyed by Arena card ID. The configured format
+// replaces the event's own for any rated draft, and the configured player
+// group narrows the ratings where 17Lands splits them.
 func (s *Server) handleCardStats(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/api/card-stats" {
 		writeError(w, http.StatusNotFound, "not found")
@@ -103,10 +118,19 @@ func (s *Server) handleCardStats(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	userGroup, format := s.cardStatsSettings()
+	if format != "" {
+		eventType = format
+	}
+	// 17Lands has no player groups for Quick Draft (every group comes back
+	// with zero games), so its ratings always cover all players.
+	if eventType == "QuickDraft" {
+		userGroup = ""
+	}
 
-	snapshot, stale, err := s.resolveCardStats(r.Context(), expansion, eventType)
+	snapshot, stale, err := s.resolveCardStats(r.Context(), expansion, eventType, userGroup)
 	if err != nil {
-		log.Printf("17Lands card stats %s %s: %v", expansion, eventType, err)
+		log.Printf("17Lands card stats %s %s %q: %v", expansion, eventType, userGroup, err)
 		writeError(w, http.StatusBadGateway, "17Lands card ratings are unavailable right now")
 		return
 	}
@@ -119,9 +143,10 @@ func (s *Server) handleCardStats(w http.ResponseWriter, r *http.Request) {
 		Status:         model.CardStatsStatusOK,
 		Expansion:      expansion,
 		Format:         eventType,
+		UserGroup:      userGroup,
 		FetchedAt:      snapshot.FetchedAt.UTC().Format(time.RFC3339),
 		Stale:          stale,
-		SourceURL:      seventeenLandsPageURL(expansion, eventType),
+		SourceURL:      seventeenLandsPageURL(expansion, eventType, userGroup),
 		MeanGIHWinRate: meanGIHWinRate(cards),
 		Cards:          cards,
 	})
@@ -136,7 +161,7 @@ type cardStatsEntry struct {
 // resolveCardStats serves the cached snapshot while it is fresh and refreshes
 // it otherwise. A failed refresh falls back to the cached copy (stale=true);
 // it is an error only when nothing is cached.
-func (s *Server) resolveCardStats(ctx context.Context, expansion, eventType string) (*db.CardStatSnapshot, bool, error) {
+func (s *Server) resolveCardStats(ctx context.Context, expansion, eventType, userGroup string) (*db.CardStatSnapshot, bool, error) {
 	// One lock covers lookup and refresh, so concurrent page loads share a
 	// single 17Lands request instead of each fetching.
 	s.cardStatsMu.Lock()
@@ -144,10 +169,10 @@ func (s *Server) resolveCardStats(ctx context.Context, expansion, eventType stri
 	if s.cardStats == nil {
 		s.cardStats = make(map[string]*cardStatsEntry)
 	}
-	key := expansion + "/" + eventType
+	key := expansion + "/" + eventType + "/" + userGroup
 	entry := s.cardStats[key]
 	if entry == nil {
-		snapshot, err := s.store.LookupCardStatSnapshot(ctx, expansion, eventType)
+		snapshot, err := s.store.LookupCardStatSnapshot(ctx, expansion, eventType, userGroup)
 		if err != nil {
 			return nil, false, err
 		}
@@ -164,11 +189,11 @@ func (s *Server) resolveCardStats(ctx context.Context, expansion, eventType stri
 		return nil, false, fmt.Errorf("17Lands request backing off until %s", entry.retryAt.Format(time.RFC3339))
 	}
 
-	cards, err := s.fetchSeventeenLandsCardStats(ctx, expansion, eventType)
+	cards, err := s.fetchSeventeenLandsCardStats(ctx, expansion, eventType, userGroup)
 	if err != nil {
 		entry.retryAt = time.Now().Add(cardStatsRetryDelay)
 		if entry.snapshot != nil {
-			log.Printf("refresh 17Lands card stats %s %s, serving cached copy: %v", expansion, eventType, err)
+			log.Printf("refresh 17Lands card stats %s %s %q, serving cached copy: %v", expansion, eventType, userGroup, err)
 			return entry.snapshot, true, nil
 		}
 		return nil, false, err
@@ -180,18 +205,21 @@ func (s *Server) resolveCardStats(ctx context.Context, expansion, eventType stri
 	go func() {
 		writeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		if err := s.store.UpsertCardStatSnapshot(writeCtx, expansion, eventType, fetched.Cards, fetched.FetchedAt); err != nil {
-			log.Printf("cache 17Lands card stats %s %s: %v", expansion, eventType, err)
+		if err := s.store.UpsertCardStatSnapshot(writeCtx, expansion, eventType, userGroup, fetched.Cards, fetched.FetchedAt); err != nil {
+			log.Printf("cache 17Lands card stats %s %s %q: %v", expansion, eventType, userGroup, err)
 		}
 	}()
 	return fetched, false, nil
 }
 
-func (s *Server) fetchSeventeenLandsCardStats(ctx context.Context, expansion, eventType string) ([]model.CardStat, error) {
+func (s *Server) fetchSeventeenLandsCardStats(ctx context.Context, expansion, eventType, userGroup string) ([]model.CardStat, error) {
 	query := url.Values{
 		"expansion":   {expansion},
 		"event_type":  {eventType},
 		"time_period": {"ALL_TIME"},
+	}
+	if userGroup != "" {
+		query.Set("user_group", userGroup)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, seventeenLandsCardDataURL+"?"+query.Encode(), nil)
 	if err != nil {

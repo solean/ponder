@@ -29,9 +29,12 @@ card performance table scrolls under a sticky header and filters by card name.
 Each draft report annotates the Pick Log, pack dialog, and Pack Replay with
 17Lands card ratings (GIH WR toned against the format average, ATA; hover for
 GP WR, IWD, ALSA, and sample sizes) for Premier, Traditional, Quick, and Pick
-Two drafts. Ratings come from the 17Lands card data endpoint, fetched by the
-backend at most once per set and format per day and cached in
-`card_stat_snapshots`; a failed refresh serves the cached copy and waits 15
+Two drafts. **Settings → Draft Ratings** narrows them to 17Lands' top, middle,
+or bottom player group and can pin one event type for every draft instead of
+matching each draft's own; 17Lands has no player groups for Quick Draft, so its
+ratings always cover all players. Ratings come from the 17Lands card data
+endpoint, fetched by the backend at most once per set, format, and player group
+per day and cached in `card_stat_snapshots`; a failed refresh serves the cached copy and waits 15
 minutes before retrying. 17Lands states this data is for use on 17lands.com;
 this is a personal-use integration, and a public release would need their
 permission or a switch to the CC BY public datasets

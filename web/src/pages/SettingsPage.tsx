@@ -8,6 +8,7 @@ import { api } from "../lib/api";
 import { RuntimeConfigSaveQueue } from "../lib/runtimeConfigSaveQueue";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { APP_NAME } from "../lib/branding";
+import { SEVENTEEN_LANDS_FORMAT_LABELS, SEVENTEEN_LANDS_USER_GROUP_LABELS } from "../lib/seventeenLands";
 import { formatBytes, formatDateTime, formatRelativeTime, shortenHomePath } from "../lib/format";
 import { useThemeControls, type ColorScheme, type ModePreference } from "../lib/theme";
 import type {
@@ -17,6 +18,8 @@ import type {
   RuntimeConfig,
   RuntimeOperation,
   RuntimeStatus,
+  SeventeenLandsFormat,
+  SeventeenLandsUserGroup,
   UpdateCheck,
 } from "../lib/types";
 
@@ -333,6 +336,8 @@ function syncForm(status: RuntimeStatus): RuntimeConfig {
     autoCheckUpdates: status.config.autoCheckUpdates ?? false,
     aiProvider: status.config.aiProvider ?? "claude",
     aiModel: status.config.aiModel ?? "opus",
+    seventeenLandsUserGroup: status.config.seventeenLandsUserGroup ?? "",
+    seventeenLandsFormat: status.config.seventeenLandsFormat ?? "",
   };
 }
 
@@ -358,6 +363,8 @@ export function SettingsPage() {
     autoCheckUpdates: false,
     aiProvider: "claude",
     aiModel: "opus",
+    seventeenLandsUserGroup: "",
+    seventeenLandsFormat: "",
   });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -395,6 +402,9 @@ export function SettingsPage() {
         const acknowledged = syncForm(status);
         queryClient.setQueryData(runtimeStatusKey, status);
         if (patch.autoCheckUpdates && !status.updateCheck) updateCheckMutation.mutate();
+        if ("seventeenLandsUserGroup" in patch || "seventeenLandsFormat" in patch) {
+          void queryClient.invalidateQueries({ queryKey: ["card-stats"] });
+        }
         setForm({ ...acknowledged, ...saveQueue.pending,
           ...(logDraft.current !== null ? { logPath: logDraft.current } : {}) });
         void queryClient.invalidateQueries({ queryKey: aiStatusKey });
@@ -958,6 +968,57 @@ export function SettingsPage() {
             The selected provider must be installed and signed in before AI generation is enabled.
           </p>
         ) : null}
+      </section>
+
+      <section className="panel">
+        <div className="panel-head panel-head--stacked">
+          <h3>Draft Ratings</h3>
+          <p>Choose which 17Lands card ratings appear in draft pick logs, pack replays, and deck lists.</p>
+        </div>
+
+        <div className="settings-groups">
+          <div className="settings-group">
+            <label className="settings-field">
+              <span>Player group</span>
+              <select
+                className="settings-input"
+                value={form.seventeenLandsUserGroup}
+                onChange={(event) => {
+                  savePatch({ seventeenLandsUserGroup: event.target.value as SeventeenLandsUserGroup });
+                }}
+              >
+                {Object.entries(SEVENTEEN_LANDS_USER_GROUP_LABELS).map(([group, label]) => (
+                  <option key={group} value={group}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <small>
+                Narrower groups have smaller samples, so more cards show too few games for a GIH WR. 17Lands
+                doesn't split Quick Draft by group, so Quick Draft ratings always cover all players.
+              </small>
+            </label>
+
+            <label className="settings-field">
+              <span>Event type</span>
+              <select
+                className="settings-input"
+                value={form.seventeenLandsFormat}
+                onChange={(event) => {
+                  savePatch({ seventeenLandsFormat: event.target.value as SeventeenLandsFormat });
+                }}
+              >
+                <option value="">Match each draft</option>
+                {Object.entries(SEVENTEEN_LANDS_FORMAT_LABELS).map(([format, label]) => (
+                  <option key={format} value={format}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <small>Applies to Premier, Traditional, Quick, and Pick Two drafts; other events have no ratings.</small>
+            </label>
+          </div>
+        </div>
       </section>
 
       <section className="panel">

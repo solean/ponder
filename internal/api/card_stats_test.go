@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/solean/ponder/internal/appstate"
 	"github.com/solean/ponder/internal/db"
 	"github.com/solean/ponder/internal/model"
 )
@@ -115,7 +116,7 @@ func TestCardStatsCachesAndFallsBack(t *testing.T) {
 	// the old copy is served as stale and 17Lands is not retried immediately.
 	upstreamStatus = http.StatusServiceUnavailable
 	expired := time.Now().Add(-cardStatsTTL - time.Minute)
-	if err := store.UpsertCardStatSnapshot(ctx, "FRA", "TradDraft", fraCards, expired); err != nil {
+	if err := store.UpsertCardStatSnapshot(ctx, "FRA", "TradDraft", "", fraCards, expired); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {
@@ -128,5 +129,94 @@ func TestCardStatsCachesAndFallsBack(t *testing.T) {
 	// Nothing cached and 17Lands down: an error, not an empty "ok".
 	if code, _ = get("QuickDraft_HOB_20260820"); code != http.StatusBadGateway || requests != 3 {
 		t.Fatalf("uncached failure: %d after %d requests", code, requests)
+	}
+}
+
+func TestCardStatsFollowsSettings(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "card-stats.db")
+	database, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	if err := db.Init(ctx, database); err != nil {
+		t.Fatal(err)
+	}
+	store := db.NewStore(database)
+	service, err := appstate.NewService(appstate.Options{Store: store, DBPath: dbPath, SupportDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := NewServer(store, "", service)
+
+	var requested []string
+	server.httpClient = &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		requested = append(requested, req.URL.RawQuery)
+		body := `{"data":[{"mtga_id":101,"ever_drawn_game_count":100,"ever_drawn_win_rate":0.60}]}`
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: req}, nil
+	})}
+	handler := server.Handler()
+
+	get := func(event string) model.CardStatsResponse {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, localRequest(http.MethodGet, "/api/card-stats?event="+event, nil))
+		var body model.CardStatsResponse
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", event, rec.Code, rec.Body.String())
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode: %v: %s", err, rec.Body.String())
+		}
+		return body
+	}
+
+	config := service.Config()
+	config.SeventeenLandsUserGroup = "top"
+	config.SeventeenLandsFormat = "PremierDraft"
+	if _, err := service.UpdateConfig(config); err != nil {
+		t.Fatal(err)
+	}
+
+	body := get("QuickDraft_FRA_20261001")
+	if body.Format != "PremierDraft" || body.UserGroup != "top" || len(body.Cards) != 1 {
+		t.Fatalf("configured ratings: %+v", body)
+	}
+	if len(requested) != 1 || !strings.Contains(requested[0], "event_type=PremierDraft") || !strings.Contains(requested[0], "user_group=top") {
+		t.Fatalf("requested %v", requested)
+	}
+	if !strings.Contains(body.SourceURL, "format=PremierDraft") || !strings.Contains(body.SourceURL, "user_group=top") {
+		t.Fatalf("source URL %s", body.SourceURL)
+	}
+	// The format override never extends ratings to events 17Lands doesn't rate.
+	if body := get("PremierSealed_FRA_20260929"); body.Status != model.CardStatsStatusUnsupported || len(requested) != 1 {
+		t.Fatalf("sealed with format override: %+v after %v", body, requested)
+	}
+
+	// Quick Draft has no player groups on 17Lands; fall back to all players
+	// rather than serving a set of zero-game ratings.
+	config.SeventeenLandsFormat = ""
+	if _, err := service.UpdateConfig(config); err != nil {
+		t.Fatal(err)
+	}
+	body = get("QuickDraft_FRA_20261001")
+	if body.Format != "QuickDraft" || body.UserGroup != "" || len(requested) != 2 || strings.Contains(requested[1], "user_group") {
+		t.Fatalf("quick draft with top players: %+v after %v", body, requested)
+	}
+
+	// Each player group is its own snapshot: switching back to all players
+	// fetches once more instead of serving the top-player ratings.
+	config.SeventeenLandsUserGroup = ""
+	if _, err := service.UpdateConfig(config); err != nil {
+		t.Fatal(err)
+	}
+	body = get("PremierDraft_FRA_20260929")
+	if body.Format != "PremierDraft" || body.UserGroup != "" || strings.Contains(body.SourceURL, "user_group") {
+		t.Fatalf("default ratings: %+v", body)
+	}
+	if len(requested) != 3 || strings.Contains(requested[2], "user_group") {
+		t.Fatalf("requested %v", requested)
 	}
 }

@@ -34,10 +34,17 @@ export type CardStat = {
   iwd: number | null;
 };
 
+/** 17Lands player group; "" is all players. */
+export type SeventeenLandsUserGroup = "" | "top" | "middle" | "bottom";
+
+/** 17Lands draft event type; "" in settings follows each draft's own format. */
+export type SeventeenLandsFormat = "" | "PremierDraft" | "TradDraft" | "QuickDraft" | "PickTwoDraft";
+
 export type CardStatsResponse = {
   status: "ok" | "unsupported";
   expansion?: string;
   format?: string;
+  userGroup?: SeventeenLandsUserGroup;
   fetchedAt?: string;
   stale?: boolean;
   sourceUrl?: string;
@@ -804,6 +811,8 @@ export type RuntimeConfig = {
   autoCheckUpdates: boolean;
   aiProvider: AiProvider;
   aiModel: string;
+  seventeenLandsUserGroup: SeventeenLandsUserGroup;
+  seventeenLandsFormat: SeventeenLandsFormat;
 };
 
 export type RuntimeOperation = {

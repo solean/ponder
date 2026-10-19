@@ -34,6 +34,20 @@ func TestNormalizeConfigPreservesAISelection(t *testing.T) {
 	}
 }
 
+func TestNormalizeConfigDropsUnknownSeventeenLandsSettings(t *testing.T) {
+	kept := normalizeConfig(Config{SeventeenLandsUserGroup: "top", SeventeenLandsFormat: "QuickDraft"}, 2*time.Second)
+	if kept.SeventeenLandsUserGroup != "top" || kept.SeventeenLandsFormat != "QuickDraft" {
+		t.Fatalf("17Lands settings = %q/%q", kept.SeventeenLandsUserGroup, kept.SeventeenLandsFormat)
+	}
+
+	// 17Lands answers an unknown group with no ratings at all, so fall back
+	// to all players rather than blanking every draft.
+	dropped := normalizeConfig(Config{SeventeenLandsUserGroup: "Top", SeventeenLandsFormat: "Sealed"}, 2*time.Second)
+	if dropped.SeventeenLandsUserGroup != "" || dropped.SeventeenLandsFormat != "" {
+		t.Fatalf("unknown 17Lands settings kept: %q/%q", dropped.SeventeenLandsUserGroup, dropped.SeventeenLandsFormat)
+	}
+}
+
 func TestNewServiceAutoStartsLiveByDefault(t *testing.T) {
 	t.Parallel()
 

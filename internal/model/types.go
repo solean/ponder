@@ -664,6 +664,9 @@ type CardStatsResponse struct {
 	Status    string `json:"status"`
 	Expansion string `json:"expansion,omitempty"`
 	Format    string `json:"format,omitempty"`
+	// 17Lands player group the ratings cover ("top", "middle", "bottom");
+	// empty for all players.
+	UserGroup string `json:"userGroup,omitempty"`
 	FetchedAt string `json:"fetchedAt,omitempty"`
 	// True when a refresh failed and an older cached snapshot is served.
 	Stale     bool   `json:"stale,omitempty"`

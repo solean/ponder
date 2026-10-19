@@ -49,6 +49,21 @@ type Config struct {
 	AutoCheckUpdates    bool             `json:"autoCheckUpdates"`
 	AIProvider          string           `json:"aiProvider"`
 	AIModel             string           `json:"aiModel"`
+	// SeventeenLandsUserGroup limits draft card ratings to one 17Lands player
+	// group ("top", "middle", "bottom"); empty rates across all players.
+	SeventeenLandsUserGroup string `json:"seventeenLandsUserGroup"`
+	// SeventeenLandsFormat pins draft card ratings to one 17Lands event type
+	// (e.g. "PremierDraft"); empty uses the format of the draft being viewed.
+	SeventeenLandsFormat string `json:"seventeenLandsFormat"`
+}
+
+var seventeenLandsUserGroups = map[string]bool{"top": true, "middle": true, "bottom": true}
+
+var seventeenLandsFormats = map[string]bool{
+	"PremierDraft": true,
+	"TradDraft":    true,
+	"QuickDraft":   true,
+	"PickTwoDraft": true,
 }
 
 // UpdateCheck is the outcome of a GitHub release check. CheckedAt lets the UI
@@ -570,6 +585,12 @@ func normalizeConfig(cfg Config, poll time.Duration) Config {
 	}
 	cfg.AIProvider = ai.NormalizeProvider(cfg.AIProvider)
 	cfg.AIModel = ai.NormalizeModel(cfg.AIProvider, cfg.AIModel)
+	if !seventeenLandsUserGroups[cfg.SeventeenLandsUserGroup] {
+		cfg.SeventeenLandsUserGroup = ""
+	}
+	if !seventeenLandsFormats[cfg.SeventeenLandsFormat] {
+		cfg.SeventeenLandsFormat = ""
+	}
 	return cfg
 }
 func trackingConfigChanged(a, b Config) bool {

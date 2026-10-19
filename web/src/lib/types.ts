@@ -125,6 +125,7 @@ export type MatchReplayChange = {
   toZoneId?: number;
   toZoneType?: string;
   toZonePosition?: number;
+  classLevel?: number;
   isToken: boolean;
 };
 
@@ -147,6 +148,7 @@ export type MatchReplayFrameObject = {
   blockAttackerIdsJson?: string;
   counterSummaryJson?: string;
   detailsJson?: string;
+  classLevel?: number;
   attackState?: string;
   blockState?: string;
   isToken: boolean;

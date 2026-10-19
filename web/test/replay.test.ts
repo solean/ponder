@@ -30,6 +30,8 @@ import {
   replayLifeDelta,
   replayLifeSeriesDomain,
   replayObjectLoyalty,
+  replayObjectStatePills,
+  replayObjectStatusText,
   replayTurnBoundaryCount,
   replayTurnLabel,
   replayTurnValue,
@@ -52,6 +54,7 @@ function change(values: Partial<MatchReplayChange> = {}): MatchReplayChange {
     action: values.action ?? "move_public",
     fromZoneType: values.fromZoneType,
     toZoneType: values.toZoneType,
+    classLevel: values.classLevel,
     isToken: values.isToken ?? false,
   };
 }
@@ -77,6 +80,7 @@ function object(
     blockAttackerIdsJson: values.blockAttackerIdsJson,
     counterSummaryJson: values.counterSummaryJson,
     detailsJson: values.detailsJson,
+    classLevel: values.classLevel,
     isToken: values.isToken ?? false,
     isTapped: values.isTapped ?? false,
     hasSummoningSickness: values.hasSummoningSickness ?? false,
@@ -1921,5 +1925,39 @@ describe("sideboard change totals", () => {
         { quantity: -3 },
       ]),
     ).toBe(3);
+  });
+});
+
+describe("class enchantments", () => {
+  test("shows the class level as a state pill and in the status text", () => {
+    const talent = object({ cardName: "Stormchaser's Talent", classLevel: 2 });
+    expect(replayObjectStatePills(talent)).toContainEqual({
+      label: "Level 2",
+      count: 1,
+    });
+    expect(replayObjectStatusText(talent, null)).toContain("Level 2");
+  });
+
+  test("omits the level for non-Class permanents", () => {
+    expect(
+      replayObjectStatePills(object()).some((pill) =>
+        pill.label.startsWith("Level"),
+      ),
+    ).toBe(false);
+  });
+
+  test("narrates a level-up", () => {
+    const levelUp = change({
+      action: "class_level_change",
+      playerSide: "opponent",
+      cardName: "Stormchaser's Talent",
+      classLevel: 2,
+    });
+    expect(describeReplayChange(levelUp)).toBe(
+      "Opponent leveled up Stormchaser's Talent to level 2.",
+    );
+    expect(buildReplayBeat(frame({ id: 2, changes: [levelUp] }), null)).toEqual({
+      text: "Opponent levels up Stormchaser's Talent to level 2",
+    });
   });
 });

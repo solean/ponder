@@ -378,6 +378,7 @@ export function replayChangePriority(action: string): number {
     case "tap":
     case "untap":
       return 70;
+    case "class_level_change":
     case "counters_change":
       return 65;
     case "stat_change":
@@ -1030,6 +1031,9 @@ export function replayObjectStatePills(
   ) {
     pills.push({ label: "Stolen", count: 1 });
   }
+  if (typeof object.classLevel === "number") {
+    pills.push({ label: `Level ${object.classLevel}`, count: 1 });
+  }
 
   return pills;
 }
@@ -1057,6 +1061,9 @@ export function replayObjectStatusText(
   }
   if (object.hasSummoningSickness) {
     parts.push("Summoning sick");
+  }
+  if (typeof object.classLevel === "number") {
+    parts.push(`Level ${object.classLevel}`);
   }
   const loyalty = replayObjectLoyalty(object);
   if (loyalty != null) {
@@ -1154,8 +1161,12 @@ export function replayObjectCanStack(
   preview: CardPreview | null,
 ): boolean {
   // Cards carrying extra state (combat, counters, stolen, summoning sick,
-  // animated with stats) stay standalone so that state remains visible.
+  // class level, animated with stats) stay standalone so that state remains
+  // visible.
   if (replayObjectIsAttacking(object) || replayObjectIsBlocking(object)) {
+    return false;
+  }
+  if (typeof object.classLevel === "number") {
     return false;
   }
   if (object.hasSummoningSickness) {
@@ -1726,6 +1737,11 @@ export function describeReplayChange(change: MatchReplayChange): string {
   }
   if (change.action === "counters_change") {
     return `${replayPossessive(name)} counters changed.`;
+  }
+  if (change.action === "class_level_change") {
+    return typeof change.classLevel === "number"
+      ? `${actor} leveled up ${name} to level ${change.classLevel}.`
+      : `${actor} leveled up ${name}.`;
   }
   return `${actor} changed ${name}.`;
 }
@@ -2613,6 +2629,16 @@ export function buildReplayBeat(
     const lead = hides[0]!;
     return {
       text: `${replayChangeName(lead)} is no longer revealed${others(hides.length)}`,
+    };
+  }
+
+  const levelUps = withAction("class_level_change");
+  if (levelUps.length > 0) {
+    const lead = levelUps[0]!;
+    const level =
+      typeof lead.classLevel === "number" ? ` to level ${lead.classLevel}` : "";
+    return {
+      text: `${replayActorVerb(lead.playerSide, "level")} up ${replayChangeName(lead)}${level}${others(levelUps.length)}`,
     };
   }
 

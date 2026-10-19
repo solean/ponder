@@ -80,6 +80,7 @@ type MatchReplayChangeRow struct {
 	ToZoneID         *int64 `json:"toZoneId,omitempty"`
 	ToZoneType       string `json:"toZoneType,omitempty"`
 	ToZonePosition   *int64 `json:"toZonePosition,omitempty"`
+	ClassLevel       *int64 `json:"classLevel,omitempty"`
 	IsToken          bool   `json:"isToken"`
 }
 
@@ -102,6 +103,7 @@ type MatchReplayFrameObjectRow struct {
 	BlockAttackerIDsJSON string `json:"blockAttackerIdsJson,omitempty"`
 	CounterSummaryJSON   string `json:"counterSummaryJson,omitempty"`
 	DetailsJSON          string `json:"detailsJson,omitempty"`
+	ClassLevel           *int64 `json:"classLevel,omitempty"`
 	AttackState          string `json:"attackState,omitempty"`
 	BlockState           string `json:"blockState,omitempty"`
 	IsToken              bool   `json:"isToken"`

@@ -333,8 +333,108 @@ func (s *Store) ListMatchReplayFrames(ctx context.Context, matchID int64) ([]mod
 	}
 
 	frames := mergeReplayFrameRows(archived, live)
+	populateReplayClassLevels(frames)
 	populateReplayFrameChanges(frames)
 	return frames, nil
+}
+
+// Class enchantments report their level only through a persistent ClassLevel
+// annotation, and stored frames keep just the persistent annotations that
+// changed in that frame. Carry the latest level forward per instance so every
+// battlefield frame shows it; a Class with no annotation yet is at level 1.
+func populateReplayClassLevels(frames []model.MatchReplayFrameRow) {
+	var (
+		prevGameNumber int64
+		levels         map[int64]int64
+	)
+
+	for i := range frames {
+		gameNumber := int64(1)
+		if frames[i].GameNumber != nil && *frames[i].GameNumber > 0 {
+			gameNumber = *frames[i].GameNumber
+		}
+		if levels == nil || gameNumber != prevGameNumber {
+			levels = make(map[int64]int64)
+			prevGameNumber = gameNumber
+		}
+
+		for instanceID, level := range replayClassLevelAnnotations(frames[i].AnnotationsJSON) {
+			levels[instanceID] = level
+		}
+
+		for j := range frames[i].Objects {
+			obj := &frames[i].Objects[j]
+			if !replayObjectIsClass(*obj) {
+				continue
+			}
+			if replayNormalizedZoneType(obj.ZoneType) != "battlefield" {
+				delete(levels, obj.InstanceID)
+				continue
+			}
+			level := levels[obj.InstanceID]
+			if level < 1 {
+				level = 1
+			}
+			obj.ClassLevel = &level
+		}
+	}
+}
+
+func replayObjectIsClass(object model.MatchReplayFrameObjectRow) bool {
+	return strings.Contains(object.DetailsJSON, `"SubType_Class"`)
+}
+
+type replayClassLevelPayload struct {
+	Annotations           []replayClassLevelAnnotation `json:"annotations"`
+	PersistentAnnotations []replayClassLevelAnnotation `json:"persistentAnnotations"`
+}
+
+type replayClassLevelAnnotation struct {
+	AffectedIDs []int64  `json:"affectedIds"`
+	Type        []string `json:"type"`
+	Details     []struct {
+		Key        string  `json:"key"`
+		ValueInt32 []int64 `json:"valueInt32"`
+	} `json:"details"`
+}
+
+func replayClassLevelAnnotations(raw string) map[int64]int64 {
+	out := make(map[int64]int64)
+	if !strings.Contains(raw, "AnnotationType_ClassLevel") {
+		return out
+	}
+
+	var payload replayClassLevelPayload
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return out
+	}
+	annotations := append(payload.Annotations, payload.PersistentAnnotations...)
+	for _, annotation := range annotations {
+		isClassLevel := false
+		for _, annotationType := range annotation.Type {
+			if strings.EqualFold(strings.TrimSpace(annotationType), "AnnotationType_ClassLevel") {
+				isClassLevel = true
+				break
+			}
+		}
+		if !isClassLevel {
+			continue
+		}
+
+		var level int64
+		for _, detail := range annotation.Details {
+			if strings.EqualFold(strings.TrimSpace(detail.Key), "level") && len(detail.ValueInt32) > 0 {
+				level = detail.ValueInt32[0]
+			}
+		}
+		if level < 1 {
+			continue
+		}
+		for _, instanceID := range annotation.AffectedIDs {
+			out[instanceID] = level
+		}
+	}
+	return out
 }
 
 // mergeReplayFrameRows combines archived frames with live rows for the same
@@ -770,6 +870,11 @@ func populateReplayFrameChanges(frames []model.MatchReplayFrameRow) {
 				}
 				if !sameReplayText(prev.CounterSummaryJSON, obj.CounterSummaryJSON) {
 					frames[i].Changes = append(frames[i].Changes, replayStateChangeRow(obj, "counters_change"))
+				}
+				if prev.ClassLevel != nil && obj.ClassLevel != nil && *prev.ClassLevel != *obj.ClassLevel {
+					change := replayStateChangeRow(obj, "class_level_change")
+					change.ClassLevel = obj.ClassLevel
+					frames[i].Changes = append(frames[i].Changes, change)
 				}
 			}
 			departedIDs := make([]int64, 0, len(prevObjects))

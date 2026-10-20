@@ -8,3 +8,5 @@ const menuBarSupported = false
 func menuBarCreate([]byte, []byte, string, string, string) {}
 
 func menuBarRender(menuBarStatus) {}
+
+func menuBarRenderOverlay(string) {}

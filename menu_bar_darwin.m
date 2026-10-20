@@ -91,11 +91,16 @@ static const CGFloat ponderHeaderSwitchGap = 12;
 @interface PonderMenuBarController : NSObject
 @property(nonatomic, strong) NSStatusItem *statusItem;
 @property(nonatomic, strong) PonderMenuBarHeaderView *header;
+@property(nonatomic, strong) NSMenuItem *overlayItem;
 @property(nonatomic, strong) NSImage *onIcon;  // Filled orbs: tracking.
 @property(nonatomic, strong) NSImage *offIcon; // Hollow rings: stopped.
 @end
 
 @implementation PonderMenuBarController
+
+- (void)toggleOverlay:(id)sender {
+    ponderMenuBarDidToggleOverlay();
+}
 
 - (void)open:(id)sender {
     ponderMenuBarDidOpen();
@@ -152,6 +157,13 @@ void ponderMenuBarCreate(
     [menu addItem:headerItem];
     [menu addItem:[NSMenuItem separatorItem]];
 
+    controller.overlayItem = [[NSMenuItem alloc] initWithTitle:@"Hide Game Overlay"
+                                                      action:@selector(toggleOverlay:)
+                                               keyEquivalent:@""];
+    controller.overlayItem.target = controller;
+    [menu addItem:controller.overlayItem];
+    [menu addItem:[NSMenuItem separatorItem]];
+
     NSMenuItem *openItem = [[NSMenuItem alloc] initWithTitle:ponderString(openLabel)
                                                       action:@selector(open:)
                                                keyEquivalent:@""];
@@ -167,6 +179,12 @@ void ponderMenuBarCreate(
 
     controller.statusItem.menu = menu;
     ponderMenuBar = controller;
+}
+
+void ponderMenuBarRenderOverlay(const char *label) {
+    if (ponderMenuBar != nil) {
+        ponderMenuBar.overlayItem.title = ponderString(label);
+    }
 }
 
 void ponderMenuBarRender(

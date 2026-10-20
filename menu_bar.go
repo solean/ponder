@@ -131,9 +131,10 @@ func loadMenuBarLiveMatch(ctx context.Context, store *db.Store) (*menuBarLiveMat
 // menuBarCallbacks routes native status item actions into the app. The native
 // side invokes them on their own goroutine, never on the main thread.
 type menuBarCallbacks struct {
-	toggle func(on bool)
-	open   func()
-	quit   func()
+	toggle  func(on bool)
+	overlay func()
+	open    func()
+	quit    func()
 }
 
 // menuBarActions is assigned before the status item exists and never changes.
@@ -179,12 +180,17 @@ func (a *App) startMenuBar() {
 				log.Printf("menu bar live tracking toggle failed: %v", err)
 			}
 		},
-		open: func() { a.onSecondInstanceLaunch(application.SecondInstanceData{}) },
-		quit: func() { a.wailsApp.Quit() },
+		overlay: a.toggleOverlay,
+		open:    func() { a.onSecondInstanceLaunch(application.SecondInstanceData{}) },
+		quit:    func() { a.wailsApp.Quit() },
 	}
 	application.InvokeSync(func() {
 		menuBarCreate(menuBarIcon(true), menuBarIcon(false), "Live Tracking", "Open "+appDisplayName, "Quit "+appDisplayName)
 	})
+	a.mu.RLock()
+	hidden := a.overlayHidden
+	a.mu.RUnlock()
+	a.syncOverlayMenuItem(hidden)
 
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)

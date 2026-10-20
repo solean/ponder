@@ -21,5 +21,6 @@ void ponderMenuBarRender(
     const char *indicator,
     const char *tooltip
 );
+void ponderMenuBarRenderOverlay(const char *label);
 
 #endif

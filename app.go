@@ -321,10 +321,8 @@ func overlayPointerScript(x, y float64, supported bool) string {
 	return "window.dispatchEvent(new CustomEvent('ponder:overlay-pointer',{detail:" + detail + "}))"
 }
 
-// overlayMenuLabel names the action the item performs, because the item is the
-// only place the mechanism is visible: during a match the app runs as an
-// accessory (no Dock icon, no menu bar), so the global shortcut is the only
-// in-game control. The keystroke is part of the label rather than a menu
+// overlayMenuLabel names the action performed by the app menu and status item.
+// The keystroke is part of the label rather than a menu
 // accelerator: the global shortcut already claims it everywhere, and a key
 // equivalent would fire the same toggle a second time whenever Ponder is
 // focused.
@@ -371,11 +369,16 @@ func (a *App) syncOverlayMenuItem(hidden bool) {
 	item := a.overlayMenuItem
 	shortcut := a.overlayShortcut
 	a.mu.RUnlock()
-	if item == nil {
+	if item == nil && !menuBarSupported {
 		return
 	}
 	label := overlayMenuLabelWithShortcut(hidden, shortcut)
-	application.InvokeSync(func() { item.SetLabel(label) })
+	application.InvokeSync(func() {
+		if item != nil {
+			item.SetLabel(label)
+		}
+		menuBarRenderOverlay(label)
+	})
 }
 
 func (a *App) toggleOverlay() {

@@ -42,8 +42,19 @@ func menuBarRender(s menuBarStatus) {
 	C.ponderMenuBarRender(cStatus, cActivity, C.bool(s.on), C.bool(s.canToggle), cIndicator, cTooltip)
 }
 
+// menuBarRenderOverlay keeps the dropdown action in sync with the app menu.
+// Main thread only.
+func menuBarRenderOverlay(label string) {
+	cLabel := C.CString(label)
+	defer C.free(unsafe.Pointer(cLabel))
+	C.ponderMenuBarRenderOverlay(cLabel)
+}
+
 // Native actions arrive on the main thread. Handlers may block (StopLive
 // waits for the tailer) or call application.InvokeSync, so run them elsewhere.
+
+//export ponderMenuBarDidToggleOverlay
+func ponderMenuBarDidToggleOverlay() { go menuBarActions.overlay() }
 
 //export ponderMenuBarDidToggle
 func ponderMenuBarDidToggle(on C.bool) { go menuBarActions.toggle(bool(on)) }

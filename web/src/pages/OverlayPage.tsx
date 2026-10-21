@@ -310,28 +310,32 @@ function DraftPackPanel({ draft, hoveredCard, shortcut }: { draft: LiveDraft; ho
         <span>Card</span>
         <span>GIH WR</span>
       </div>
-      {draft.waiting ? (
-        <p className="overlay-empty">Pick made. Waiting for the next pack.</p>
-      ) : (
-        <ul className="overlay-card-list">
-          {cards.map((card, index) => {
-            // A pack can hold two copies of a card, so rows key on position.
-            const rowId = `draft:${index}:${card.cardId}`;
-            return (
-              <li key={rowId} data-overlay-card={rowId}>
-                <span className="overlay-card-mark" aria-hidden="true" />
-                <div className="overlay-card-name">
-                  <CardPreviewName cardId={card.cardId} cardName={card.cardName} label={<span>{cardName(card)}</span>} passiveHover={hoveredCard === rowId} />
-                </div>
-                <OverlayManaCost cost={card.manaCost} />
-                <span className="overlay-card-count">
-                  {stats.byId.has(card.cardId) ? <CardStatLine cardId={card.cardId} stats={stats} compact /> : "—"}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      {/* Fixed height: the transparent native window keeps stale pixels
+          wherever a shrinking panel stops painting. */}
+      <div className="overlay-draft-body">
+        {draft.waiting ? (
+          <p className="overlay-empty">Pick made. Waiting for the next pack.</p>
+        ) : (
+          <ul className="overlay-card-list">
+            {cards.map((card, index) => {
+              // A pack can hold two copies of a card, so rows key on position.
+              const rowId = `draft:${index}:${card.cardId}`;
+              return (
+                <li key={rowId} data-overlay-card={rowId}>
+                  <span className="overlay-card-mark" aria-hidden="true" />
+                  <div className="overlay-card-name">
+                    <CardPreviewName cardId={card.cardId} cardName={card.cardName} label={<span>{cardName(card)}</span>} passiveHover={hoveredCard === rowId} />
+                  </div>
+                  <OverlayManaCost cost={card.manaCost} />
+                  <span className="overlay-card-count">
+                    {stats.byId.has(card.cardId) ? <CardStatLine cardId={card.cardId} stats={stats} compact /> : "—"}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
       <footer className="overlay-panel-foot">
         <span className={`overlay-state-dot ${stats.mean == null ? "" : "is-ready"}`} aria-hidden="true" />
         {stats.mean == null ? "Format average unavailable" : `Format average GIH WR ${pct(stats.mean)}`}

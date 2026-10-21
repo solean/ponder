@@ -12147,6 +12147,20 @@ html.overlay-document body::before {
   grid-template-columns: 0.2rem minmax(0, 1fr) auto 2.6rem;
 }
 
+/* Room for a 15-card pack whatever is on screen; see DraftPackPanel. */
+.overlay-draft-body {
+  flex: none;
+  height: calc(15 * (var(--overlay-row-height, 2rem) + 1px));
+  overflow: hidden;
+}
+
+/* One line per card keeps the fixed height enough for a full pack. */
+.overlay-panel-draft .overlay-card-name .card-preview-trigger {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .overlay-card-list {
   min-height: 0;
   margin: 0;

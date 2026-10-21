@@ -43,7 +43,9 @@ func (s *Store) GetLiveDraft(ctx context.Context, now time.Time) (*model.LiveDra
 			ds.id,
 			ds.is_bot_draft,
 			-- Player drafts learn their event name only once the draft ends;
-			-- until then, use the draft event most recently joined before it.
+			-- until then, use the draft event joined most recently. Insertion
+			-- order, not started_at: that is Arena's log clock, which can
+			-- disagree with created_at by the local UTC offset.
 			COALESCE(
 				NULLIF(ds.event_name, ''),
 				(SELECT er.event_name FROM event_runs er WHERE er.draft_session_id = ds.id),
@@ -52,9 +54,7 @@ func (s *Store) GetLiveDraft(ctx context.Context, now time.Time) (*model.LiveDra
 					FROM event_runs er
 					WHERE er.draft_session_id IS NULL
 					  AND er.event_name LIKE '%Draft%'
-					  AND julianday(er.started_at) <= julianday(ds.created_at)
-					  AND julianday(ds.created_at) - julianday(er.started_at) <= 1
-					ORDER BY er.started_at DESC, er.id DESC
+					ORDER BY er.id DESC
 					LIMIT 1
 				),
 				''
@@ -64,7 +64,8 @@ func (s *Store) GetLiveDraft(ctx context.Context, now time.Time) (*model.LiveDra
 			COALESCE(dp.picked_card_ids, ''),
 			COALESCE(dp.pack_card_ids, ''),
 			MAX(dp.created_at, ds.updated_at),
-			EXISTS (SELECT 1 FROM matches m WHERE m.started_at >= dp.created_at)
+			-- created_at, like dp.created_at, is Ponder's clock.
+			COALESCE((SELECT created_at FROM matches ORDER BY id DESC LIMIT 1), '') > dp.created_at
 		FROM (SELECT * FROM draft_picks ORDER BY id DESC LIMIT 1) dp
 		JOIN draft_sessions ds ON ds.id = dp.draft_session_id
 	`).Scan(

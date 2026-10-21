@@ -54,9 +54,10 @@ func TestGetLiveDraftFollowsPlayerDraftPicks(t *testing.T) {
 	}
 
 	// Arena logs the event join before the first pack; the session itself
-	// has no event name until the draft ends.
+	// has no event name until the draft ends. The join's log timestamp can
+	// run hours ahead of Ponder's clock (Arena logging UTC read as local).
 	write(func(tx *sql.Tx) {
-		joinedAt := time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
+		joinedAt := time.Now().Add(7 * time.Hour).UTC().Format(time.RFC3339)
 		if err := store.UpsertEventRunJoin(ctx, tx, "PremierDraft_FRA_20260929", "Gem", 1500, joinedAt); err != nil {
 			t.Fatalf("UpsertEventRunJoin: %v", err)
 		}

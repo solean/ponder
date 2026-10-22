@@ -12145,13 +12145,28 @@ html.overlay-document body::before {
 
 .overlay-panel-draft .overlay-card-list li {
   grid-template-columns: 0.2rem minmax(0, 1fr) auto 2.6rem;
+  flex: 0 1 var(--overlay-row-height, 2rem);
+  min-height: 0;
 }
 
-/* Room for a 15-card pack whatever is on screen; see DraftPackPanel. */
+/* Keep the header above the pack visible when the viewport limits its height. */
+.overlay-panel-draft .overlay-list-head {
+  flex-shrink: 0;
+}
+
+/* Reserve a full pack's height across picks, shrinking only to fit the viewport. */
 .overlay-draft-body {
-  flex: none;
+  flex: 0 1 auto;
   height: calc(15 * (var(--overlay-row-height, 2rem) + 1px));
+  min-height: 0;
   overflow: hidden;
+}
+
+/* Compress full packs slightly rather than cutting off their final cards. */
+.overlay-draft-body > .overlay-card-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 /* One line per card keeps the fixed height enough for a full pack. */

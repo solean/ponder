@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -16,6 +17,8 @@ func TestGetLiveDraftFollowsPlayerDraftPicks(t *testing.T) {
 		t.Fatalf("Init: %v", err)
 	}
 	store := NewStore(database)
+	// Join and pack notifications share Arena's log clock, including its skew.
+	draftStarted := time.Now().Add(7 * time.Hour).UTC()
 
 	write := func(apply func(tx *sql.Tx)) {
 		t.Helper()
@@ -30,7 +33,7 @@ func TestGetLiveDraftFollowsPlayerDraftPicks(t *testing.T) {
 	}
 	notify := func(tx *sql.Tx, pack, pick int64, cards []int64) {
 		t.Helper()
-		sessionID, err := store.EnsureDraftSession(ctx, tx, "", ptrString("draft-live"), false, "")
+		sessionID, err := store.EnsureDraftSession(ctx, tx, "", ptrString("draft-live"), false, draftStarted.Format(time.RFC3339))
 		if err != nil {
 			t.Fatalf("EnsureDraftSession: %v", err)
 		}
@@ -57,7 +60,7 @@ func TestGetLiveDraftFollowsPlayerDraftPicks(t *testing.T) {
 	// has no event name until the draft ends. The join's log timestamp can
 	// run hours ahead of Ponder's clock (Arena logging UTC read as local).
 	write(func(tx *sql.Tx) {
-		joinedAt := time.Now().Add(7 * time.Hour).UTC().Format(time.RFC3339)
+		joinedAt := draftStarted.Add(-time.Minute).Format(time.RFC3339)
 		if err := store.UpsertEventRunJoin(ctx, tx, "PremierDraft_FRA_20260929", "Gem", 1500, joinedAt); err != nil {
 			t.Fatalf("UpsertEventRunJoin: %v", err)
 		}
@@ -164,5 +167,125 @@ func TestGetLiveDraftYieldsToALaterMatch(t *testing.T) {
 
 	if got, err := store.GetLiveDraft(ctx, time.Now()); err != nil || got != nil {
 		t.Fatalf("GetLiveDraft = %+v, %v; want nil once a match started", got, err)
+	}
+}
+
+func TestGetLiveDraftBoundsEventLookupOnArenaClock(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name       string
+		joinDeltas []time.Duration
+		wantEvent  string
+	}{
+		{name: "missing join does not reuse last week's event", joinDeltas: []time.Duration{-7 * 24 * time.Hour}},
+		{name: "future join belongs to another draft", joinDeltas: []time.Duration{time.Minute}},
+		{name: "latest prior join wins over insertion order", joinDeltas: []time.Duration{-time.Minute, -10 * time.Minute}, wantEvent: "PremierDraft_SET0"},
+		{name: "missing timestamps do not guess an event"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			database := openTempSQLiteDB(t)
+			if err := Init(ctx, database); err != nil {
+				t.Fatal(err)
+			}
+			store := NewStore(database)
+			tx, err := store.BeginTx(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback()
+			// Both sides are shifted from Ponder's clock by the same amount.
+			arenaStart := time.Now().Add(7 * time.Hour).UTC()
+			for i, delta := range tc.joinDeltas {
+				event := fmt.Sprintf("PremierDraft_SET%d", i)
+				if err := store.UpsertEventRunJoin(ctx, tx, event, "Gem", 1500, arenaStart.Add(delta).Format(time.RFC3339)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			startedAt := arenaStart.Format(time.RFC3339)
+			if len(tc.joinDeltas) == 0 {
+				startedAt = ""
+				if err := store.UpsertEventRunJoin(ctx, tx, "PremierDraft_UNKNOWN", "Gem", 1500, ""); err != nil {
+					t.Fatal(err)
+				}
+			}
+			session, err := store.EnsureDraftSession(ctx, tx, "", ptrString("draft-current"), false, startedAt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.InsertDraftPick(ctx, tx, session, 1, 1, nil, []int64{101, 102}, startedAt); err != nil {
+				t.Fatal(err)
+			}
+			if err := tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
+			draft, err := store.GetLiveDraft(ctx, time.Now())
+			if err != nil || draft == nil {
+				t.Fatalf("GetLiveDraft = %+v, %v", draft, err)
+			}
+			if draft.EventName != tc.wantEvent {
+				t.Fatalf("event = %q, want %q", draft.EventName, tc.wantEvent)
+			}
+		})
+	}
+}
+
+func TestGetLiveDraftRequiresLaterMatchEventAndObservation(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name          string
+		matchEventAgo time.Duration
+		observedAgo   time.Duration
+		importOlder   bool
+		wantLive      bool
+	}{
+		{name: "historical match imported after draft", matchEventAgo: 24 * time.Hour, observedAgo: time.Second, wantLive: true},
+		{name: "older match with future log clock", matchEventAgo: -7 * time.Hour, observedAgo: 3 * time.Minute, wantLive: true},
+		{name: "later match hides draft", matchEventAgo: time.Minute, observedAgo: time.Minute},
+		{name: "later match still counts after historical import", matchEventAgo: time.Minute, observedAgo: time.Minute, importOlder: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			database := openTempSQLiteDB(t)
+			if err := Init(ctx, database); err != nil {
+				t.Fatal(err)
+			}
+			store := NewStore(database)
+			tx, err := store.BeginTx(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback()
+			now := time.Now().UTC()
+			session, err := store.EnsureDraftSession(ctx, tx, "QuickDraft_TST", nil, true, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.InsertDraftPick(ctx, tx, session, 0, 0, nil, []int64{101, 102}, ""); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE draft_picks SET created_at = ? WHERE draft_session_id = ?`, utcTimestamp(now.Add(-2*time.Minute)), session); err != nil {
+				t.Fatal(err)
+			}
+			match, err := store.UpsertMatchStart(ctx, tx, "match", "Play", 1, utcTimestamp(now.Add(-tc.matchEventAgo)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE matches SET created_at = ? WHERE id = ?`, utcTimestamp(now.Add(-tc.observedAgo)), match); err != nil {
+				t.Fatal(err)
+			}
+			if tc.importOlder {
+				if _, err := store.UpsertMatchStart(ctx, tx, "historical-match", "Play", 1, utcTimestamp(now.Add(-24*time.Hour))); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
+			draft, err := store.GetLiveDraft(ctx, now)
+			if err != nil || (draft != nil) != tc.wantLive {
+				t.Fatalf("GetLiveDraft = %+v, %v; want live = %v", draft, err, tc.wantLive)
+			}
+		})
 	}
 }

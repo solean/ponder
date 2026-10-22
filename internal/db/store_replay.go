@@ -816,6 +816,25 @@ func populateReplayFrameChanges(frames []model.MatchReplayFrameRow) {
 					})
 					continue
 				}
+				// Hand membership can persist while identity becomes visible/hidden.
+				// Record that transition without inventing a zone transfer.
+				if sameReplayZone(prev, obj) && replayNormalizedZoneType(obj.ZoneType) == "hand" &&
+					(prev.CardID > 0) != (obj.CardID > 0) {
+					action, identity := "enter_public", obj
+					if obj.CardID <= 0 {
+						action, identity = "leave_public", prev
+					}
+					change := replayStateChangeRow(identity, action)
+					if action == "enter_public" {
+						change.ToZoneType, change.ToZoneID = obj.ZoneType, obj.ZoneID
+					} else {
+						change.FromZoneType, change.FromZoneID = prev.ZoneType, prev.ZoneID
+						change.FromZonePosition = prev.ZonePosition
+						change.ToZoneType, change.ToZoneID, change.ToZonePosition = "", nil, nil
+					}
+					frames[i].Changes = append(frames[i].Changes, change)
+				}
+
 				if !sameReplayZone(prev, obj) {
 					frames[i].Changes = append(frames[i].Changes, model.MatchReplayChangeRow{
 						InstanceID:       obj.InstanceID,

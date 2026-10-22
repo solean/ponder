@@ -655,6 +655,7 @@ export function MatchReplayFrameBoard({
 
           <div className="match-replay-arena-top">
             <MatchReplayFrameSideSummary
+              previewByCardID={previewByCardID}
               side="opponent"
               objects={currentObjects}
               variant="rail"
@@ -713,6 +714,7 @@ export function MatchReplayFrameBoard({
           />
 
           <MatchReplayFrameSideSummary
+            previewByCardID={previewByCardID}
             side="self"
             objects={currentObjects}
             variant="rail"

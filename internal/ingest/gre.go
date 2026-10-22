@@ -498,6 +498,7 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 			}
 
 			current := replayState.Objects[obj.InstanceID]
+			previous := current
 			previousControllerSeatID := current.ControllerSeatID
 			current.InstanceID = obj.InstanceID
 			cardID := obj.GrpID
@@ -518,6 +519,21 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 			}
 			if visibility := normalizeGREVisibility(obj.Visibility); visibility != "" {
 				current.Visibility = visibility
+			}
+			// A public permanent returned under the same instance ID remains known
+			// on arrival in hand. A later explicit private update revokes knowledge.
+			if previous.CardID > 0 && isPublicGREVisibility(previous.Visibility) &&
+				replayKnownReturnSource(state.zoneType(matchID, previous.ZoneID)) &&
+				state.zoneType(matchID, current.ZoneID) == "hand" {
+				current.Visibility = "known"
+			}
+			// Identities carried internally through a library/hidden-zone move are
+			// stale after shuffling. Only a new public observation can restore them.
+			if previous.ZoneID != current.ZoneID &&
+				!replayKnownReturnSource(state.zoneType(matchID, previous.ZoneID)) &&
+				state.zoneType(matchID, previous.ZoneID) != "hand" &&
+				!isPublicGREVisibility(obj.Visibility) {
+				current.Visibility = "private"
 			}
 			if obj.Power != nil {
 				current.Power = replayIntPtr(obj.Power.Value)
@@ -644,6 +660,8 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 			}
 			replayState.PublicZoneMembers[zone.ZoneID] = members
 		}
+
+		applyReplayKnownHandReturns(replayState, state, matchID, previousPublicByInstance, msg.GameStateMessage.Annotations)
 
 		replayState.LastGameStateID = msg.GameStateMessage.GameStateID
 		snapshotObjects, currentPublicByInstance := buildReplayPublicSnapshot(matchID, replayState, state, selfSeat)
@@ -811,6 +829,42 @@ func hydrateReplayStateFromFrameObjects(replay *replayPublicState, latestTurnNum
 	}
 }
 
+// Follow only an explicit public-zone-to-hand ID replacement. Hand-to-hand ID
+// churn can conceal a shuffle and must never inherit a previously known name.
+func applyReplayKnownHandReturns(replay *replayPublicState, state *parseState, matchID string, previous map[int64]model.MatchReplayFrameObjectRow, payload json.RawMessage) {
+	var annotations []greAnnotation
+	if json.Unmarshal(payload, &annotations) != nil {
+		return
+	}
+	for _, annotation := range annotations {
+		if !hasGREAnnotationType(annotation.Type, "ObjectIdChanged") {
+			continue
+		}
+		oldID := annotationDetailInt(annotation.Details, "orig_id")
+		newID := annotationDetailInt(annotation.Details, "new_id")
+		source, ok := previous[oldID]
+		target, exists := replay.Objects[newID]
+		if !ok || !exists || source.CardID <= 0 || !replayKnownReturnSource(source.ZoneType) ||
+			state.zoneType(matchID, target.ZoneID) != "hand" ||
+			(target.CardID > 0 && target.CardID != source.CardID) {
+			continue
+		}
+		target.CardID = source.CardID
+		target.Visibility = "known"
+		replay.Objects[newID] = target
+	}
+}
+
+// These are observable source zones, unlike a library or Limbo resync.
+func replayKnownReturnSource(zoneType string) bool {
+	switch zoneType {
+	case "battlefield", "graveyard", "exile", "stack", "revealed":
+		return true
+	default:
+		return false
+	}
+}
+
 func buildReplayPublicSnapshot(
 	matchID string,
 	replay *replayPublicState,
@@ -852,7 +906,8 @@ func buildReplayPublicSnapshot(
 			if zoneType == "hand" && state.zoneOwnerSeat(matchID, zoneID) > 0 {
 				ownerSeatID = state.zoneOwnerSeat(matchID, zoneID)
 			}
-			hiddenHand := zoneType == "hand" && (selfSeat <= 0 || ownerSeatID != selfSeat)
+			hiddenHand := zoneType == "hand" && (selfSeat <= 0 || ownerSeatID != selfSeat) &&
+				!isPublicGREVisibility(current.Visibility) && current.Visibility != "known"
 			if current.CardID <= 0 && !hiddenHand {
 				continue
 			}
@@ -890,8 +945,7 @@ func buildReplayPublicSnapshot(
 				row.AttackTargetID = &attackTargetID
 			}
 			if hiddenHand {
-				// Hand membership is observable; even previously revealed card
-				// identities and their raw gameObject metadata stay private.
+				// Membership survives visibility loss, but identity and metadata do not.
 				row = model.MatchReplayFrameObjectRow{
 					InstanceID:       instanceID,
 					OwnerSeatID:      replayIntPtr(ownerSeatID),

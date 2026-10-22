@@ -129,3 +129,16 @@ func TestPopulateReplayClassLevelsIgnoresNonClassObjects(t *testing.T) {
 		t.Fatalf("non-Class class level = %d, want none", *frames[0].Objects[0].ClassLevel)
 	}
 }
+
+func TestPopulateReplayFrameChangesTracksHandIdentityTransitions(t *testing.T) {
+	hidden := replayChangeTestObject(501, 0, 2, "opponent", "hand", "private")
+	known := replayChangeTestObject(501, 999, 2, "opponent", "hand", "public")
+	frames := []model.MatchReplayFrameRow{{Objects: []model.MatchReplayFrameObjectRow{hidden}}, {Objects: []model.MatchReplayFrameObjectRow{known}}, {Objects: []model.MatchReplayFrameObjectRow{hidden}}}
+	populateReplayFrameChanges(frames)
+	if len(frames[1].Changes) != 1 || frames[1].Changes[0].Action != "enter_public" || frames[1].Changes[0].CardID != 999 {
+		t.Fatalf("reveal changes = %#v", frames[1].Changes)
+	}
+	if len(frames[2].Changes) != 1 || frames[2].Changes[0].Action != "leave_public" || frames[2].Changes[0].CardID != 999 {
+		t.Fatalf("hide changes = %#v", frames[2].Changes)
+	}
+}

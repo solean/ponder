@@ -1,3 +1,4 @@
+export { replayHandIdentityKnown } from "./handVisibility";
 import type { CardPreview } from "../scryfall";
 import type {
   MatchCardPlay,

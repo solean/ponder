@@ -70,6 +70,9 @@ export function MatchReplayFrameBoard({
     index: safeSelectedFrameIndex,
     setIndex: setSelectedFrameIndex,
     isPlaying,
+    togglePlay,
+    canPlay,
+    playLabel,
     setIsPlaying,
     speed,
     setSpeed,
@@ -477,7 +480,6 @@ export function MatchReplayFrameBoard({
         frames.length - 1,
     );
   };
-  const togglePlay = () => setIsPlaying((currentValue) => !currentValue);
 
   useReplayKeyboard({
     onStepBackward: goToPrevStep,
@@ -547,8 +549,9 @@ export function MatchReplayFrameBoard({
               className="match-replay-button is-primary"
               onClick={togglePlay}
               aria-pressed={isPlaying}
+              disabled={!canPlay}
             >
-              <span>{isPlaying ? "Pause" : "Play"}</span>
+              <span>{playLabel}</span>
               <kbd className="match-replay-button-shortcut" aria-hidden="true">
                 Space
               </kbd>

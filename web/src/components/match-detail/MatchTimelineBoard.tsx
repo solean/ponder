@@ -33,6 +33,9 @@ export function MatchTimelineBoard({
     index: selectedActionIndex,
     setIndex: setSelectedActionIndex,
     isPlaying,
+    togglePlay,
+    canPlay,
+    playLabel,
     setIsPlaying,
     speed,
     setSpeed,
@@ -98,7 +101,6 @@ export function MatchTimelineBoard({
         lastActionIndex,
     );
   };
-  const togglePlay = () => setIsPlaying((currentValue) => !currentValue);
 
   useReplayKeyboard({
     onStepBackward: goToPrevAction,
@@ -158,8 +160,9 @@ export function MatchTimelineBoard({
               className="match-replay-button is-primary"
               onClick={togglePlay}
               aria-pressed={isPlaying}
+              disabled={!canPlay}
             >
-              <span>{isPlaying ? "Pause" : "Play"}</span>
+              <span>{playLabel}</span>
               <kbd className="match-replay-button-shortcut" aria-hidden="true">
                 Space
               </kbd>

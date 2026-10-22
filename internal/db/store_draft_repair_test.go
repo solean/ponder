@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"testing"
 )
 
@@ -71,8 +73,9 @@ func TestRepairDraftDataBackfillsPlayerDraftMetadataFromRawEvents(t *testing.T) 
 	if row.StartedAt != "2026-04-04T00:33:13.720644Z" {
 		t.Fatalf("StartedAt = %q, want 2026-04-04T00:33:13.720644Z", row.StartedAt)
 	}
-	if row.CompletedAt != "2026-04-04T00:33:13.720644Z" {
-		t.Fatalf("CompletedAt = %q, want 2026-04-04T00:33:13.720644Z", row.CompletedAt)
+	// One pick and no DraftCompleteDraft: the draft is still in progress.
+	if row.CompletedAt != "" {
+		t.Fatalf("CompletedAt = %q, want empty mid-draft", row.CompletedAt)
 	}
 
 	picks, err := store.ListDraftPicks(ctx, sessionID)
@@ -205,6 +208,83 @@ func TestRepairDraftDataBackfillsPlayerDraftFromPickAndCompleteEvents(t *testing
 	}
 	if picks[0].PickTs == "" {
 		t.Fatalf("PickTs = %q, want non-empty fallback timestamp", picks[0].PickTs)
+	}
+}
+
+func TestRepairDraftDataCompletesPlayerDraftOnlyAfterCompleteDraft(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database := openTempSQLiteDB(t)
+	if err := Init(ctx, database); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	store := NewStore(database)
+
+	// Each batch mirrors one live ingest pass: store the pick, then repair.
+	ingestPick := func(draftID string, pack, pick int64, ts string, line int64) int64 {
+		t.Helper()
+		tx, err := store.BeginTx(ctx)
+		if err != nil {
+			t.Fatalf("BeginTx: %v", err)
+		}
+		sessionID, err := store.EnsureDraftSession(ctx, tx, "", ptrString(draftID), false, ts)
+		if err != nil {
+			t.Fatalf("EnsureDraftSession: %v", err)
+		}
+		if err := store.InsertDraftPick(ctx, tx, sessionID, pack, pick, []int64{1000 + pick}, nil, ts); err != nil {
+			t.Fatalf("InsertDraftPick: %v", err)
+		}
+		raw := fmt.Sprintf(`{"DraftId":%q,"GrpIds":[%d],"Pack":%d,"Pick":%d}`, draftID, 1000+pick, pack, pick)
+		if _, err := store.InsertRawEvent(ctx, tx, "Player.log", line, line*10, "outgoing", "EventPlayerDraftMakePick", "", []byte(raw), ""); err != nil {
+			t.Fatalf("InsertRawEvent(pick): %v", err)
+		}
+		if err := tx.Commit(); err != nil {
+			t.Fatalf("Commit: %v", err)
+		}
+		if err := store.RepairDraftDataFromRawEvents(ctx); err != nil {
+			t.Fatalf("RepairDraftDataFromRawEvents: %v", err)
+		}
+		return sessionID
+	}
+	completedAt := func(sessionID int64) string {
+		t.Helper()
+		var v sql.NullString
+		if err := database.QueryRowContext(ctx, `SELECT completed_at FROM draft_sessions WHERE id = ?`, sessionID).Scan(&v); err != nil {
+			t.Fatalf("read completed_at: %v", err)
+		}
+		return v.String
+	}
+
+	// An abandoned draft, then a second draft that runs to completion.
+	abandoned := ingestPick("draft-a", 1, 1, "2026-10-19T03:00:00Z", 1)
+	sessionID := ingestPick("draft-b", 1, 1, "2026-10-19T03:56:14Z", 2)
+	ingestPick("draft-b", 1, 2, "2026-10-19T03:57:00Z", 3)
+	if got := completedAt(sessionID); got != "" {
+		t.Fatalf("completed_at mid-draft = %q, want empty", got)
+	}
+	ingestPick("draft-b", 3, 14, "2026-10-19T04:12:06Z", 4)
+
+	tx, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+	rawComplete := `{"EventName":"PremierDraft_FRA_20260929","IsBotDraft":false}`
+	if _, err := store.InsertRawEvent(ctx, tx, "Player.log", 5, 50, "outgoing", "DraftCompleteDraft", "", []byte(rawComplete), ""); err != nil {
+		t.Fatalf("InsertRawEvent(complete): %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+	if err := store.RepairDraftDataFromRawEvents(ctx); err != nil {
+		t.Fatalf("RepairDraftDataFromRawEvents: %v", err)
+	}
+
+	if got := completedAt(sessionID); got != "2026-10-19T04:12:06Z" {
+		t.Fatalf("completed_at = %q, want last pick 2026-10-19T04:12:06Z", got)
+	}
+	if got := completedAt(abandoned); got != "" {
+		t.Fatalf("abandoned completed_at = %q, want empty", got)
 	}
 }
 

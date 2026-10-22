@@ -169,6 +169,11 @@ func Init(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 
+	draftCompletionsCleared, err := clearEarlyDraftCompletedAt(ctx, conn)
+	if err != nil {
+		return err
+	}
+
 	if err := dropRedundantIndexes(ctx, conn); err != nil {
 		return err
 	}
@@ -181,6 +186,11 @@ func Init(ctx context.Context, db *sql.DB) error {
 	}
 	connClosed = true
 
+	if draftCompletionsCleared > 0 {
+		if err := NewStore(db).RepairDraftDataFromRawEvents(ctx); err != nil {
+			return err
+		}
+	}
 	if err := NewStore(db).RepairEventRunInstances(ctx); err != nil {
 		return err
 	}
@@ -439,6 +449,65 @@ func prepareEconomyBackfill(ctx context.Context, db dbConn) error {
 		return fmt.Errorf("commit economy backfill migration: %w", err)
 	}
 	return nil
+}
+
+// Draft repair used to stamp player drafts with their latest pick as soon as
+// the first pick was ingested, and never revisited it. Clear those stamps so
+// the corrected repair can recompute them from the retained raw events.
+const draftCompletedAtRepairMetadataKey = "draft_completed_at_repair_v1"
+
+func clearEarlyDraftCompletedAt(ctx context.Context, db dbConn) (int64, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("begin draft completed_at repair: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var markerCount int64
+	if err := tx.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM app_metadata WHERE key = ?
+	`, draftCompletedAtRepairMetadataKey).Scan(&markerCount); err != nil {
+		return 0, fmt.Errorf("check draft completed_at repair marker: %w", err)
+	}
+	if markerCount > 0 {
+		return 0, tx.Commit()
+	}
+
+	// The old fallback took MAX over the pick events seen so far, so an early
+	// stamp sorts before the draft's final pick event.
+	res, err := tx.ExecContext(ctx, `
+		UPDATE draft_sessions
+		SET completed_at = NULL
+		WHERE is_bot_draft = 0
+		  AND draft_id IS NOT NULL
+		  AND COALESCE(completed_at, '') <> ''
+		  AND completed_at < (
+			SELECT MAX(COALESCE(NULLIF(json_extract(er.payload_json, '$.EventTime'), ''), er.created_at))
+			FROM events_raw er
+			WHERE er.kind = 'outgoing'
+			  AND json_valid(er.payload_json)
+			  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
+			  AND (
+				er.method_name = 'EventPlayerDraftMakePick'
+				OR (er.method_name = 'LogBusinessEvents' AND json_extract(er.payload_json, '$.EventType') = 24)
+			  )
+		  )
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("clear early draft completed_at: %w", err)
+	}
+	cleared, _ := res.RowsAffected()
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO app_metadata (key, value, updated_at)
+		VALUES (?, 'complete', ?)
+	`, draftCompletedAtRepairMetadataKey, nowUTC()); err != nil {
+		return 0, fmt.Errorf("save draft completed_at repair marker: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit draft completed_at repair: %w", err)
+	}
+	return cleared, nil
 }
 
 // dropRedundantIndexes removes indexes that older schema versions created but

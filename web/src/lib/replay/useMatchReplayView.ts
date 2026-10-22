@@ -43,7 +43,7 @@ export function useMatchReplayView({
     if (hasReplayFrames) {
       for (const frame of visibleReplayFrames) {
         for (const object of frame.objects ?? []) {
-          if (!uniqueCards.has(object.cardId)) {
+          if (object.cardId > 0 && !uniqueCards.has(object.cardId)) {
             uniqueCards.set(object.cardId, {
               cardId: object.cardId,
               cardName: object.cardName,
@@ -51,7 +51,7 @@ export function useMatchReplayView({
           }
         }
         for (const change of frame.changes ?? []) {
-          if (!uniqueCards.has(change.cardId)) {
+          if (change.cardId > 0 && !uniqueCards.has(change.cardId)) {
             uniqueCards.set(change.cardId, {
               cardId: change.cardId,
               cardName: change.cardName,
@@ -61,7 +61,7 @@ export function useMatchReplayView({
       }
     } else {
       for (const play of timelineRows) {
-        if (!uniqueCards.has(play.cardId)) {
+        if (play.cardId > 0 && !uniqueCards.has(play.cardId)) {
           uniqueCards.set(play.cardId, {
             cardId: play.cardId,
             cardName: play.cardName,
@@ -91,7 +91,7 @@ export function useMatchReplayView({
     return out;
   }, [boardPreviewCards, boardCardPreviewQueries]);
   const isBoardCardPreviewLoading = boardCardPreviewQueries.some(
-    (queryRow) => queryRow.isPending,
+    (queryRow) => queryRow.isFetching,
   );
   const timelineGroups = useMemo(() => {
     const byGame = new Map<number, MatchCardPlay[]>();

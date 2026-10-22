@@ -164,7 +164,8 @@ func (s *Store) CompleteDraftSession(ctx context.Context, tx *sql.Tx, eventName 
 	}
 
 	if eventName != "" {
-		res, err := tx.ExecContext(ctx, `
+		var sessionID int64
+		err := tx.QueryRowContext(ctx, `
 			UPDATE draft_sessions
 			SET event_name = COALESCE(?, event_name), completed_at = COALESCE(completed_at, ?), updated_at = ?
 			WHERE id = (
@@ -184,13 +185,16 @@ func (s *Store) CompleteDraftSession(ctx context.Context, tx *sql.Tx, eventName 
 				id DESC
 				LIMIT 1
 			)
-		`, nullIfEmpty(eventName), nullIfEmpty(ts), nowUTC(), isBotInt, eventName, eventName)
+			RETURNING id
+		`, nullIfEmpty(eventName), nullIfEmpty(ts), nowUTC(), isBotInt, eventName, eventName).Scan(&sessionID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
 		if err != nil {
 			return fmt.Errorf("complete draft session by event_name: %w", err)
 		}
-		if rowsAffected, rowsErr := res.RowsAffected(); rowsErr == nil && rowsAffected > 0 {
-			return nil
-		}
+		// Completion may be the first event that names a human draft session.
+		return s.ensureDraftSessionEventRun(ctx, tx, sessionID)
 	}
 
 	return nil

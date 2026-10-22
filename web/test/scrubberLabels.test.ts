@@ -20,3 +20,10 @@ test("known starting player determines own and opposing turns", () => {
  expect(scrubberTurnLabel(2, "play")).toBe("T1 Opp");
  expect(scrubberTurnLabel(1, "draw")).toBe("T1 Opp");
 });
+
+import { timelinePhaseLabel } from "../src/lib/replay";
+test("main phases use game terminology", () => {
+ expect(timelinePhaseLabel("Main1")).toBe("Precombat main");
+ expect(timelinePhaseLabel("Main2")).toBe("Postcombat main");
+ expect(timelinePhaseLabel("combat_begin")).toBe("Combat Begin");
+});

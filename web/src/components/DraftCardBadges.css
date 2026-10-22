@@ -1,0 +1,35 @@
+.draft-card-badges {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.draft-card-badge {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+  padding: 0.3em 0.55em;
+  border: 1px solid rgba(218, 204, 171, 0.65);
+  border-radius: 5px;
+  background: rgba(15, 18, 24, 0.94);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.65);
+  color: #f5f7fa;
+  font-family: var(--font-mono);
+  font-size: clamp(10px, 0.95vw, 18px);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.draft-card-badge-label {
+  color: #c1c7d0;
+  font-size: 0.65em;
+  letter-spacing: 0.04em;
+}
+
+.draft-card-badge .win-rate--positive { color: #8be0b5; }
+.draft-card-badge .win-rate--negative { color: #ff9c92; }
+.draft-card-badge .win-rate--neutral { color: #f5f7fa; }

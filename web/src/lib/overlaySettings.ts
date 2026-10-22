@@ -1,4 +1,12 @@
 export type OverlaySettings = {
+  draftCardBadges: boolean;
+  draftBadgeLeft: number;
+  draftBadgeTop: number;
+  draftBadgeWidth: number;
+  draftBadgeHeight: number;
+  draftBadgeGapX: number;
+  draftBadgeGapY: number;
+  draftBadgeColumns: number;
   showDeck: boolean;
   showOpponent: boolean;
   showDraft: boolean;
@@ -10,6 +18,14 @@ export type OverlaySettings = {
 };
 
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
+  draftCardBadges: true,
+  draftBadgeLeft: 18.7,
+  draftBadgeTop: 28.5,
+  draftBadgeWidth: 7.9,
+  draftBadgeHeight: 31.6,
+  draftBadgeGapX: 1.3,
+  draftBadgeGapY: 1.6,
+  draftBadgeColumns: 8,
   showDeck: true,
   showOpponent: true,
   showDraft: true,

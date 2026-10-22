@@ -4,6 +4,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { ManaSymbol } from "../components/ManaSymbol";
 import { CardPreviewName } from "../components/CardPreviewName";
+import { DraftCardBadges } from "../components/DraftCardBadges";
 import { CardStatLine, useDraftCardStats, type DraftCardStats } from "../components/CardStats";
 import { api } from "../lib/api";
 import { pct } from "../lib/format";
@@ -467,6 +468,8 @@ export function OverlayPage() {
     return (
       <main className="overlay-hud" aria-label="Ponder draft overlay" ref={hudRef}>
         {settings.showDraft && <DraftPackPanel key={draft.sessionId} draft={draft} hoveredCard={activePreview} shortcut={settings.shortcut} />}
+        {settings.showDraft && settings.draftCardBadges && !draftQuery.isError &&
+          <DraftCardBadges draft={draft} settings={settings} />}
       </main>
     );
   }

@@ -169,5 +169,6 @@ func (s *Server) handleLiveDraft(w http.ResponseWriter, r *http.Request) {
 	for i := range draft.Pack {
 		draft.Pack[i].CardName = names[draft.Pack[i].CardID]
 	}
+	draft.DisplayPack = draftDisplayPack(ctx, draft.Pack)
 	writeJSON(w, http.StatusOK, map[string]any{"draft": draft})
 }

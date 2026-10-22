@@ -23,6 +23,8 @@ export type LiveDraft = {
   /** The pick is made and the next pack has not arrived; pack is empty. */
   waiting: boolean;
   pack: { cardId: number; cardName?: string }[];
+  /** Arena's default rarity/color order; absent if local sort metadata is unavailable. */
+  displayPack?: { cardId: number; cardName?: string }[];
 };
 
 export type SetInfo = {

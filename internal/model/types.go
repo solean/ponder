@@ -628,6 +628,8 @@ type LiveDraft struct {
 	// arrived; Pack is then empty.
 	Waiting bool            `json:"waiting"`
 	Pack    []DraftPickCard `json:"pack"`
+	// DisplayPack follows Arena visual order when every card has local sort metadata.
+	DisplayPack []DraftPickCard `json:"displayPack,omitempty"`
 }
 
 type LiveMatch struct {

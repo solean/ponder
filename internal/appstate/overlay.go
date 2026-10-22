@@ -8,26 +8,42 @@ import (
 )
 
 type OverlaySettings struct {
-	ShowDeck     bool    `json:"showDeck"`
-	ShowOpponent bool    `json:"showOpponent"`
-	ShowDraft    bool    `json:"showDraft"`
-	PanelSize    string  `json:"panelSize"`
-	Opacity      float64 `json:"opacity"`
-	CardPreviews bool    `json:"cardPreviews"`
-	HoverDelayMs int     `json:"hoverDelayMs"`
-	Shortcut     string  `json:"shortcut"`
+	DraftCardBadges   bool    `json:"draftCardBadges"`
+	DraftBadgeLeft    float64 `json:"draftBadgeLeft"`
+	DraftBadgeTop     float64 `json:"draftBadgeTop"`
+	DraftBadgeWidth   float64 `json:"draftBadgeWidth"`
+	DraftBadgeHeight  float64 `json:"draftBadgeHeight"`
+	DraftBadgeGapX    float64 `json:"draftBadgeGapX"`
+	DraftBadgeGapY    float64 `json:"draftBadgeGapY"`
+	DraftBadgeColumns int     `json:"draftBadgeColumns"`
+	ShowDeck          bool    `json:"showDeck"`
+	ShowOpponent      bool    `json:"showOpponent"`
+	ShowDraft         bool    `json:"showDraft"`
+	PanelSize         string  `json:"panelSize"`
+	Opacity           float64 `json:"opacity"`
+	CardPreviews      bool    `json:"cardPreviews"`
+	HoverDelayMs      int     `json:"hoverDelayMs"`
+	Shortcut          string  `json:"shortcut"`
 }
 
 func DefaultOverlaySettings() OverlaySettings {
 	return OverlaySettings{
-		ShowDeck:     true,
-		ShowOpponent: true,
-		ShowDraft:    true,
-		PanelSize:    "default",
-		Opacity:      0.9,
-		CardPreviews: true,
-		HoverDelayMs: 250,
-		Shortcut:     "CmdOrCtrl+Shift+O",
+		DraftCardBadges:   true,
+		DraftBadgeLeft:    18.7,
+		DraftBadgeTop:     28.5,
+		DraftBadgeWidth:   7.9,
+		DraftBadgeHeight:  31.6,
+		DraftBadgeGapX:    1.3,
+		DraftBadgeGapY:    1.6,
+		DraftBadgeColumns: 8,
+		ShowDeck:          true,
+		ShowOpponent:      true,
+		ShowDraft:         true,
+		PanelSize:         "default",
+		Opacity:           0.9,
+		CardPreviews:      true,
+		HoverDelayMs:      250,
+		Shortcut:          "CmdOrCtrl+Shift+O",
 	}
 }
 
@@ -44,6 +60,25 @@ func (s *OverlaySettings) UnmarshalJSON(data []byte) error {
 }
 
 func ValidateOverlaySettings(settings OverlaySettings) error {
+	for _, field := range []struct {
+		name            string
+		value, min, max float64
+	}{
+		{"draft badge left", settings.DraftBadgeLeft, 0, 90},
+		{"draft badge top", settings.DraftBadgeTop, 0, 90},
+		{"draft badge width", settings.DraftBadgeWidth, 1, 60},
+		{"draft badge height", settings.DraftBadgeHeight, 1, 60},
+		{"draft badge horizontal gap", settings.DraftBadgeGapX, 0, 20},
+		{"draft badge vertical gap", settings.DraftBadgeGapY, 0, 20},
+	} {
+		if math.IsNaN(field.value) || math.IsInf(field.value, 0) || field.value < field.min || field.value > field.max {
+			return fmt.Errorf("%s must be between %g and %g", field.name, field.min, field.max)
+		}
+	}
+	if settings.DraftBadgeColumns < 1 || settings.DraftBadgeColumns > 15 {
+		return fmt.Errorf("draft badge columns must be between 1 and 15")
+	}
+
 	if settings.PanelSize != "compact" && settings.PanelSize != "default" && settings.PanelSize != "large" {
 		return fmt.Errorf("panel size must be compact, default, or large")
 	}

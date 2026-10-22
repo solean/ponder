@@ -20,3 +20,8 @@
 .overlay-settings-sample-menus > span { display: flex; justify-content: space-between; }
 .overlay-settings-preview-note { color: var(--muted-strong); font-size: var(--text-sm); }
 @media (max-width: 760px) { .overlay-settings-fields { grid-template-columns: 1fr; gap: 1.5rem; } }
+
+.overlay-badge-help { margin: .5rem 0 .75rem; }
+.overlay-badge-calibration summary { cursor: pointer; font-size: var(--text-sm); }
+.overlay-badge-calibration > .settings-note { margin: .75rem 0; }
+.overlay-badge-calibration .settings-field { margin-top: .65rem; }

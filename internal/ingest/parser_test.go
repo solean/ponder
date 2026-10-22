@@ -1276,7 +1276,7 @@ func TestReplayFramesCaptureGameResultMetadata(t *testing.T) {
 	}
 }
 
-func TestReplayFramesTrackHandCountsWithoutOpponentIdentity(t *testing.T) {
+func TestReplayFramesTrackHandCountsAndCurrentOpponentKnowledge(t *testing.T) {
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test-replay-hand.db")
@@ -1330,7 +1330,11 @@ func TestReplayFramesTrackHandCountsWithoutOpponentIdentity(t *testing.T) {
 		{`[{"zoneId":35,"type":"ZoneType_Hand","ownerSeatId":2,"objectInstanceIds":[]}]`, `[]`, nil},
 		{`[{"zoneId":35,"type":"ZoneType_Hand","ownerSeatId":2,"objectInstanceIds":[201]}]`,
 			`[{"instanceId":201,"grpId":90189,"type":"GameObjectType_Card","zoneId":35,"visibility":"Visibility_Private","ownerSeatId":2,"controllerSeatId":2}]`, nil},
+		{`[]`, `[{"instanceId":201,"grpId":90189,"type":"GameObjectType_Card","zoneId":35,"visibility":"Visibility_Private","ownerSeatId":2}]`, nil},
+		{`[{"zoneId":35,"type":"ZoneType_Hand","ownerSeatId":2,"objectInstanceIds":[204]}]`, `[]`, nil},
 		{`[]`, `[{"instanceId":201,"type":"GameObjectType_Card","zoneId":36,"visibility":"Visibility_Private","ownerSeatId":2}]`, nil},
+		// Returning the old ID after a hidden/library move is not a new reveal.
+		{`[{"zoneId":35,"type":"ZoneType_Hand","ownerSeatId":2,"objectInstanceIds":[201]}]`, `[{"instanceId":201,"zoneId":35,"ownerSeatId":2}]`, nil},
 	}
 	for index, diff := range diffs {
 		payload, err := json.Marshal(map[string]any{
@@ -1358,7 +1362,7 @@ func TestReplayFramesTrackHandCountsWithoutOpponentIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list resumed replay frames: %v", err)
 	}
-	wantOpponentHands := [][]int64{{201, 202}, {201, 202}, {201, 202, 203}, {202, 203}, {203}, {}, {201}, {}}
+	wantOpponentHands := [][]int64{{201, 202}, {201, 202}, {201, 202, 203}, {202, 203}, {203}, {}, {201}, {201}, {204}, {204}, {201}}
 	if len(frames) != len(wantOpponentHands) {
 		t.Fatalf("got %d frames, want %d", len(frames), len(wantOpponentHands))
 	}
@@ -1370,6 +1374,14 @@ func TestReplayFramesTrackHandCountsWithoutOpponentIdentity(t *testing.T) {
 				selfHand = append(selfHand, object)
 			case "opponent":
 				opponentHand = append(opponentHand, object)
+				if index == 2 || index == 6 {
+					if object.InstanceID == 201 {
+						if object.CardID != 90189 || (object.Visibility != "public" && object.Visibility != "known") {
+							t.Fatalf("frame %d known hand identity = %#v", index, object)
+						}
+						continue
+					}
+				}
 				if object.CardID != 0 || object.CardName != "" || object.DetailsJSON != "" ||
 					object.Power != nil || object.Toughness != nil || object.AttackTargetID != nil ||
 					object.AttackState != "" || object.BlockState != "" || object.BlockAttackerIDsJSON != "" ||

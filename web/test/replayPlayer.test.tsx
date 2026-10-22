@@ -155,3 +155,21 @@ test("expanding full event details preserves playback and selected original fram
   expect(transport().textContent).toContain("Pause");
   expect(timers.size).toBe(1);
 });
+
+test("opponent hand renders only identities known in the selected snapshot", async () => {
+  const { MatchReplayFrameSideSummary } = await import("../src/components/match-detail/ReplayZones");
+  const base = { id: 1, frameId: 1, instanceId: 1, cardId: 100, cardName: "Known Island", playerSide: "opponent" as const, zoneType: "hand", isToken: false, isTapped: false, hasSummoningSickness: false };
+  const renderHand = (visibility: string, cardId = 100) => act(() => root.render(
+    <MatchReplayFrameSideSummary side="opponent" objects={[{ ...base, visibility, cardId }]} variant="rail" previewByCardID={new Map()} />,
+  ));
+  renderHand("public");
+  expect(container.querySelector('a[aria-label="Open Known Island on Scryfall"]')).not.toBeNull();
+  renderHand("known");
+  expect(container.querySelector('a[aria-label="Open Known Island on Scryfall"]')).not.toBeNull();
+  renderHand("private");
+  expect(container.querySelector("a")).toBeNull();
+  expect(container.querySelector('[aria-label="Face-down card"]')).not.toBeNull();
+  renderHand("private", 0);
+  expect(container.textContent).not.toContain("Known Island");
+  expect(container.querySelector('[aria-label="Face-down card"]')).not.toBeNull();
+});

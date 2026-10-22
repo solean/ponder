@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import magicCardbackURL from "../../assets/magic-cardback.jpg";
 import {
   boardZoneKind,
+  replayHandIdentityKnown,
   boardZoneLabel,
   isInspectableZoneKind,
   sortReplayObjects,
@@ -212,6 +213,7 @@ export function MatchReplayZoneDialog({
 export function MatchReplayFrameSideSummary({
   side,
   objects,
+  previewByCardID = new Map(),
   lifeTotal,
   includeHand = false,
   onOpenZone,
@@ -223,6 +225,7 @@ export function MatchReplayFrameSideSummary({
 }: {
   side: "self" | "opponent";
   objects: MatchReplayFrameObject[];
+  previewByCardID?: Map<number, CardPreview | null>;
   lifeTotal?: number;
   includeHand?: boolean;
   onOpenZone?: (state: MatchReplayZoneDialogState) => void;
@@ -272,7 +275,14 @@ export function MatchReplayFrameSideSummary({
               <div className="match-replay-compact-hand-cards">
                 {sideObjects
                   .filter((object) => boardZoneKind(object.zoneType) === "hand")
-                  .map((object) => (
+                  .map((object) => replayHandIdentityKnown(object) ? (
+                    <MatchReplayObjectCard
+                      key={object.instanceId}
+                      object={object}
+                      preview={previewByCardID.get(object.cardId) ?? null}
+                      size="hand"
+                    />
+                  ) : (
                     <div
                       key={object.instanceId}
                       className="match-replay-card is-cardback"

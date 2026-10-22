@@ -29,7 +29,7 @@ var (
 	rePersonaMatchTo    = regexp.MustCompile(`Match to ([A-Za-z0-9_\-]+):`)
 	reClientID          = regexp.MustCompile(`"clientId"\s*:\s*"([A-Za-z0-9_\-]+)"`)
 	reScreenName        = regexp.MustCompile(`"screenName"\s*:\s*"([^"]+)"`)
-	reUnityLogTimestamp = regexp.MustCompile(`^\[UnityCrossThreadLogger\](\d{1,2}/\d{1,2}/\d{4} \d{1,2}:\d{2}:\d{2} (?:AM|PM))`)
+	reUnityLogTimestamp = regexp.MustCompile(`^\[UnityCrossThreadLogger\](\d{1,2}/\d{1,2}/\d{4} \d{1,2}:\d{2}:\d{2} (?:AM|PM))(.*)$`)
 )
 
 type Parser struct {
@@ -39,6 +39,9 @@ type Parser struct {
 	playerName              string
 	pendingCompletedMatches []string
 	historicalReplayLogs    map[string]bool
+	headerZones             [headerKindCount]headerZone
+	// headerLoc overrides time.Local for header times; tests pin it.
+	headerLoc *time.Location
 }
 
 func NewParser(store *db.Store) *Parser {
@@ -72,6 +75,9 @@ type parseState struct {
 	deckByEvent               map[string]string
 	replayByMatchGame         map[string]*replayPublicState
 	lastUnityLogTimestamp     string
+	lastClockAnchor           time.Time
+	lastClockAnchorLine       int64
+	pendingSuffixedHeader     time.Time
 	pendingResponseMethod     string
 	pendingResponseRequestID  string
 	pendingResponseObservedAt string
@@ -598,6 +604,9 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		stats.CompletedAt = time.Now().UTC()
 		return stats, nil
 	}
+	if err := p.primeHeaderZones(file, progress.Offset); err != nil {
+		return stats, err
+	}
 
 	// Backfills reset offsets but retain the old nonempty cursor signature. A
 	// genuine empty-log checkpoint has an empty signature and may carry cross-log
@@ -764,9 +773,7 @@ func (p *Parser) processLine(ctx context.Context, tx *sql.Tx, stats *model.Parse
 		return nil
 	}
 
-	if ts := parseUnityLogTimestamp(line); ts != "" {
-		state.lastUnityLogTimestamp = ts
-	}
+	p.observeLogClock(state, lineNo, line)
 
 	// ClientToGRE deck submissions are emitted as a header followed by a
 	// pretty-printed JSON object. Abort an incomplete object at the next Unity
@@ -911,18 +918,6 @@ func (p *Parser) handleClientToGREJSON(payload []byte, state *parseState) error 
 		expectedGame,
 	)
 	return nil
-}
-
-func parseUnityLogTimestamp(line string) string {
-	m := reUnityLogTimestamp.FindStringSubmatch(strings.TrimSpace(line))
-	if len(m) != 2 {
-		return ""
-	}
-	parsed, err := time.ParseInLocation("1/2/2006 3:04:05 PM", m[1], time.Local)
-	if err != nil {
-		return ""
-	}
-	return parsed.UTC().Format(time.RFC3339Nano)
 }
 
 func decodeRawRequest(raw json.RawMessage) ([]byte, error) {

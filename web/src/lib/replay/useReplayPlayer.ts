@@ -11,6 +11,9 @@ type ReplayPlayer = {
   index: number;
   setIndex: (next: number | ((current: number) => number)) => void;
   isPlaying: boolean;
+  togglePlay: () => void;
+  canPlay: boolean;
+  playLabel: "Play" | "Pause" | "Replay";
   setIsPlaying: (next: boolean | ((current: boolean) => boolean)) => void;
   /** Autoplay speed multiplier (1 = the original 1200ms cadence). */
   speed: number;
@@ -35,6 +38,23 @@ export function useReplayPlayer(
   const [speed, setSpeed] = useState(1);
   const lastIndex = length > 0 ? length - 1 : 0;
   const safeIndex = Math.min(index, lastIndex);
+  const canPlay = length > 1;
+  const playLabel = isPlaying
+    ? "Pause"
+    : canPlay && safeIndex === lastIndex
+      ? "Replay"
+      : "Play";
+
+  const togglePlay = () => {
+    if (!canPlay) {
+      return;
+    }
+    // Completed games open on the final board; starting playback replays them.
+    if (!isPlaying && safeIndex === lastIndex) {
+      setIndex(0);
+    }
+    setIsPlaying((current) => !current);
+  };
 
   useEffect(() => {
     if (length === 0) {
@@ -65,6 +85,9 @@ export function useReplayPlayer(
     index: safeIndex,
     setIndex,
     isPlaying,
+    togglePlay,
+    canPlay,
+    playLabel,
     setIsPlaying,
     speed,
     setSpeed,

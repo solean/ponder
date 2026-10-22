@@ -199,128 +199,8 @@ func (s *Store) CompleteDraftSession(ctx context.Context, tx *sql.Tx, eventName 
 func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 	now := nowUTC()
 
+	// Picks first: the session pass reads their timestamps.
 	_, err := s.db.ExecContext(ctx, `
-		WITH valid_events AS MATERIALIZED (
-			SELECT * FROM events_raw WHERE json_valid(payload_json)
-		)
-		UPDATE draft_sessions
-		SET
-			event_name = COALESCE(
-				NULLIF(draft_sessions.event_name, ''),
-				(
-					SELECT COALESCE(
-						NULLIF(json_extract(er.payload_json, '$.EventId'), ''),
-						NULLIF(json_extract(er.payload_json, '$.EventName'), '')
-					)
-					FROM valid_events er
-					WHERE er.kind = 'outgoing'
-					  AND er.method_name = 'LogBusinessEvents'
-					  AND json_extract(er.payload_json, '$.EventType') = 24
-					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
-					ORDER BY COALESCE(NULLIF(json_extract(er.payload_json, '$.EventTime'), ''), er.created_at) DESC, er.id DESC
-					LIMIT 1
-				),
-				(
-					SELECT NULLIF(json_extract(er.payload_json, '$.EventName'), '')
-					FROM valid_events er
-					WHERE er.kind = 'outgoing'
-					  AND er.method_name = 'DraftCompleteDraft'
-					  AND json_extract(er.payload_json, '$.IsBotDraft') = draft_sessions.is_bot_draft
-					  AND er.created_at >= draft_sessions.updated_at
-					ORDER BY er.created_at ASC, er.id ASC
-					LIMIT 1
-				),
-				(
-					SELECT NULLIF(json_extract(er.payload_json, '$.EventName'), '')
-					FROM valid_events er
-					WHERE er.kind = 'outgoing'
-					  AND er.method_name = 'EventSetDeckV2'
-					  AND LOWER(COALESCE(json_extract(er.payload_json, '$.EventName'), '')) LIKE '%draft%'
-					  AND er.created_at >= draft_sessions.updated_at
-					ORDER BY er.created_at ASC, er.id ASC
-					LIMIT 1
-				)
-			),
-			started_at = COALESCE(
-				NULLIF(draft_sessions.started_at, ''),
-				(
-					SELECT MIN(COALESCE(NULLIF(json_extract(er.payload_json, '$.EventTime'), ''), er.created_at))
-					FROM valid_events er
-					WHERE er.kind = 'outgoing'
-					  AND er.method_name = 'LogBusinessEvents'
-					  AND json_extract(er.payload_json, '$.EventType') = 24
-					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
-				),
-				(
-					SELECT MIN(er.created_at)
-					FROM valid_events er
-					WHERE er.kind = 'outgoing'
-					  AND er.method_name = 'EventPlayerDraftMakePick'
-					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
-				)
-			),
-			completed_at = COALESCE(
-				NULLIF(draft_sessions.completed_at, ''),
-				(
-					SELECT MAX(COALESCE(NULLIF(json_extract(er.payload_json, '$.EventTime'), ''), er.created_at))
-					FROM valid_events er
-					WHERE er.kind = 'outgoing'
-					  AND er.method_name = 'LogBusinessEvents'
-					  AND json_extract(er.payload_json, '$.EventType') = 24
-					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
-				),
-				(
-					SELECT er.created_at
-					FROM valid_events er
-					WHERE er.kind = 'outgoing'
-					  AND er.method_name = 'DraftCompleteDraft'
-					  AND json_extract(er.payload_json, '$.IsBotDraft') = draft_sessions.is_bot_draft
-					  AND er.created_at >= draft_sessions.updated_at
-					ORDER BY er.created_at ASC, er.id ASC
-					LIMIT 1
-				),
-				(
-					SELECT MAX(er.created_at)
-					FROM valid_events er
-					WHERE er.kind = 'outgoing'
-					  AND er.method_name = 'EventPlayerDraftMakePick'
-					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
-				)
-			),
-			updated_at = ?
-		WHERE draft_sessions.draft_id IS NOT NULL
-		  AND (
-			COALESCE(draft_sessions.event_name, '') = ''
-			OR COALESCE(draft_sessions.started_at, '') = ''
-			OR COALESCE(draft_sessions.completed_at, '') = ''
-		  )
-		  AND EXISTS (
-			SELECT 1
-			FROM valid_events er
-			WHERE er.kind = 'outgoing'
-			  AND (
-				(
-					er.method_name = 'LogBusinessEvents'
-					AND json_extract(er.payload_json, '$.EventType') = 24
-					AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
-				)
-				OR (
-					er.method_name = 'EventPlayerDraftMakePick'
-					AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
-				)
-				OR (
-					er.method_name = 'DraftCompleteDraft'
-					AND json_extract(er.payload_json, '$.IsBotDraft') = draft_sessions.is_bot_draft
-					AND er.created_at >= draft_sessions.updated_at
-				)
-			  )
-		  )
-	`, now)
-	if err != nil {
-		return fmt.Errorf("repair draft sessions from raw events: %w", err)
-	}
-
-	_, err = s.db.ExecContext(ctx, `
 		WITH valid_events AS MATERIALIZED (
 			SELECT * FROM events_raw WHERE json_valid(payload_json)
 		)
@@ -401,6 +281,140 @@ func (s *Store) RepairDraftDataFromRawEvents(ctx context.Context) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("repair draft picks from raw events: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, `
+		WITH valid_events AS MATERIALIZED (
+			SELECT * FROM events_raw WHERE json_valid(payload_json)
+		),
+		pick_events AS MATERIALIZED (
+			SELECT id, json_extract(payload_json, '$.DraftId') AS draft_id
+			FROM valid_events
+			WHERE kind = 'outgoing'
+			  AND (
+				method_name = 'EventPlayerDraftMakePick'
+				OR (method_name = 'LogBusinessEvents' AND json_extract(payload_json, '$.EventType') = 24)
+			  )
+		),
+		last_picks AS MATERIALIZED (
+			SELECT draft_id, MAX(id) AS last_id FROM pick_events GROUP BY draft_id
+		)
+		UPDATE draft_sessions
+		SET
+			event_name = COALESCE(
+				NULLIF(draft_sessions.event_name, ''),
+				(
+					SELECT COALESCE(
+						NULLIF(json_extract(er.payload_json, '$.EventId'), ''),
+						NULLIF(json_extract(er.payload_json, '$.EventName'), '')
+					)
+					FROM valid_events er
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'LogBusinessEvents'
+					  AND json_extract(er.payload_json, '$.EventType') = 24
+					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
+					ORDER BY COALESCE(NULLIF(json_extract(er.payload_json, '$.EventTime'), ''), er.created_at) DESC, er.id DESC
+					LIMIT 1
+				),
+				(
+					SELECT NULLIF(json_extract(er.payload_json, '$.EventName'), '')
+					FROM valid_events er
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'DraftCompleteDraft'
+					  AND json_extract(er.payload_json, '$.IsBotDraft') = draft_sessions.is_bot_draft
+					  AND er.created_at >= draft_sessions.updated_at
+					ORDER BY er.created_at ASC, er.id ASC
+					LIMIT 1
+				),
+				(
+					SELECT NULLIF(json_extract(er.payload_json, '$.EventName'), '')
+					FROM valid_events er
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'EventSetDeckV2'
+					  AND LOWER(COALESCE(json_extract(er.payload_json, '$.EventName'), '')) LIKE '%draft%'
+					  AND er.created_at >= draft_sessions.updated_at
+					ORDER BY er.created_at ASC, er.id ASC
+					LIMIT 1
+				)
+			),
+			started_at = COALESCE(
+				NULLIF(draft_sessions.started_at, ''),
+				(
+					SELECT MIN(COALESCE(NULLIF(json_extract(er.payload_json, '$.EventTime'), ''), er.created_at))
+					FROM valid_events er
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'LogBusinessEvents'
+					  AND json_extract(er.payload_json, '$.EventType') = 24
+					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
+				),
+				(
+					SELECT MIN(er.created_at)
+					FROM valid_events er
+					WHERE er.kind = 'outgoing'
+					  AND er.method_name = 'EventPlayerDraftMakePick'
+					  AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
+				)
+			),
+			-- This pass runs after every ingest batch, mid-draft included, so
+			-- a draft only counts as finished once a DraftCompleteDraft follows
+			-- its last pick with no other draft's picks in between.
+			completed_at = COALESCE(
+				NULLIF(draft_sessions.completed_at, ''),
+				(
+					SELECT COALESCE(
+						(
+							SELECT MAX(dp.pick_ts)
+							FROM draft_picks dp
+							WHERE dp.draft_session_id = draft_sessions.id
+							  AND COALESCE(dp.pick_ts, '') <> ''
+						),
+						cd.created_at
+					)
+					FROM last_picks lp
+					JOIN valid_events cd ON cd.id > lp.last_id
+					WHERE lp.draft_id = draft_sessions.draft_id
+					  AND cd.kind = 'outgoing'
+					  AND cd.method_name = 'DraftCompleteDraft'
+					  AND json_extract(cd.payload_json, '$.IsBotDraft') = draft_sessions.is_bot_draft
+					  AND NOT EXISTS (
+						SELECT 1 FROM pick_events pe
+						WHERE pe.id > lp.last_id AND pe.id < cd.id
+					  )
+					ORDER BY cd.id ASC
+					LIMIT 1
+				)
+			),
+			updated_at = ?
+		WHERE draft_sessions.draft_id IS NOT NULL
+		  AND (
+			COALESCE(draft_sessions.event_name, '') = ''
+			OR COALESCE(draft_sessions.started_at, '') = ''
+			OR COALESCE(draft_sessions.completed_at, '') = ''
+		  )
+		  AND EXISTS (
+			SELECT 1
+			FROM valid_events er
+			WHERE er.kind = 'outgoing'
+			  AND (
+				(
+					er.method_name = 'LogBusinessEvents'
+					AND json_extract(er.payload_json, '$.EventType') = 24
+					AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
+				)
+				OR (
+					er.method_name = 'EventPlayerDraftMakePick'
+					AND json_extract(er.payload_json, '$.DraftId') = draft_sessions.draft_id
+				)
+				OR (
+					er.method_name = 'DraftCompleteDraft'
+					AND json_extract(er.payload_json, '$.IsBotDraft') = draft_sessions.is_bot_draft
+					AND er.created_at >= draft_sessions.updated_at
+				)
+			  )
+		  )
+	`, now)
+	if err != nil {
+		return fmt.Errorf("repair draft sessions from raw events: %w", err)
 	}
 
 	return nil

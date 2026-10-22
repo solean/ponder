@@ -1,6 +1,6 @@
+import { scrubberTurnLabel, selectScrubberLabels } from "../../lib/replay/scrubberLabels";
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
-  boardTurnLabel,
   buildReplayBeat,
   replayFrameMomentLabel,
   replayLifeDelta,
@@ -151,7 +151,9 @@ export function MatchReplayScrubber({
   tickKinds,
   keyMoments,
   snapshotForIndex,
+  playDraw,
 }: {
+  playDraw?: "play" | "draw" | "";
   length: number;
   index: number;
   onSeek: (index: number) => void;
@@ -163,6 +165,26 @@ export function MatchReplayScrubber({
   snapshotForIndex?: (index: number) => ReplayScrubberSnapshot | null;
 }) {
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const labelsRef = useRef<HTMLDivElement | null>(null);
+  const [labelPositions, setLabelPositions] = useState<Map<number, number>>(new Map());
+  useEffect(() => {
+    const track = trackRef.current;
+    const labels = labelsRef.current;
+    if (!track || !labels) return;
+    const measure = () => {
+      const candidates = Array.from(labels.children).map((element) => ({
+        index: Number((element as HTMLElement).dataset.index),
+        width: element.getBoundingClientRect().width,
+      }));
+      setLabelPositions(selectScrubberLabels(candidates, Math.max(0, length - 1), track.getBoundingClientRect().width));
+    };
+    measure();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    observer?.observe(track);
+    let disposed = false;
+    document.fonts?.ready.then(() => { if (!disposed) measure(); });
+    return () => { disposed = true; observer?.disconnect(); };
+  }, [length, turnBoundaries, playDraw]);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const lastIndex = length > 0 ? length - 1 : 0;
@@ -323,14 +345,15 @@ export function MatchReplayScrubber({
           ) : null}
         </svg>
 
-        <div className="match-replay-scrubber-turn-labels" aria-hidden="true">
+        <div ref={labelsRef} className="match-replay-scrubber-turn-labels" title={!playDraw ? "a/b: first/second player turn in each round; starting player unknown" : undefined} aria-hidden="true">
           {turnBoundaries.map((boundary) => (
             <span
               key={`turn-label-${boundary.turnKey}-${boundary.firstIndex}`}
               className="match-replay-scrubber-turn-label"
-              style={{ left: `${pctOf(boundary.firstIndex)}%` }}
+              data-index={boundary.firstIndex}
+              style={{ left: labelPositions.get(boundary.firstIndex) ?? 0, visibility: labelPositions.has(boundary.firstIndex) ? "visible" : "hidden" }}
             >
-              {boardTurnLabel(boundary.turnKey)}
+              {scrubberTurnLabel(boundary.turnKey, playDraw)}
             </span>
           ))}
         </div>

@@ -57,11 +57,13 @@ const REPLAY_MOVELIST_COLLAPSED_KEY = "ponder.replayMoveListCollapsed";
 
 export function MatchReplayFrameBoard({
   gameNumber,
+  playDraw,
   frames,
   gameSummary,
   previewByCardID,
 }: {
   gameNumber: number;
+  playDraw?: "play" | "draw" | "";
   frames: MatchReplayFrame[];
   gameSummary: ReplayGameSummary | null;
   previewByCardID: Map<number, CardPreview | null>;
@@ -611,6 +613,7 @@ export function MatchReplayFrameBoard({
 
         <div className="match-replay-track-panel">
           <MatchReplayScrubber
+            playDraw={playDraw}
             length={frames.length}
             index={safeSelectedFrameIndex}
             onSeek={(nextIndex) => {

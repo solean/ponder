@@ -87,6 +87,7 @@ export function MatchReplayPanel({
               <MatchReplayFrameBoard
                 key={activeReplayGroup.gameNumber}
                 gameNumber={activeReplayGroup.gameNumber}
+                playDraw={activeTimelineGameAnalytics?.playDrawConfidence !== "unknown" ? activeTimelineGameAnalytics?.playDraw : undefined}
                 frames={activeReplayGroup.frames}
                 gameSummary={activeReplayGroup.summary}
                 previewByCardID={boardPreviewByCardID}

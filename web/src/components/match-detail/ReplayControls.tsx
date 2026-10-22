@@ -1,4 +1,5 @@
 import { scrubberTurnLabel, selectScrubberLabels } from "../../lib/replay/scrubberLabels";
+import { replayFrameMatches, type ReplayCategory } from "../../lib/replay/navigation";
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   buildReplayBeat,
@@ -541,6 +542,9 @@ export function MatchReplayMoveList({
   onToggleCollapsed: () => void;
   onSeek: (index: number) => void;
 }) {
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<ReplayCategory>("all");
+  const matchingIndices = new Set(frames.flatMap((frame, index) => replayFrameMatches(frame, relationships, query, category) ? [index] : []));
   const beats = useMemo(
     () =>
       frames.map((frame, index) =>
@@ -595,13 +599,22 @@ export function MatchReplayMoveList({
           {collapsed ? "+" : "–"}
         </span>
       </button>
+        <div className="match-replay-filters" hidden={collapsed}>
+          <input aria-label="Search replay cards" placeholder="Search cards…" value={query} onChange={event => setQuery(event.target.value)} />
+          <select aria-label="Replay category" value={category} onChange={event => setCategory(event.target.value as ReplayCategory)}>
+            <option value="all">All events</option><option value="spells">Spells</option><option value="combat">Combat</option><option value="removal">Removal</option>
+          </select>
+          <button type="button" disabled={!query && category === "all"} onClick={() => { setQuery(""); setCategory("all"); }}>Clear filters</button>
+          <span>{matchingIndices.size} of {frames.length} steps</span>
+        </div>
       <div
         id={scrollId}
         ref={scrollRef}
         className="match-replay-movelist-scroll"
         hidden={collapsed}
       >
-        {turnBoundaries.map((boundary) => (
+        {matchingIndices.size === 0 ? <p>No matching events. Clear filters to see every step.</p> : null}
+        {turnBoundaries.filter(boundary => Array.from(matchingIndices).some(index => index >= boundary.firstIndex && index <= boundary.lastIndex)).map((boundary) => (
           <div
             className="match-replay-movelist-turn"
             key={`${boundary.turnKey}-${boundary.firstIndex}`}
@@ -615,7 +628,7 @@ export function MatchReplayMoveList({
             ).map((index) => {
               const isCurrent = index === currentIndex;
               const beat = beats[index];
-              if (!beat) {
+              if (!beat || !matchingIndices.has(index)) {
                 return null;
               }
               return (
@@ -628,7 +641,7 @@ export function MatchReplayMoveList({
                   onClick={() => onSeek(index)}
                 >
                   <span className="match-replay-movelist-beat-text">
-                    {beat.text}
+                    <small>Step {index + 1} · </small>{beat.text}
                   </span>
                   {beat.note ? (
                     <span className="match-replay-movelist-beat-note">

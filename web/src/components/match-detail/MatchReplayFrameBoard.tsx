@@ -1,3 +1,4 @@
+import { isReplayDecision, replayNavigationIndex } from "../../lib/replay/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePersistedFlag } from "../../lib/persistedFlag";
 import {
@@ -69,6 +70,9 @@ export function MatchReplayFrameBoard({
   gameSummary: ReplayGameSummary | null;
   previewByCardID: Map<number, CardPreview | null>;
 }) {
+  const [decisionMode, setDecisionMode] = useState(false);
+  const relationships = useMemo(() => buildReplayRelationshipIndex(frames), [frames]);
+  const decisionIndices = useMemo(() => frames.flatMap((frame, index) => index === 0 || index === frames.length - 1 || isReplayDecision(frame, frames[index - 1], relationships) ? [index] : []), [frames, relationships]);
   const {
     index: safeSelectedFrameIndex,
     setIndex: setSelectedFrameIndex,
@@ -80,7 +84,7 @@ export function MatchReplayFrameBoard({
     speed,
     setSpeed,
     lastIndex: lastFrameIndex,
-  } = useReplayPlayer(frames.length, preferredReplayFrameIndex(frames));
+  } = useReplayPlayer(frames.length, preferredReplayFrameIndex(frames), decisionMode ? decisionIndices : undefined);
   const [zoneDialogState, setZoneDialogState] =
     useState<MatchReplayZoneDialogState | null>(null);
   const [focusedConnectionInstanceId, setFocusedConnectionInstanceId] =
@@ -104,10 +108,6 @@ export function MatchReplayFrameBoard({
   const lifeSeries = useMemo(() => buildReplayLifeSeries(frames), [frames]);
   const tickKinds = useMemo(() => buildReplayTickKinds(frames), [frames]);
   const keyMoments = useMemo(() => findReplayKeyMoments(frames), [frames]);
-  const relationships = useMemo(
-    () => buildReplayRelationshipIndex(frames),
-    [frames],
-  );
   const targetsBySourceId = relationships.spellTargetsBySourceId;
 
   // Lazily-built, cached per index: users sweep the scrubber back and forth
@@ -464,11 +464,11 @@ export function MatchReplayFrameBoard({
   };
   const goToPrevStep = () => {
     setIsPlaying(false);
-    setSelectedFrameIndex(Math.max(safeSelectedFrameIndex - 1, 0));
+    setSelectedFrameIndex(replayNavigationIndex(safeSelectedFrameIndex, -1, frames.length, decisionMode ? decisionIndices : undefined));
   };
   const goToNextStep = () => {
     setIsPlaying(false);
-    setSelectedFrameIndex(Math.min(safeSelectedFrameIndex + 1, lastFrameIndex));
+    setSelectedFrameIndex(replayNavigationIndex(safeSelectedFrameIndex, 1, frames.length, decisionMode ? decisionIndices : undefined));
   };
   const goToPrevTurn = () => {
     setIsPlaying(false);
@@ -609,6 +609,7 @@ export function MatchReplayFrameBoard({
 
           <div className="match-replay-controls-aux">
             <MatchReplaySpeedControl speed={speed} onSelectSpeed={setSpeed} />
+            <label className="match-replay-decision-mode"><input type="checkbox" checked={decisionMode} onChange={event => setDecisionMode(event.target.checked)} /> Decisions only</label>
           </div>
         </div>
 

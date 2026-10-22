@@ -1305,7 +1305,7 @@ function replayChangeIsGenuineVisibilityLoss(
   );
 }
 
-function replayChangeIsNarratable(change: MatchReplayChange): boolean {
+export function replayChangeIsNarratable(change: MatchReplayChange): boolean {
   if (replayChangeIsNoiseMove(change) || replayChangeIsLimboParking(change)) {
     return false;
   }

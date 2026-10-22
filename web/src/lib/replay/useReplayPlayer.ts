@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { replayNavigationIndex } from "./navigation";
 
 /** Autoplay cadence at 1× speed; divided by the selected speed multiplier. */
 const BASE_AUTOPLAY_INTERVAL_MS = 1200;
@@ -32,6 +33,7 @@ type ReplayPlayer = {
 export function useReplayPlayer(
   length: number,
   initialIndex: number,
+  decisionIndices?: number[],
 ): ReplayPlayer {
   const [index, setIndex] = useState(initialIndex);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -75,11 +77,11 @@ export function useReplayPlayer(
     }
 
     const timeoutID = window.setTimeout(() => {
-      setIndex(Math.min(safeIndex + 1, lastIndex));
+      setIndex(replayNavigationIndex(safeIndex, 1, length, decisionIndices));
     }, BASE_AUTOPLAY_INTERVAL_MS / speed);
 
     return () => window.clearTimeout(timeoutID);
-  }, [isPlaying, lastIndex, safeIndex, speed]);
+  }, [isPlaying, lastIndex, safeIndex, speed, decisionIndices, length]);
 
   return {
     index: safeIndex,

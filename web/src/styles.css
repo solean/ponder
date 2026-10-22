@@ -12525,3 +12525,10 @@ html.overlay-document body::before {
     top: 0;
   }
 }
+/* IXN-27: replay event navigation */
+.match-replay-filters { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); }
+.match-replay-filters[hidden] { display: none; }
+.match-replay-filters input { width: 100%; min-width: 0; }
+.match-replay-filters input, .match-replay-filters select, .match-replay-filters button { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 3px; padding: 6px; }
+.match-replay-filters span, .match-replay-movelist-beat small { opacity: .65; font-size: 11px; }
+.match-replay-decision-mode { display: flex; align-items: center; gap: 5px; font-size: 12px; }

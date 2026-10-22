@@ -123,3 +123,20 @@ for (const mode of ["frames", "observed"] as const) {
     });
   });
 }
+
+test("decisions-only playback skips routine frames while original steps remain available", () => {
+  const frames = [
+    { id: 1, turnNumber: 1 },
+    { id: 2, turnNumber: 1, changes: [{ instanceId: 9, cardId: 9, cardName: "Forest", action: "tap", playerSide: "self" as const, isToken: false }] },
+    { id: 3, turnNumber: 1 },
+  ];
+  act(() => root.render(<MatchReplayFrameBoard gameNumber={1} frames={frames} gameSummary={null} previewByCardID={new Map()} />));
+  act(() => container.querySelector<HTMLInputElement>(".match-replay-decision-mode input")!.click());
+  act(() => transport().click());
+  expect(position()).toBe(1);
+  tick();
+  expect(position()).toBe(3);
+  const routine = [...container.querySelectorAll<HTMLButtonElement>(".match-replay-movelist-beat")].find(button => button.textContent?.includes("Forest"))!;
+  act(() => routine.click());
+  expect(position()).toBe(2);
+});

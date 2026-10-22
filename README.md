@@ -1,322 +1,270 @@
 # Ponder
 
-Local MTG Arena log parser + viewer.
+Private, local-first match tracking and analytics for **MTG Arena** on macOS.
 
-This MVP includes:
-- Go backend parser for `Player.log` / `Player-prev.log`
-- SQLite storage for matches, decks, drafts, event runs, and Arena economy snapshots
-- Local HTTP API
-- React/Vite frontend for overview, match history, decks, drafts, and economy tracking
+Ponder reads the log file Arena already writes on your Mac, turns it into a
+local database of your matches, decks, drafts, and economy, and gives you a
+native app to explore it, plus an in-game overlay that tracks your library
+while you play. Nothing is uploaded and you don't need an account.
 
-Rank progress lives on Overview. Its **Season details** link opens tier win rates
-and season history for the selected ladder and season; browser Back restores the
-Overview selection. Detail records count tracked matches, which may differ from
-Arena's season totals shown in the Overview rank panel. Season history reports
-the last recorded rank, not a guaranteed end-of-season finish.
+## Features
 
-Drafts has **Overview**, **Performance**, and **Matchups** tabs. Overview keeps
-the event win-rate chart and draft sessions; Matchups shows set matchups for
-the newest release by default, or any single set or **All sets** via its picker.
-Performance reuses the deck analytics dashboard for match/game records,
-play/draw splits, mulligans, opening hands, game shape, and card performance.
-Select **All sets**, an individual **Draft set**, or **Unknown set** to scope
-the dashboard and its game drill-downs.
-It pools recorded draft games across decks, including matches without captured
-draft picks or a linked deck; constructed and sealed matches are excluded.
-Coverage indicators distinguish missing game facts from recorded results. The
-card performance table scrolls under a sticky header and filters by card name.
+- **Overview**: rank progress for Constructed and Limited, recent form,
+  streaks, an activity calendar, and your most-played decks. **Season
+  details** breaks down win rates by tier and season.
+- **Matches**: full match history with game-by-game results, the opponent's
+  revealed cards, a turn-by-turn timeline, and a **visual replay** of every
+  game you play while Ponder is tracking.
+- **Decks**: per-deck records, play/draw splits, mulligan and opening-hand
+  stats, card performance, matchups by opponent colors and archetype, deck
+  version history, and one-click export back to Arena.
+- **Drafts**: every pick, the full pack contents, and a pack-by-pack replay,
+  annotated with **17Lands** card ratings (GIH WR, ATA, and more). You also
+  get draft performance and set matchups across all your Limited play.
+- **Economy**: gold, gems, wildcards, vault progress, boosters, and where
+  each change came from.
+- **In-game overlay**: shows your remaining deck and the opponent's revealed
+  cards at the top edges of Arena's window, with card previews on hover.
+- **AI deck primers and game reviews** (optional): generated through the
+  Claude Code or Codex CLI using your existing subscription.
+- **Menu bar status**: start or stop tracking and see the current match at a
+  glance, even with the window closed.
 
-Each draft report annotates the Pick Log, pack dialog, and Pack Replay with
-17Lands card ratings (GIH WR toned against the format average, ATA; hover for
-GP WR, IWD, ALSA, and sample sizes) for Premier, Traditional, Quick, and Pick
-Two drafts. **Settings → Draft Ratings** narrows them to 17Lands' top, middle,
-or bottom player group and can pin one event type for every draft instead of
-matching each draft's own; 17Lands has no player groups for Quick Draft, so its
-ratings always cover all players. Ratings come from the 17Lands card data
-endpoint, fetched by the backend at most once per set, format, and player group
-per day and cached in `card_stat_snapshots`; a failed refresh serves the cached copy and waits 15
-minutes before retrying. 17Lands states this data is for use on 17lands.com;
-this is a personal-use integration, and a public release would need their
-permission or a switch to the CC BY public datasets
-(`research/17lands-card-data-research.md`).
+## Install
 
-## Project Layout
+**Requirements:** macOS 12 Monterey or later, on Apple Silicon or Intel, with
+MTG Arena installed.
 
-- `cmd/ponder` - CLI entrypoint (`parse`, `tail`, `serve`)
-- `internal` - backend packages (db, ingest, api)
-- `web` - frontend app
-- `spec.md` - planning/spec document
+1. Download the latest `Ponder.dmg` from
+   [GitHub Releases](https://github.com/solean/ponder/releases).
+2. Open it and drag **Ponder** into your **Applications** folder.
+3. Launch Ponder from Applications or Spotlight.
 
-## Root Scripts
+> Signed and notarized releases are still being set up. Until they're
+> published, [build the app from source](#building-the-app). If macOS blocks a
+> build you got from someone else, open **System Settings → Privacy &
+> Security** and click **Open Anyway**.
+
+Ponder checks GitHub for new versions. Use **Settings → Application → Check
+for Updates**, or turn on automatic checks there. To install an update,
+replace the app in Applications with the new download. Your data stays where
+it is.
+
+## Getting started
+
+### 1. Turn on Detailed Logs in Arena
+
+Ponder needs Arena's detailed logs to see match, deck, and draft data. In
+Arena, open **Options → Account**, check **Detailed Logs (Plugin Support)**,
+then restart Arena. Wizards'
+[log file instructions](https://mtgarena-support.wizards.com/hc/en-us/articles/360000726823-Creating-Log-Files-on-PC-Mac-Steam)
+have more detail.
+
+### 2. Open Ponder and play
+
+Tracking starts automatically. On launch, Ponder imports everything still in
+Arena's current and previous logs. After that it records new activity as it
+happens. Arena only keeps its last two sessions of logs, so leave Ponder
+running while you play. Matches played with Ponder closed can't be recovered
+once Arena overwrites those logs.
+
+Ponder reads logs from `~/Library/Logs/Wizards Of The Coast/MTGA/`. You can
+point it at a different file under **Settings → Tracking → Advanced
+tracking**.
+
+### 3. Leave it running
+
+- Closing the window hides Ponder but keeps tracking. Reopen it from the Dock
+  or the menu bar, and quit with **⌘Q**.
+- The **menu bar icon** has a Live Tracking switch and shows the opponent,
+  game, turn, and deck during a match. Filled orbs mean tracking is on,
+  hollow orbs mean it's off, and an exclamation mark means something needs
+  attention.
+- Turn on **Settings → Application → Launch Ponder at login** to have it
+  ready whenever you start your Mac.
+
+## The in-game overlay
+
+During a live match, Ponder shows two panels flush with the top edges of
+Arena's window. Your side lists the cards left in your library, and the
+opponent's side lists the cards they've revealed. Both are sorted by mana
+value, with lands last. Hover any row to see the card.
+
+The overlay only appears while Arena is the frontmost app and a match is in
+progress. It never captures clicks or scrolling, so everything passes through
+to Arena.
+
+Press **⌘⇧O** to hide or show it, even while Arena has focus, or use
+**Overlay → Hide Game Overlay** in Ponder's app menu. More options are
+under **Settings → Overlay**.
+
+## AI primers and game reviews
+
+Ponder can write a strategy primer for any deck and review individual games
+from their replays. It does this by running an AI command-line tool you've
+already installed and signed into, so it uses your existing subscription.
+Ponder never sees or stores your credentials.
+
+- **Claude**: install [Claude Code](https://claude.com/claude-code) and sign
+  in with your Claude account.
+- **OpenAI**: install the [Codex CLI](https://github.com/openai/codex), run
+  `codex login`, and choose **Sign in with ChatGPT**.
+
+Then pick the provider and model under **Settings → AI**. When you generate a
+primer or review, the relevant deck list and game data are sent to that
+provider.
+
+## 17Lands draft ratings
+
+Draft reports show 17Lands card ratings for Premier, Traditional, Quick, and
+Pick Two drafts. Under **Settings → Draft Ratings** you can limit ratings to
+17Lands' top, middle, or bottom player group, or pin a single event type for
+every draft. Ratings are fetched at most once a day per set and format and
+then cached, so they still show when you're offline.
+
+17Lands provides this data for use on 17lands.com. Ponder's integration is
+intended for personal use.
+
+## Privacy
+
+Your match history, decks, drafts, and settings live only on your Mac. Ponder
+has no accounts, sync, or telemetry. It makes these outbound requests:
+
+| Service | What for |
+| --- | --- |
+| [Scryfall](https://scryfall.com) | Card names, images, and set symbols |
+| [17Lands](https://www.17lands.com) | Draft card ratings |
+| GitHub | Checking for new Ponder releases |
+| Claude Code / Codex CLI | AI primers and reviews, only when you ask for one |
+
+## Your data
+
+Everything is stored in `~/Library/Application Support/ponder/`:
+
+- `ponder.db` is the SQLite database with all your tracked history.
+- `config.json` holds your settings.
+
+**Settings → Data** shows both paths and can reveal them in Finder. To back
+up, quit Ponder and copy that folder.
+
+### Uninstalling
+
+1. Quit Ponder and drag it from Applications to the Trash.
+2. To remove your data too, delete `~/Library/Application Support/ponder/`.
+3. If you turned on launch at login, delete
+   `~/Library/LaunchAgents/dev.ixianlabs.ponder.plist`.
+
+---
+
+## Development
+
+Ponder is a [Wails v3](https://v3.wails.io) desktop app. The Go backend
+parses Arena logs into SQLite and serves a JSON API, and the React frontend
+(Vite, TypeScript, Tailwind) is embedded in the app.
+
+### Prerequisites
+
+- Go 1.25+
+- [Bun](https://bun.sh) 1.3+
+- Xcode Command Line Tools (`xcode-select --install`)
+- The Wails CLI:
+
+  ```bash
+  go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
+  ```
+
+Install frontend dependencies once:
 
 ```bash
-./scripts/start-backend.sh      # go run ./cmd/ponder serve
-./scripts/start-backend-dev.sh  # serve with hot reload via air (go install github.com/air-verse/air@latest)
-./scripts/start-desktop.sh      # wails3 dev using data/ponder.db
-./scripts/start-parse.sh        # go run ./cmd/ponder parse -resume=true
-./scripts/start-tail.sh         # go run ./cmd/ponder tail -interval=2s
-./scripts/start-web.sh          # bun run dev (in web/)
+cd web && bun install
 ```
 
-Each script forwards additional arguments to its underlying command.
-
-The desktop in-game overlay places your deck and the opponent's revealed cards
-flush with the top screen edges of Arena's window, on whichever display and
-Space Arena occupies. On macOS it is bound to the Arena client: it appears only
-while Arena is the frontmost application and disappears the moment you switch
-away, so it never floats over other apps. It also requires a live match that is
-still producing game events — a match left in progress by quitting Arena stops
-driving the overlay after ten idle minutes, and the overlay never returns while
-Arena is closed. It is display-only: clicks and scrolling pass
-through to Arena everywhere, including beneath its panels and card previews.
-On macOS, hovering anywhere on a visible card row shows its image using passive
-cursor tracking; the overlay never enables mouse capture. Other platforms remain
-click-through without hover previews until passive cursor tracking is available.
-Both panels list nonlands by ascending mana value, with lands at the bottom and
-alphabetical ties. Cards with no copies remaining stay in their mana-order
-position and are dimmed. Ordering uses the shared card-preview metadata cache;
-cards with unknown mana values follow known-cost nonlands while metadata loads.
-
-Press **Cmd+Shift+O** on macOS (**Ctrl+Shift+O** on Windows/Linux) to hide or show
-both panels, even while Arena has focus. Ponder also has an **Overlay → Show / Hide
-Game Overlay** menu item. Hiding clears the entire overlay, including previews;
-the same shortcut restores it. The choice lasts until toggled again or Ponder
-restarts, including across games. Enabling it outside a live match waits for the
-next match rather than displaying stale game data.
-
-## Backend Setup
-
-Requirements:
-- Go 1.22+
-
-Commands:
+### Run the desktop app in development
 
 ```bash
-go mod tidy
-go build ./...
-```
-
-## Parse a Log File
-
-Default (recommended on macOS):
-- Parses `~/Library/Logs/Wizards Of The Coast/MTGA/Player-prev.log`
-- Then parses `~/Library/Logs/Wizards Of The Coast/MTGA/Player.log`
-
-```bash
-go run ./cmd/ponder parse -db data/ponder.db -resume=false
-```
-
-Use `-resume=true` for incremental ingestion:
-
-```bash
-go run ./cmd/ponder parse -db data/ponder.db -resume=true
-```
-
-Incremental ingestion saves parsing context with its cursor, so restarting the
-app or live tracking preserves active-match diffs, pending responses, and deck
-submissions. Existing databases with cursor-only checkpoints rebuild the saved
-log prefix when new lines next arrive, without committing duplicate records.
-That one-time recovery scales with the prefix length; ordinary unchanged polls
-do not reparse the log or load its full context.
-
-Optional explicit log path:
-
-```bash
-go run ./cmd/ponder parse -db data/ponder.db -log /absolute/path/to/Player.log -resume=true
-```
-
-## Tail a Live Log
-
-Default (recommended on macOS): tails `~/Library/Logs/Wizards Of The Coast/MTGA/Player.log`
-
-```bash
-go run ./cmd/ponder tail -db data/ponder.db -interval=2s
-```
-
-`tail` now logs activity summaries whenever new log lines are ingested (for example when matches/decks/events are picked up).
-
-Enable idle heartbeat logs (every poll):
-
-```bash
-go run ./cmd/ponder tail -db data/ponder.db -interval=2s -verbose=true
-```
-
-Optional explicit log path:
-
-```bash
-go run ./cmd/ponder tail -db data/ponder.db -log /absolute/path/to/Player.log -interval=2s
-```
-
-## Run API Server
-
-```bash
-go run ./cmd/ponder serve -db data/ponder.db
-```
-
-The server listens on `127.0.0.1:8080` by default. You can override this with
-`-addr`; binding to a non-loopback address exposes the unauthenticated API to
-machines that can reach the host.
-
-The API rejects untrusted browser origins with HTTP 403 before dispatching any
-handler, including bodyless runtime controls. Same-origin pages and HTTP(S)
-origins on `localhost` or a loopback IP are trusted; all loopback ports remain
-supported for local development. JSON endpoints require `Content-Type: application/json` (parameters such as
-`charset=utf-8` are accepted), and return HTTP 415 for missing or unsupported
-media types. Bodyless controls
-do not require that header.
-
-Requests without `Origin` remain supported for CLI clients. If a Referer or
-`Sec-Fetch-Site: cross-site` identifies an untrusted browser request, it is
-rejected. `Origin: null`, malformed origins, and duplicate Origin headers are
-rejected. Native Wails asset requests use a separate policy that accepts the
-local Wails origin/Referer; those exceptions do not apply to HTTP listeners.
-
-Default listeners accept only localhost and loopback Host headers. An explicit
-non-loopback `-addr` permits its configured IP or hostname; a wildcard bind
-permits literal IP hosts. Arbitrary DNS names remain rejected unless explicitly
-configured. Remote same-origin pages are supported with an explicit remote bind,
-but this policy is not authentication: clients without browser origin headers
-can still use any API exposed by that bind. Forwarded host/protocol headers do
-not expand the trusted origin policy.
-
-API endpoints:
-- `GET /api/health`
-- `GET /api/overview`
-- `POST /api/activity` with `{ "days": [{ "date": "2026-07-03", "start": "2026-07-03T04:00:00Z", "end": "2026-07-04T04:00:00Z" }] }` → daily counts, W/L/unresolved results, tracked duration/count, and Limited/Constructed mix over the complete range. Send 1–366 consecutive dates with contiguous browser-local midnight intervals; DST days can span 23 or 25 hours. Recent-match limits do not apply.
-- `GET /api/economy`
-- `GET /api/matches?limit=500` → `{ "matches": [...], "total": N }`; `limit` defaults to 200 and is clamped to 20000, `total` ignores it so the UI can say "showing N of M"
-- `GET /api/matches/:id`
-- `GET /api/matches/:id/timeline`
-- `GET /api/matches/:id/replay` → replay frame array
-- `GET /api/matches/:id/replay-status` → `{ "revision": "...", "complete": true }`; metadata-only freshness check, or 404 for an unknown match
-- `GET /api/decks` (constructed decks only)
-- `GET /api/decks?scope=draft`
-- `GET /api/decks?scope=all`
-- `GET /api/decks/:id`
-- `GET /api/drafts`
-- `GET /api/drafts/analytics[?set=BLB]` → `{ "analytics": {...}, "sets": [...] }`; the set list is independent of the filter. Omit `set` for all draft sets, or use `set=` for unknown-set drafts.
-- `GET /api/drafts/analytics/games[?set=BLB]` → games behind a draft statistic; accepts the deck analytics filters `card`, `facet`, `keptSize`, `mulligans`, `turns`, `game`, `playDraw`, `landDrops`, and `limit`.
-- `GET /api/drafts/:id/picks`
-- `GET /api/card-stats?event=PremierDraft_FRA_20260929` → 17Lands ratings for the event's set and draft format: `{ "status": "ok", "expansion", "format", "fetchedAt", "stale", "sourceUrl", "meanGihWinRate", "cards": [...] }`, or `{ "status": "unsupported", "cards": [] }` for formats without draft ratings; 502 when 17Lands is unreachable and nothing is cached.
-- `GET /api/decks/:id/matchups`
-- `GET /api/decks/:id/matchups/refs?colors=UR&archetype=control`
-- `GET /api/limited/matchups`
-- `GET /api/limited/matchups/refs?set=TMT&colors=BG[&group=UBG]`
-
-Matchup summaries carry a `matchCount` per row but omit the per-match
-`matchRefs` list, which grows with the match count; the `/refs` endpoints serve
-one row's matches for the expanded drill-down. Omitting `group` selects the
-set-level rows, while an empty `group=` selects the unknown-own-colors bucket.
-
-While Replay or AI Game Review is open, the frontend checks replay status every
-2 seconds for unfinished matches and every 10 seconds for completed matches.
-Revision changes refresh the replay, match detail, and timeline without decoding
-the archive on unchanged status checks. Completed payloads have a five-minute
-freshness window; inactive replay cache entries expire after 60 seconds.
-Imports invalidate replay caches, and late frames or same-ID snapshot replacements
-change the status revision. The revision is an opaque comparison token, not a
-client-parsed timestamp.
-
-## Replay Storage Compaction
-
-Replay frames are stored as relational rows while a match is live, then
-automatically compacted into a zstd-compressed archive blob
-(`match_replay_archives`) when the match completes. This reduces replay
-storage by roughly 50x. Compaction for older matches also runs in the
-background when `parse`, `tail`, `serve`, or the desktop app starts, followed
-by a `VACUUM` to shrink the database file.
-
-To compact an existing database manually:
-
-```bash
-go run ./cmd/ponder compact -db data/ponder.db
-```
-
-## Frontend Setup
-
-Requirements:
-- Bun 1.3+
-
-Commands:
-
-```bash
-cd web
-bun install
-bun run dev
-```
-
-Vite dev server runs at `http://127.0.0.1:5173` and proxies `/api` to `http://127.0.0.1:8080`.
-
-Production build:
-
-```bash
-cd web
-bun run build
-```
-
-When `web/dist` exists, backend `serve` will also host built assets from `/`.
-
-## Desktop App
-
-The desktop shell uses Wails v3. Install the matching CLI, then run the native
-development loop:
-
-```bash
-go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
 ./scripts/start-desktop.sh
 ```
 
-`start-desktop.sh` runs `wails3 dev` with `PONDER_DB_PATH` set to the same
-`data/ponder.db` used by `start-backend-dev.sh`. Stop that backend process
-before starting the desktop app so two ingestion processes do not write to the
-same database. Running `wails3 dev` directly without the variable uses the
-normal application-support database.
+This runs `wails3 dev` against `data/ponder.db` in the repo instead of your
+real Application Support database. Edits in `web/src` hot-reload in place, and
+Go changes rebuild and relaunch the app. Running `wails3 dev` without the
+script uses the normal Application Support database.
 
-Under `wails3 dev`, the window loads the frontend from the Vite dev server, so
-edits in `web/src` hot-reload in place without restarting the app. Go changes
-trigger a rebuild and relaunch of the native app; Vite keeps running.
+Only run one process that ingests into a database at a time. Stop
+`start-backend*.sh` before starting the desktop app, and vice versa.
 
-`wails3 build` produces the native binary and `wails3 package` creates the
-platform bundle. Both commands use the checked-in `Taskfile.yml` and
-`build/config.yml`; Bun remains the frontend package runner.
+### Run in a browser instead
 
-In production, the API is mounted on the Wails asset server, so the frontend
-reaches it same-origin without a listening port or CORS exposure. Development
-mode starts the development-only localhost API on
-`http://127.0.0.1:39123` for the Vite proxy. For plain browser development
-against `ponder serve` on port 8080, continue to use `bun run dev` from `web/`.
+```bash
+./scripts/start-backend-dev.sh   # API on 127.0.0.1:8080, hot reload via air
+./scripts/start-web.sh           # Vite on 127.0.0.1:5173, proxies /api to 8080
+```
 
-Desktop behaviors:
-- On macOS, a menu bar icon remains visible while Ponder runs, even with its
-  window hidden. Its dropdown opens with a Live Tracking switch that starts or
-  stops the tracker, then offers Open Ponder and Quit. Under the switch, the
-  menu shows the opponent, game, turn, and deck during a match; otherwise it
-  shows how long ago MTGA last wrote new log activity. The icon's orbs are
-  filled while tracking runs and hollow while it is off; an exclamation mark
-  means tracking needs attention. Hover for details. Status refreshes every
-  two seconds.
-- Closing the window hides it and keeps the app (and live log tailing)
-  running; reopen from the Dock, quit with Cmd+Q.
-- A second launch focuses the existing window instead of starting another
-  instance.
-- Startup failures surface in a native error dialog and as a 503 from the API.
-- Settings has a "Launch Ponder at login" toggle (macOS LaunchAgent) and a
-  "Check for Updates" button against GitHub releases. The app version comes
-  from `internal/version` (override with
-  `-ldflags "-X github.com/solean/ponder/internal/version.Version=x.y.z"`).
+`start-backend-dev.sh` needs [air](https://github.com/air-verse/air)
+(`go install github.com/air-verse/air@latest`).
+`start-backend.sh` runs the same server without hot reload.
 
-By default, the desktop app stores its SQLite database and runtime config under `~/Library/Application Support/ponder/`.
+### Building the app
 
-## Notes
+```bash
+wails3 package                          # bin/Ponder.app for this Mac's architecture
+wails3 task darwin:package:universal    # bin/Ponder.app for Apple Silicon + Intel
+```
 
-- Event aliasing is implemented for common Arena naming differences (e.g. `FIN_Quick_Draft` to `QuickDraft_FIN_...`).
-- Draft parsing supports both `BotDraftDraftPick` and `EventPlayerDraftMakePick`. Available pack cards are captured from bot-draft responses and player-draft `Draft.Notify` lines (or older `LogBusinessEvents`), then shown per pick in the draft report. Only drafts still present in `Player.log`/`Player-prev.log` can be backfilled by re-parsing with `-resume=false`.
-- Economy parsing tracks `InventoryInfo` snapshots: gold, gems, wildcards, vault progress, wildcard-track position, boosters, custom tokens, vouchers, and change sources.
-- Deck card names are resolved on demand and cached in the local `card_catalog` table:
-  - First from the local MTGA raw card DB (`Raw_CardDatabase*.mtga`) if found.
-  - Then from Scryfall for any remaining unresolved IDs.
-- Match detail (`GET /api/matches/:id`) includes a partial opponent list from public GRE game objects
-  (cards seen on stack/battlefield/exile/graveyard/revealed zones).
-- Match timeline (`GET /api/matches/:id/timeline`) includes first observed public card plays (both players)
-  with turn/phase when available.
-- You can override the raw card DB path with `MTGA_RAW_CARD_DB=/absolute/path/to/Raw_CardDatabase_*.mtga`.
+Builds are ad-hoc signed. Product metadata (name, bundle ID, version) lives in
+`build/config.yml`, and the in-app version comes from `internal/version`.
+Override it at build time with
+`-ldflags "-X github.com/solean/ponder/internal/version.Version=x.y.z"`.
+
+### Command-line tool
+
+The `ponder` CLI runs the same ingestion and API without the desktop shell.
+It's useful for debugging the parser against real logs:
+
+```bash
+go run ./cmd/ponder parse -db data/ponder.db               # import Player-prev.log + Player.log
+go run ./cmd/ponder parse -db data/ponder.db -resume=false # re-import from scratch
+go run ./cmd/ponder tail  -db data/ponder.db -interval=2s  # follow Player.log live
+go run ./cmd/ponder serve -db data/ponder.db               # API (and web/dist if built) on :8080
+go run ./cmd/ponder compact -db data/ponder.db             # compress stored replays
+```
+
+Pass `-log /path/to/Player.log` to read a specific file. The `scripts/start-*.sh`
+wrappers forward extra arguments to these commands.
+
+The API binds to `127.0.0.1` and rejects cross-origin browser requests. It has
+no authentication, so think twice before passing a non-loopback `-addr`. In
+the packaged app the API runs inside the Wails asset server and opens no port
+at all.
+
+### Tests
+
+```bash
+go test ./...
+cd web && bun test && bun run typecheck
+```
+
+### Project layout
+
+| Path | Contents |
+| --- | --- |
+| `main.go`, `app.go`, `menu_bar*`, `overlay_native*` | Desktop shell: windows, menu bar, native overlay |
+| `cmd/ponder` | CLI entry point |
+| `internal/ingest` | Arena log parser |
+| `internal/db` | SQLite schema, migrations, and queries |
+| `internal/api` | HTTP API, plus Scryfall, 17Lands, and update-check clients |
+| `internal/ai` | Claude Code and Codex CLI integration |
+| `internal/appstate` | Runtime config, live tracking, launch at login |
+| `web` | React frontend |
+| `build` | Wails build config, app icon, platform packaging |
+
+Windows and Linux build targets come from the Wails template, but Ponder is
+developed and tested on macOS only.
+
+## Disclaimer
+
+Ponder is unofficial Fan Content permitted under the Wizards of the Coast Fan
+Content Policy. It is not approved or endorsed by Wizards. Portions of the
+materials used are property of Wizards of the Coast. ©Wizards of the Coast
+LLC. Card data and images are provided by Scryfall, and draft ratings by
+17Lands.

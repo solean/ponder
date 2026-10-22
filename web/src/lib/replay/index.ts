@@ -193,6 +193,8 @@ export function timelineZoneLabel(zone: string): string {
 export function timelinePhaseLabel(phase: string | undefined): string {
   const trimmed = phase?.trim() ?? "";
   if (!trimmed) return "-";
+  if (/^main_?1$/i.test(trimmed)) return "Precombat main";
+  if (/^main_?2$/i.test(trimmed)) return "Postcombat main";
   return trimmed
     .split("_")
     .filter(Boolean)

@@ -27,6 +27,7 @@ import {
   type ReplayBoardConnection,
   type ReplayGameSummary,
 } from "../../lib/replay";
+import { scrubberTurnLabel } from "../../lib/replay/scrubberLabels";
 import { useReplayKeyboard } from "../../lib/replay/useReplayKeyboard";
 import { useReplayPlayer } from "../../lib/replay/useReplayPlayer";
 import type { CardPreview } from "../../lib/scryfall";
@@ -125,7 +126,7 @@ export function MatchReplayFrameBoard({
       const prev = frameIndex > 0 ? (frames[frameIndex - 1] ?? null) : null;
       const life = lifeSeries[frameIndex];
       const snapshot: ReplayScrubberSnapshot = {
-        momentLabel: replayFrameMomentLabel(frame),
+        momentLabel: `${replayFrameMomentLabel(frame)} · ${scrubberTurnLabel(replayTurnValue(frame.turnNumber), playDraw)}`,
         stepLabel: `Step ${frameIndex + 1}/${frames.length}`,
         selfLife: life?.self ?? null,
         opponentLife: life?.opponent ?? null,
@@ -137,7 +138,7 @@ export function MatchReplayFrameBoard({
       cache.set(frameIndex, snapshot);
       return snapshot;
     };
-  }, [frames, lifeSeries, relationships]);
+  }, [frames, lifeSeries, relationships, playDraw]);
 
   const currentTurnBoundaryIndex = currentFrame
     ? turnBoundaries.findIndex(
@@ -507,7 +508,7 @@ export function MatchReplayFrameBoard({
 
   if (!currentFrame) {
     return (
-      <article className="panel inner match-replay-game">
+      <article className="match-replay-game">
         <div className="match-replay-head">
           <div className="match-replay-head-copy">
             <h4>Game {gameNumber}</h4>
@@ -518,7 +519,7 @@ export function MatchReplayFrameBoard({
               </div>
             ) : null}
           </div>
-          <p className="match-replay-kicker">Replay</p>
+
         </div>
         <StatusMessage>No replay steps for this game.</StatusMessage>
       </article>
@@ -526,7 +527,7 @@ export function MatchReplayFrameBoard({
   }
 
   return (
-    <article className="panel inner match-replay-game">
+    <article className="match-replay-game">
       <div className="match-replay-command-deck">
         <div className="match-replay-head">
           <div className="match-replay-head-copy">
@@ -565,7 +566,7 @@ export function MatchReplayFrameBoard({
               disabled={!canJumpPrevTurn}
               aria-label="Previous turn"
             >
-              <span>Prev Turn</span>
+              <span>Prev turn</span>
               <kbd className="match-replay-button-shortcut" aria-hidden="true">
                 ⇧←
               </kbd>
@@ -577,7 +578,7 @@ export function MatchReplayFrameBoard({
               disabled={!canStepBackward}
               aria-label="Previous step"
             >
-              <span>Prev Step</span>
+              <span>Prev step</span>
               <kbd className="match-replay-button-shortcut" aria-hidden="true">
                 ←
               </kbd>
@@ -588,7 +589,7 @@ export function MatchReplayFrameBoard({
               onClick={goToNextStep}
               disabled={!canStepForward}
             >
-              <span>Next Step</span>
+              <span>Next step</span>
               <kbd className="match-replay-button-shortcut" aria-hidden="true">
                 →
               </kbd>
@@ -599,7 +600,7 @@ export function MatchReplayFrameBoard({
               onClick={goToNextTurn}
               disabled={!canJumpNextTurn}
             >
-              <span>Next Turn</span>
+              <span>Next turn</span>
               <kbd className="match-replay-button-shortcut" aria-hidden="true">
                 ⇧→
               </kbd>

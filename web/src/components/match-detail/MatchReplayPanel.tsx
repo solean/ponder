@@ -41,17 +41,17 @@ export function MatchReplayPanel({
     isBoardCardPreviewLoading,
   } = view;
   return (
-    <section className="panel">
+    <section className="panel match-replay-panel">
       <div className="panel-head match-timeline-toolbar">
         <div className="match-timeline-heading">
-          <h3>Card Play Timeline</h3>
+          <h3>Game replay</h3>
         </div>
         {showTimelineGameTabs && activeTimelineGameNumber !== null ? (
           <MatchGameTabs
             gameNumbers={timelineGameNumbers}
             activeGameNumber={activeTimelineGameNumber}
             baseId={timelineGameTabBaseId}
-            ariaLabel="Timeline game selector"
+            ariaLabel="Replay game selector"
             onSelect={setSelectedTimelineGameNumber}
             onKeyDown={handleTimelineGameTabKeyDown}
           />
@@ -68,9 +68,8 @@ export function MatchReplayPanel({
       <div className="stack-md">
         {!hasReplayFrames ? (
           <p className="match-board-disclaimer">
-            Replay frames are not available for this match yet, so this fallback
-            board still uses first public sightings and cannot show a true
-            stack.
+            First-sighting fallback: this board shows when cards were first
+            publicly observed. Replay frames and the live stack are unavailable.
           </p>
         ) : null}
         {replayQuery.isPending ? (

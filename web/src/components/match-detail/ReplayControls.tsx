@@ -1,4 +1,5 @@
 import { scrubberTurnLabel, selectScrubberLabels } from "../../lib/replay/scrubberLabels";
+import { ReplayEventDetails } from "./ReplayEventDetails";
 import { replayFrameMatches, type ReplayCategory } from "../../lib/replay/navigation";
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
@@ -632,8 +633,8 @@ export function MatchReplayMoveList({
                 return null;
               }
               return (
+                <div key={index} className="match-replay-event-row">
                 <button
-                  key={index}
                   ref={isCurrent ? activeRef : undefined}
                   type="button"
                   className={`match-replay-movelist-beat ${isCurrent ? "is-current" : ""}`}
@@ -650,6 +651,8 @@ export function MatchReplayMoveList({
                     </span>
                   ) : null}
                 </button>
+                <ReplayEventDetails frame={frames[index]!} relationships={relationships} />
+                </div>
               );
             })}
           </div>

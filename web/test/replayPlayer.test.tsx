@@ -140,3 +140,18 @@ test("decisions-only playback skips routine frames while original steps remain a
   act(() => routine.click());
   expect(position()).toBe(2);
 });
+
+test("expanding full event details preserves playback and selected original frame", () => {
+  const changes = ["Alpha", "Beta"].map((cardName, index) => ({ instanceId: index + 1, cardId: index + 1, cardName, playerSide: "self" as const, action: "attack", isToken: false }));
+  act(() => root.render(<MatchReplayFrameBoard gameNumber={1} frames={[{ id: 1, turnNumber: 1, changes }, { id: 2, turnNumber: 1 }]} gameSummary={null} previewByCardID={new Map()} />));
+  act(() => transport().click());
+  expect(position()).toBe(1);
+  const details = container.querySelector<HTMLDetailsElement>(".match-replay-event-details")!;
+  act(() => details.querySelector("summary")!.click());
+  expect(details.open).toBe(true);
+  expect(details.textContent).toContain("Alpha");
+  expect(details.textContent).toContain("Beta");
+  expect(position()).toBe(1);
+  expect(transport().textContent).toContain("Pause");
+  expect(timers.size).toBe(1);
+});

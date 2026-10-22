@@ -765,6 +765,31 @@ describe("play-by-play beats", () => {
     ).toEqual({ text: "Kaito and 1 more enter your hand" });
   });
 
+  test("attributes simultaneous opening hands to each player", () => {
+    const entries = (["opponent", "self"] as const).flatMap((playerSide, side) =>
+      Array.from({ length: 7 }, (_, index) => change({
+        action: "enter_public", instanceId: side * 10 + index,
+        playerSide, cardId: playerSide === "opponent" ? 0 : 100,
+        cardName: playerSide === "self" ? "Island" : undefined,
+        toZoneType: "Hand",
+      })),
+    );
+    expect(buildReplayBeat(frame({ changes: entries }), null)).toEqual({
+      text: "7 cards enter opponent's hand; Island and 6 more enter your hand",
+    });
+  });
+
+  test("uses counts for hidden draws and keeps each actor separate", () => {
+    const changes = [change({ instanceId: 1, cardId: 0, playerSide: "opponent", action: "enter_public", toZoneType: "Hand" }),
+      change({ instanceId: 2, cardName: "Island", action: "enter_public", toZoneType: "Hand" })];
+    const annotationsJson = JSON.stringify({ annotations: [{ affectedIds: [1, 2], type: ["AnnotationType_ZoneTransfer"], details: [{ key: "category", valueString: ["Draw"] }] }] });
+    expect(buildReplayBeat(frame({ changes, annotationsJson }), null)).toEqual({ text: "Opponent draws a card; You draw Island" });
+  });
+
+  test("does not label known resync arrivals as reveals", () => {
+    expect(buildReplayBeat(frame({ changes: [change({ action: "enter_public", playerSide: "opponent", cardName: "Island", toZoneType: "Hand" })] }), frame({ objects: [] }))).toEqual({ text: "Island enters opponent's hand" });
+  });
+
   test("still calls an opponent hand card becoming visible a reveal", () => {
     expect(
       buildReplayBeat(
@@ -779,9 +804,15 @@ describe("play-by-play beats", () => {
             }),
           ],
         }),
-        null,
+        frame({ objects: [object({ instanceId: 1, playerSide: "opponent", cardId: 0, zoneType: "Hand" })] }),
       ),
     ).toEqual({ text: "Opponent reveals Kaito" });
+  });
+
+  test("hidden hand departures are never described as losing a reveal", () => {
+    const beat = buildReplayBeat(frame({ changes: [change({ action: "leave_public", playerSide: "opponent", cardId: 0, fromZoneType: "Hand" })] }), frame({}));
+    expect(beat.text).not.toContain("revealed");
+    expect(beat.text).not.toContain("Card 0");
   });
 
   test("only calls a real opponent-hand visibility loss no longer revealed", () => {

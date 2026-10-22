@@ -12532,3 +12532,10 @@ html.overlay-document body::before {
 .match-replay-filters input, .match-replay-filters select, .match-replay-filters button { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 3px; padding: 6px; }
 .match-replay-filters span, .match-replay-movelist-beat small { opacity: .65; font-size: 11px; }
 .match-replay-decision-mode { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+
+/* IXN-29: complete replay event detail disclosure */
+.match-replay-event-row > .match-replay-movelist-beat { width: 100%; }
+.match-replay-event-details { padding: 0 12px 10px; font-size: 12px; line-height: 1.5; }
+.match-replay-event-details summary { cursor: pointer; opacity: .8; }
+.match-replay-event-details ol { margin: 8px 0 0; padding-left: 20px; }
+.match-replay-event-details li + li { margin-top: 6px; }

@@ -751,10 +751,11 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		return stats, fmt.Errorf("commit final tx: %w", err)
 	}
 
-	// Raw events are only stored when draft repair can consume them, so their
-	// presence is the trigger to backfill draft metadata. Running here keeps
-	// the repair scans off the API read path.
-	if stats.RawEventsStored > 0 || stats.DraftPicksAdded > 0 {
+	// Historical imports reconcile older rows once after parsing. Live polls
+	// already persist packs and picks inline; scanning all retained draft history
+	// here holds the writer gate and delays the next pack by many seconds.
+	// Explicit maintenance also runs these repairs for existing databases.
+	if historicalReplay && (stats.RawEventsStored > 0 || stats.DraftPicksAdded > 0) {
 		if err := p.store.RepairDraftDataFromRawEvents(ctx); err != nil {
 			return stats, fmt.Errorf("repair draft data after ingest: %w", err)
 		}

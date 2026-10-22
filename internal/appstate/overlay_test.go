@@ -3,6 +3,7 @@ package appstate
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -78,5 +79,60 @@ func TestOverlaySettingsRejectInvalidAndUnavailableShortcut(t *testing.T) {
 	}
 	if s.OverlaySettings() != DefaultOverlaySettings() {
 		t.Fatal("failed registration changed config")
+	}
+}
+
+func TestOverlaySettingsDefaultFieldsMissingFromSavedConfig(t *testing.T) {
+	var saved Config
+	raw := `{"overlay":{"showDeck":false,"showOpponent":true,"panelSize":"large","opacity":0.5,"cardPreviews":true,"hoverDelayMs":100,"shortcut":"Ctrl+Alt+P"}}`
+	if err := json.Unmarshal([]byte(raw), &saved); err != nil {
+		t.Fatal(err)
+	}
+	saved = normalizeConfig(saved, time.Second)
+	got := *saved.Overlay
+	if !got.DraftCardBadges || got.DraftBadgeLeft != 18.7 || got.DraftBadgeTop != 28.5 || got.DraftBadgeWidth != 7.9 || got.DraftBadgeHeight != 31.6 || got.DraftBadgeGapX != 1.3 || got.DraftBadgeGapY != 1.6 || got.DraftBadgeColumns != 8 {
+		t.Fatalf("legacy config lost badge defaults: %+v", got)
+	}
+	if !got.ShowDraft {
+		t.Fatal("showDraft saved before it existed should default to on")
+	}
+	if got.ShowDeck || got.PanelSize != "large" || got.Shortcut != "Ctrl+Alt+P" {
+		t.Fatalf("saved values lost: %+v", got)
+	}
+}
+
+func TestOverlayDraftBadgeCalibrationValidation(t *testing.T) {
+	for _, field := range []func(*OverlaySettings, float64){
+		func(s *OverlaySettings, v float64) { s.DraftBadgeLeft = v },
+		func(s *OverlaySettings, v float64) { s.DraftBadgeTop = v },
+		func(s *OverlaySettings, v float64) { s.DraftBadgeWidth = v },
+		func(s *OverlaySettings, v float64) { s.DraftBadgeHeight = v },
+		func(s *OverlaySettings, v float64) { s.DraftBadgeGapX = v },
+		func(s *OverlaySettings, v float64) { s.DraftBadgeGapY = v },
+	} {
+		for _, invalid := range []float64{-1, 91, math.NaN(), math.Inf(1)} {
+			settings := DefaultOverlaySettings()
+			field(&settings, invalid)
+			if err := ValidateOverlaySettings(settings); err == nil {
+				t.Fatalf("accepted invalid calibration: %+v", settings)
+			}
+		}
+	}
+	for _, columns := range []int{0, 16} {
+		settings := DefaultOverlaySettings()
+		settings.DraftBadgeColumns = columns
+		if err := ValidateOverlaySettings(settings); err == nil {
+			t.Fatalf("accepted %d columns", columns)
+		}
+	}
+	var settings OverlaySettings
+	if err := json.Unmarshal([]byte(`{"showDraft":false,"draftCardBadges":false}`), &settings); err != nil {
+		t.Fatal(err)
+	}
+	expected := DefaultOverlaySettings()
+	expected.ShowDraft = false
+	expected.DraftCardBadges = false
+	if settings != expected {
+		t.Fatalf("legacy/default calibration = %+v, want %+v", settings, expected)
 	}
 }

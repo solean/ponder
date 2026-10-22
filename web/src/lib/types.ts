@@ -13,6 +13,20 @@ export type LiveMatch = {
   turnNumber: number;
 };
 
+/** The pack Arena is showing in a draft in progress; pack and pick are 1-based. */
+export type LiveDraft = {
+  sessionId: number;
+  /** Empty until Arena logs which event the draft belongs to. */
+  eventName: string;
+  packNumber: number;
+  pickNumber: number;
+  /** The pick is made and the next pack has not arrived; pack is empty. */
+  waiting: boolean;
+  pack: { cardId: number; cardName?: string }[];
+  /** Arena's default rarity/color order; absent if local sort metadata is unavailable. */
+  displayPack?: { cardId: number; cardName?: string }[];
+};
+
 export type SetInfo = {
   code: string;
   name: string;

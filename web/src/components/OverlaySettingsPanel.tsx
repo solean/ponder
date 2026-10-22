@@ -9,6 +9,16 @@ import { ManaSymbol } from "./ManaSymbol";
 import { SettingToggle } from "./SettingToggle";
 import "./OverlaySettingsPanel.css";
 
+const badgeCalibrationFields = [
+  { key: "draftBadgeLeft", label: "First card left", min: 0, max: 90 },
+  { key: "draftBadgeTop", label: "First card top", min: 0, max: 90 },
+  { key: "draftBadgeWidth", label: "Card width", min: 1, max: 60 },
+  { key: "draftBadgeHeight", label: "Card height", min: 1, max: 60 },
+  { key: "draftBadgeGapX", label: "Horizontal gap", min: 0, max: 20 },
+  { key: "draftBadgeGapY", label: "Vertical gap", min: 0, max: 20 },
+  { key: "draftBadgeColumns", label: "Columns", min: 1, max: 15 },
+] as const;
+
 export function OverlaySettingsPanel() {
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: ["overlay-settings"], queryFn: api.overlaySettings });
@@ -70,7 +80,7 @@ export function OverlaySettingsPanel() {
     <section className="panel overlay-settings" aria-labelledby="overlay-settings-title">
       <div className="panel-head panel-head--stacked">
         <h3 id="overlay-settings-title">Overlay</h3>
-        <p>Adjust the deck tracker shown during gameplay. Changes save automatically. Apply shortcut changes separately.</p>
+        <p>Adjust the deck tracker shown during gameplay and the pack ratings shown while drafting. Changes save automatically. Apply shortcut changes separately.</p>
       </div>
       {query.isPending ? <StatusMessage>Loading overlay settings…</StatusMessage> : query.isError ? (
         <><StatusMessage tone="error">{(query.error as Error).message}</StatusMessage><button className="control-button" type="button" onClick={() => void query.refetch()}>Try again</button></>
@@ -81,6 +91,21 @@ export function OverlaySettingsPanel() {
               <div>
                 <SettingToggle checked={settings.showDeck} onChange={(value) => change("showDeck", value)}>Show your deck</SettingToggle>
                 <SettingToggle checked={settings.showOpponent} onChange={(value) => change("showOpponent", value)}>Show opponent cards</SettingToggle>
+                <SettingToggle checked={settings.showDraft} onChange={(value) => change("showDraft", value)}>Show 17Lands ratings while drafting</SettingToggle>
+              </div>
+              <div>
+                <SettingToggle checked={settings.draftCardBadges} onChange={(value) => change("draftCardBadges", value)}>On-card draft ratings · Experimental</SettingToggle>
+                <p className="settings-note overlay-badge-help">Uses Arena’s default rarity order and a fixed grid. Adjust if badges do not line up; disable when using a different draft layout. Requires local Arena card data.</p>
+                <details className="overlay-badge-calibration">
+                  <summary>Calibrate card positions</summary>
+                  <p className="settings-note">Positions and sizes use a percentage of the game window.</p>
+                  {badgeCalibrationFields.map(({ key, label, min, max }) => (
+                    <label className="settings-field" key={key}>
+                      <span>{label} · {settings[key]}{key === "draftBadgeColumns" ? "" : "%"}</span>
+                      <input type="range" min={min} max={max} step={key === "draftBadgeColumns" ? 1 : 0.1} value={settings[key]} disabled={!settings.draftCardBadges} onChange={(event) => change(key, Number(event.target.value), false)} onPointerUp={commitSlider} onPointerCancel={commitSlider} onKeyUp={commitSlider} onBlur={commitSlider} />
+                    </label>
+                  ))}
+                </details>
               </div>
               <label className="settings-field"><span>Panel size</span><select className="settings-input" value={settings.panelSize} onChange={(event) => change("panelSize", event.target.value as OverlaySettings["panelSize"])}><option value="compact">Compact</option><option value="default">Default</option><option value="large">Large</option></select></label>
               <label className="settings-field"><span>Background opacity · {Math.round(settings.opacity * 100)}%</span><input type="range" min="30" max="100" step="5" value={Math.round(settings.opacity * 100)} onChange={(event) => change("opacity", Number(event.target.value) / 100, false)} onPointerUp={commitSlider} onPointerCancel={commitSlider} onKeyUp={commitSlider} onBlur={commitSlider} /></label>

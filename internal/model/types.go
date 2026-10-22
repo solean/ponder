@@ -616,6 +616,22 @@ type LiveDeckCardRow struct {
 	CardName  string `json:"cardName,omitempty"`
 }
 
+// LiveDraft is the draft pick Arena is showing right now. Pack and pick are
+// 1-based for every draft kind.
+type LiveDraft struct {
+	SessionID int64 `json:"sessionId"`
+	// Empty when Arena has not yet logged which event the draft belongs to.
+	EventName  string `json:"eventName"`
+	PackNumber int64  `json:"packNumber"`
+	PickNumber int64  `json:"pickNumber"`
+	// Waiting is true once this pick is made and the next pack has not
+	// arrived; Pack is then empty.
+	Waiting bool            `json:"waiting"`
+	Pack    []DraftPickCard `json:"pack"`
+	// DisplayPack follows Arena visual order when every card has local sort metadata.
+	DisplayPack []DraftPickCard `json:"displayPack,omitempty"`
+}
+
 type LiveMatch struct {
 	Match                 MatchRow                  `json:"match"`
 	OpponentObservedCards []OpponentObservedCardRow `json:"opponentObservedCards"`

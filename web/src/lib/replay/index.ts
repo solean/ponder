@@ -171,7 +171,7 @@ export const SELF_BATTLEFIELD_SECTION_ORDER: BattlefieldSectionKind[] = [
 ];
 
 export function cardDisplayName(card: PreviewCard): string {
-  return card.cardName?.trim() || `Card ${card.cardId}`;
+  return card.cardName?.trim() || (card.cardId > 0 ? `Card ${card.cardId}` : "a card");
 }
 
 export function timelinePlayerLabel(playerSide?: string): string {
@@ -1292,7 +1292,8 @@ function replayChangeIsNoiseMove(change: MatchReplayChange): boolean {
 function replayChangeIsGenuineVisibilityLoss(
   change: MatchReplayChange,
 ): boolean {
-  if (change.action !== "leave_public") {
+  if (change.action !== "leave_public" ||
+      (change.cardId <= 0 && !change.cardName?.trim())) {
     return false;
   }
   const from = boardZoneKind(change.fromZoneType ?? "");
@@ -2490,42 +2491,42 @@ export function buildReplayBeat(
       boardZoneKind(change.toZoneType ?? "") === "hand",
   );
   if (handEntries.length > 0) {
-    // A draw outranks anything else that reached hand in the same frame; failing
-    // that, prefer a card GRE actually explained, since uncategorized arrivals
-    // are resync backfill and make a poor headline.
-    const lead =
-      handEntries.find((change) => transferCategory(change) === "Draw") ??
-      handEntries.find((change) =>
-        categoryByInstanceId?.has(change.instanceId),
-      ) ??
-      handEntries[0]!;
-    const category = transferCategory(lead);
-    const name = replayChangeName(lead);
-    const rest = others(handEntries.length);
-    if (category === "Draw") {
-      return {
-        text: `${replayActorVerb(lead.playerSide, "draw")} ${name}${rest}`,
-      };
-    }
-    if (category === "Return") {
-      return { text: `${name} returns to hand${rest}` };
-    }
-    if (category === "Put") {
-      return {
-        text: `${replayActorVerb(lead.playerSide, "put")} ${name} into hand${rest}`,
-      };
-    }
-    // Your own hand is fully tracked, so a card surfacing there is never a
-    // reveal — it is the opening hand or a post-resync backfill. Only the
-    // opponent's hidden hand produces genuine reveals.
-    if (lead.playerSide === "self") {
-      return {
-        text: `${name}${rest} ${handEntries.length > 1 ? "enter" : "enters"} your hand`,
-      };
-    }
-    return {
-      text: `${replayActorVerb(lead.playerSide, "reveal")} ${name}${rest}`,
-    };
+    const sides = [...new Set(handEntries.map((change) => change.playerSide))];
+    const descriptions = sides.map((side) => {
+      const entries = handEntries.filter((change) => change.playerSide === side);
+      const lead =
+        entries.find((change) => transferCategory(change) === "Draw") ??
+        entries.find((change) => categoryByInstanceId?.has(change.instanceId)) ??
+        entries[0]!;
+      const category = transferCategory(lead);
+      const known = lead.cardId > 0 || Boolean(lead.cardName?.trim());
+      const name = known
+        ? `${replayChangeName(lead)}${others(entries.length)}`
+        : entries.length === 1 ? "a card" : `${entries.length} cards`;
+      if (category === "Draw") {
+        return `${replayActorVerb(side, "draw")} ${name}`;
+      }
+      if (category === "Return") {
+        return `${name} ${entries.length > 1 ? "return" : "returns"} to hand`;
+      }
+      if (category === "Put") {
+        return `${replayActorVerb(side, "put")} ${name} into hand`;
+      }
+      // Require evidence of a hidden-to-known transition. New arrivals can be
+      // opening setup or resync backfill, even when their identities are known.
+      const wasHidden = previousFrame?.objects?.some((object) =>
+        object.instanceId === lead.instanceId &&
+        boardZoneKind(object.zoneType) === "hand" &&
+        object.cardId <= 0 && !object.cardName?.trim(),
+      );
+      if (side === "opponent" && known && wasHidden) {
+        return `${replayActorVerb(side, "reveal")} ${name}`;
+      }
+      const destination = side === "self" ? "your hand"
+        : side === "opponent" ? "opponent's hand" : "hand";
+      return `${name} ${entries.length > 1 ? "enter" : "enters"} ${destination}`;
+    });
+    return { text: descriptions.join("; ") };
   }
 
   // A card can surface directly in a public zone with no source zone at all:

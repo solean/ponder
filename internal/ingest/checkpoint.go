@@ -188,6 +188,10 @@ type parserCheckpoint struct {
 	PersonaID               string
 	PlayerName              string
 	PendingCompletedMatches []string
+	// Zones learned for bare and suffixed Unity headers; they carry over to
+	// the next log file, whose first lines precede any anchor.
+	BareHeaderZone     headerZone `json:",omitempty"`
+	SuffixedHeaderZone headerZone `json:",omitempty"`
 }
 
 func (p *Parser) loadParserCheckpoint(ctx context.Context) error {
@@ -217,6 +221,8 @@ func (p *Parser) loadParserCheckpoint(ctx context.Context) error {
 	p.personaID = wire.PersonaID
 	p.pendingCompletedMatches = wire.PendingCompletedMatches
 	p.playerName = wire.PlayerName
+	p.headerZones[headerKindBare] = wire.BareHeaderZone
+	p.headerZones[headerKindSuffixed] = wire.SuffixedHeaderZone
 	return nil
 }
 
@@ -228,6 +234,8 @@ func (p *Parser) encodeParserCheckpoint() (string, error) {
 		PersonaID:               p.personaID,
 		PlayerName:              p.playerName,
 		PendingCompletedMatches: p.pendingCompletedMatches,
+		BareHeaderZone:          p.headerZones[headerKindBare],
+		SuffixedHeaderZone:      p.headerZones[headerKindSuffixed],
 	})
 	return string(data), err
 }

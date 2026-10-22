@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -166,6 +167,10 @@ func Init(ctx context.Context, db *sql.DB) error {
 	}
 
 	if err := prepareEventCoursesBackfill(ctx, conn); err != nil {
+		return err
+	}
+
+	if err := backfillUTCLogHeaderTimes(ctx, conn, time.Local); err != nil {
 		return err
 	}
 

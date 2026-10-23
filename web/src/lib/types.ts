@@ -252,6 +252,7 @@ export type GameAnalytics = {
   openingHandSource?: string;
   openingHandConfidence: "exact" | "derived" | "unknown";
   openingHands: OpeningHand[];
+  landAnalytics?: { turns: GameLandTurn[] };
   turnStats: GameTurnStat[];
   flags: GameFlag[];
   sideboardChanges?: GameSideboardChanges;
@@ -271,6 +272,16 @@ export type GameSideboardChanges = {
   cardsOut: SideboardChangeCard[];
   observedAt?: string;
   source?: string;
+};
+
+export type GameLandTurn = {
+  turnNumber: number;
+  isPlayerTurn?: boolean;
+  landsDrawn: number;
+  spellsDrawn: number;
+  unknownDrawn: number;
+  landsPlayed: number;
+  landDropStatus: "no_land_available" | "land_played" | "land_available" | "incomplete" | "unobserved" | "opponent_turn";
 };
 
 // One turn's derived game shape. Life, hand size, and land-in-hand come from

@@ -274,6 +274,9 @@ func TestRefreshMatchAnalyticsStoresTurnStatsAndMinLife(t *testing.T) {
 	if game.MinOpponentLife == nil || *game.MinOpponentLife != 13 {
 		t.Fatalf("min opponent life = %#v, want 13", game.MinOpponentLife)
 	}
+	if game.LandAnalytics == nil || len(game.LandAnalytics.Turns) == 0 {
+		t.Fatal("expected read-time land analytics on game detail")
+	}
 	if len(game.TurnStats) != 4 {
 		t.Fatalf("turn stats = %d rows, want 4", len(game.TurnStats))
 	}

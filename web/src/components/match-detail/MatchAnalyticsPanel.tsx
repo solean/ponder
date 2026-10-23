@@ -1,3 +1,4 @@
+import { GameLandAnalytics } from "./GameLandAnalytics";
 import { useQueries } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { cardDisplayName, cardFallbackHref } from "../../lib/replay";
@@ -116,7 +117,7 @@ function shapeTurnSummary(stat: FullTurnShapeStat, missed: boolean): string {
     parts.push(`${stat.selfHandSize} in hand`);
   }
   if (missed) {
-    parts.push("no land played while holding one (heuristic)");
+    parts.push("no land available for a land drop");
   }
   return parts.join(" · ");
 }
@@ -132,11 +133,9 @@ function GameShapeChart({ game }: { game: GameAnalytics }) {
   }
   const byTurn = new Map(stats.map((stat) => [stat.turnNumber, stat]));
   const missedTurns = new Set(
-    game.flags
-      .filter(
-        (flag) => flag.flag === "missed_land_drop" && flag.turnNumber != null,
-      )
-      .map((flag) => arenaTurnToFullTurn(flag.turnNumber as number)),
+    (game.landAnalytics?.turns ?? [])
+      .filter(turn => turn.landDropStatus === "no_land_available")
+      .map(turn => arenaTurnToFullTurn(turn.turnNumber)),
   );
 
   const viewW = SHAPE_CHART_LEFT + maxTurn * SHAPE_CHART_TURN_W + 8;
@@ -281,7 +280,7 @@ function GameShapeChart({ game }: { game: GameAnalytics }) {
         <span className="game-shape-legend-item is-spell">Spells</span>
         {missedTurns.size > 0 ? (
           <span className="game-shape-legend-item is-missed">
-            Possible missed land drop
+            No land available
           </span>
         ) : null}
         <span className="game-shape-legend-note">
@@ -440,24 +439,7 @@ export function MatchAnalyticsPanel({ games }: { games: GameAnalytics[] }) {
               {game.turnStats.length > 0 ? (
                 <GameShapeChart game={game} />
               ) : null}
-              {game.flags.length > 0 ? (
-                <ul
-                  className="game-shape-flags"
-                  aria-label={`Review flags for game ${game.gameNumber}`}
-                >
-                  {game.flags.map((flag, index) => (
-                    <li key={`${flag.flag}-${flag.turnNumber ?? index}`}>
-                      <span className="game-shape-flag-turn">
-                        {flag.turnNumber != null
-                          ? `Turn ${arenaTurnToFullTurn(flag.turnNumber)}`
-                          : "Game"}
-                      </span>
-                      {flag.detail || flag.flag}
-                      <small>{flag.confidence}</small>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+              <GameLandAnalytics game={game} />
 
               {game.openingHands.length > 0 ? (
                 <div className="opening-hand-list">
@@ -528,8 +510,8 @@ export function MatchAnalyticsPanel({ games }: { games: GameAnalytics[] }) {
         Logged results come directly from GRE game state. Opening-hand
         sequencing and play/draw are inferred from observed replay transitions.
         Turn-by-turn lands and spells classify observed card plays by type line
-        and first public zone; missed-land-drop flags are heuristic prompts for
-        replay review, not judgments.
+        and first public zone. Land availability uses observed own-turn replay
+        snapshots; held-land decisions are not flagged.
       </p>
     </section>
   );

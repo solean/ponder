@@ -1,4 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { replayPositionKey, saveReplayKind } from "../../lib/replay/position";
+import { ReplayBookmarkControl } from "./ReplayBookmarkControl";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatDateTime } from "../../lib/format";
 import {
   boardPlayMeta,
@@ -22,16 +24,24 @@ import type { MatchReplayZoneDialogState } from "./types";
 
 export function MatchTimelineBoard({
   gameNumber,
+  matchId,
+  bookmarkFrameId,
+  onPositionRecovered,
   plays,
   previewByCardID,
 }: {
   gameNumber: number;
+  matchId?: number;
+  bookmarkFrameId?: number;
+  onPositionRecovered?: () => void;
   plays: MatchCardPlay[];
   previewByCardID: Map<number, CardPreview | null>;
 }) {
+  useEffect(() => { if (matchId !== undefined) saveReplayKind(matchId, gameNumber, "observed"); }, [matchId, gameNumber]);
   const {
     index: selectedActionIndex,
     setIndex: setSelectedActionIndex,
+    missingPosition,
     isPlaying,
     togglePlay,
     canPlay,
@@ -39,7 +49,7 @@ export function MatchTimelineBoard({
     setIsPlaying,
     speed,
     setSpeed,
-  } = useReplayPlayer(plays.length, plays.length > 0 ? plays.length - 1 : 0);
+  } = useReplayPlayer(plays.length, plays.length > 0 ? plays.length - 1 : 0, undefined, matchId === undefined ? undefined : { key: replayPositionKey(matchId, gameNumber, "observed"), ids: plays.map(row => row.id), bookmarkFrameId });
   const [zoneDialogState, setZoneDialogState] =
     useState<MatchReplayZoneDialogState | null>(null);
   const openZone = useCallback((state: MatchReplayZoneDialogState) => {
@@ -117,6 +127,8 @@ export function MatchTimelineBoard({
     onFirst: goToFirstAction,
     onLast: goToLastAction,
   });
+
+  if (missingPosition) return <StatusMessage tone="error">This saved replay position is no longer available. <button type="button" onClick={() => { setSelectedActionIndex(0); onPositionRecovered?.(); }}>Start from the first step</button></StatusMessage>;
 
   if (!currentAction) {
     return (
@@ -223,6 +235,7 @@ export function MatchTimelineBoard({
 
           <div className="match-replay-controls-aux">
             <MatchReplaySpeedControl speed={speed} onSelectSpeed={setSpeed} />
+            {matchId !== undefined ? <ReplayBookmarkControl matchId={matchId} game={gameNumber} frameId={plays[selectedActionIndex]!.id} kind="observed" /> : null}
           </div>
         </div>
 

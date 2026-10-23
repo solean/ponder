@@ -1,6 +1,7 @@
+import { parseReplayBookmark, readReplayGame, saveReplayGame } from "../lib/replay/position";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useState, type KeyboardEvent } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { useBreadcrumbLabel } from "../components/Breadcrumbs";
 import { MatchAnalyticsPanel } from "../components/match-detail/MatchAnalyticsPanel";
 import {
@@ -34,12 +35,24 @@ type MatchSection = (typeof MATCH_SECTIONS)[number]["id"];
 
 export function MatchDetailPage() {
   const params = useParams();
+  const location = useLocation();
+  return <MatchDetailContent key={`${params.matchId}:${location.search}:${location.key}`} />;
+}
+
+function MatchDetailContent() {
+  const params = useParams();
   const matchId = Number(params.matchId);
+  const location = useLocation();
+  const bookmarkResult = parseReplayBookmark(location.search);
+  const [bookmarkApplied, setBookmarkApplied] = useState(false);
   const isValidMatchID = Number.isFinite(matchId);
   const [activeSection, setActiveSection] = useState<MatchSection>("replay");
   const [selectedTimelineGameNumber, setSelectedTimelineGameNumber] = useState<
     number | null
-  >(null);
+  >(() => bookmarkResult.bookmark?.game ?? readReplayGame(matchId));
+  useEffect(() => {
+    if (selectedTimelineGameNumber !== null) saveReplayGame(matchId, selectedTimelineGameNumber);
+  }, [matchId, selectedTimelineGameNumber]);
   const timelineGameTabBaseId = useId();
   const sectionTabBaseId = useId();
 
@@ -77,6 +90,9 @@ export function MatchDetailPage() {
     selectedTimelineGameNumber,
   });
   const { timelineGameNumbers, activeTimelineGameNumber } = replayView;
+  useEffect(() => {
+    if (activeTimelineGameNumber !== null) saveReplayGame(matchId, activeTimelineGameNumber);
+  }, [matchId, activeTimelineGameNumber]);
   const showTimelineGameTabs = timelineGameNumbers.length > 1;
   const activeTimelineGameTabID =
     activeTimelineGameNumber === null
@@ -88,17 +104,11 @@ export function MatchDetailPage() {
       : `${timelineGameTabBaseId}-panel-${activeTimelineGameNumber}`;
 
   useEffect(() => {
-    if (timelineGameNumbers.length === 0) {
-      setSelectedTimelineGameNumber(null);
-      return;
+    // A saved or explicit game remains selected while queries are pending,
+    // and remains an unavailable target if it was deleted. Recovery is explicit.
+    if (timelineGameNumbers.length > 0) {
+      setSelectedTimelineGameNumber(current => current ?? timelineGameNumbers[0]);
     }
-
-    setSelectedTimelineGameNumber((currentGameNumber) =>
-      currentGameNumber !== null &&
-      timelineGameNumbers.includes(currentGameNumber)
-        ? currentGameNumber
-        : timelineGameNumbers[0],
-    );
   }, [timelineGameNumbers]);
 
   function handleTimelineGameTabKeyDown(
@@ -210,6 +220,10 @@ export function MatchDetailPage() {
           aria-labelledby={sectionTabID(sectionTabBaseId, "replay")}
         >
           <MatchReplayPanel
+            matchId={matchId}
+            bookmarkResult={bookmarkResult}
+            applyBookmark={!bookmarkApplied}
+            onBookmarkApplied={() => setBookmarkApplied(true)}
             bestOf={match.bestOf}
             replayQuery={replayQuery}
             timelineError={timelineQuery.error}

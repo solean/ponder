@@ -12551,3 +12551,11 @@ html.overlay-document body::before {
 .match-replay-recording p { margin: 0; max-width: 90ch; }
 .match-replay-recording strong { color: var(--text); font-weight: 600; }
 .match-replay-recording-error { display: grid; justify-items: start; gap: 0.5rem; }
+/* IXN-28: local replay links */
+.match-replay-bookmark { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; align-items: center; }
+.match-replay-bookmark a { color: var(--accent, #7bb9f3); text-decoration: underline; }
+
+.match-replay-saved-bookmarks { margin: 12px 0; font-size: 12px; }
+.match-replay-saved-bookmarks summary { cursor: pointer; }
+.match-replay-saved-bookmarks form, .match-replay-saved-bookmarks li { display: flex; gap: 8px; margin: 8px 0; }
+.match-replay-saved-bookmarks input { min-width: 200px; flex: 1; }

@@ -41,7 +41,20 @@ describe("on-card draft ratings", () => {
     const first = draftBadgePosition(0, DEFAULT_OVERLAY_SETTINGS);
     const ninth = draftBadgePosition(8, DEFAULT_OVERLAY_SETTINGS);
     expect(ninth.left).toBe(first.left);
-    expect(ninth.top - first.top).toBeCloseTo(33.2);
+    expect(ninth.top - first.top).toBeCloseTo(18.6);
     expect(draftBadgePosition(7, DEFAULT_OVERLAY_SETTINGS).left).toBeLessThan(100);
+  });
+  test("places all thirteen badges inside the cards in the full-window screenshot", () => {
+    // Card rectangles measured in the user's 2048 × 1154 reference rendering.
+    // The first reference was cropped and must not define viewport percentages.
+    for (let index = 0; index < 13; index++) {
+      const { left, top } = draftBadgePosition(index, DEFAULT_OVERLAY_SETTINGS);
+      const cardLeft = 350 + (index % 8) * 171;
+      const cardTop = 186 + Math.floor(index / 8) * 214;
+      expect(left * 2048 / 100).toBeGreaterThan(cardLeft + 20);
+      expect(left * 2048 / 100).toBeLessThan(cardLeft + 146 - 20);
+      expect(top * 1154 / 100).toBeGreaterThan(cardTop + 150);
+      expect(top * 1154 / 100).toBeLessThan(cardTop + 204 - 10);
+    }
   });
 });

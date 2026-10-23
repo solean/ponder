@@ -95,16 +95,23 @@ export function OverlaySettingsPanel() {
               </div>
               <div>
                 <SettingToggle checked={settings.draftCardBadges} onChange={(value) => change("draftCardBadges", value)}>On-card draft ratings · Experimental</SettingToggle>
-                <p className="settings-note overlay-badge-help">Uses Arena’s default rarity order and a fixed grid. Adjust if badges do not line up; disable when using a different draft layout. Requires local Arena card data.</p>
+                <p className="settings-note overlay-badge-help">Uses Arena’s default rarity order and 16:9 draft layout. Adjust if badges do not line up; disable when using a different draft layout. Requires local Arena card data.</p>
                 <details className="overlay-badge-calibration">
                   <summary>Calibrate card positions</summary>
                   <p className="settings-note">Positions and sizes use a percentage of the game window.</p>
                   {badgeCalibrationFields.map(({ key, label, min, max }) => (
                     <label className="settings-field" key={key}>
                       <span>{label} · {settings[key]}{key === "draftBadgeColumns" ? "" : "%"}</span>
-                      <input type="range" min={min} max={max} step={key === "draftBadgeColumns" ? 1 : 0.1} value={settings[key]} disabled={!settings.draftCardBadges} onChange={(event) => change(key, Number(event.target.value), false)} onPointerUp={commitSlider} onPointerCancel={commitSlider} onKeyUp={commitSlider} onBlur={commitSlider} />
+                      <input type="range" min={min} max={max} step={key === "draftBadgeColumns" ? 1 : 0.05} value={settings[key]} disabled={!settings.draftCardBadges} onChange={(event) => change(key, Number(event.target.value), false)} onPointerUp={commitSlider} onPointerCancel={commitSlider} onKeyUp={commitSlider} onBlur={commitSlider} />
                     </label>
                   ))}
+                  <button type="button" className="control-button" disabled={status === "saving"} onClick={() => {
+                    const next = { ...(latest.current ?? settings) };
+                    for (const { key } of badgeCalibrationFields) next[key] = DEFAULT_OVERLAY_SETTINGS[key];
+                    latest.current = next;
+                    setDraft(next);
+                    enqueue(next);
+                  }}>Reset card positions</button>
                 </details>
               </div>
               <label className="settings-field"><span>Panel size</span><select className="settings-input" value={settings.panelSize} onChange={(event) => change("panelSize", event.target.value as OverlaySettings["panelSize"])}><option value="compact">Compact</option><option value="default">Default</option><option value="large">Large</option></select></label>

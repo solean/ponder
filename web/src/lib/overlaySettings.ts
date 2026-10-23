@@ -19,12 +19,12 @@ export type OverlaySettings = {
 
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   draftCardBadges: true,
-  draftBadgeLeft: 18.7,
-  draftBadgeTop: 28.5,
-  draftBadgeWidth: 7.9,
-  draftBadgeHeight: 31.6,
-  draftBadgeGapX: 1.3,
-  draftBadgeGapY: 1.6,
+  draftBadgeLeft: 17.1,
+  draftBadgeTop: 16.1,
+  draftBadgeWidth: 7.1,
+  draftBadgeHeight: 17.7,
+  draftBadgeGapX: 1.25,
+  draftBadgeGapY: 0.9,
   draftBadgeColumns: 8,
   showDeck: true,
   showOpponent: true,

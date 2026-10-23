@@ -90,7 +90,7 @@ func TestOverlaySettingsDefaultFieldsMissingFromSavedConfig(t *testing.T) {
 	}
 	saved = normalizeConfig(saved, time.Second)
 	got := *saved.Overlay
-	if !got.DraftCardBadges || got.DraftBadgeLeft != 18.7 || got.DraftBadgeTop != 28.5 || got.DraftBadgeWidth != 7.9 || got.DraftBadgeHeight != 31.6 || got.DraftBadgeGapX != 1.3 || got.DraftBadgeGapY != 1.6 || got.DraftBadgeColumns != 8 {
+	if !got.DraftCardBadges || got.DraftBadgeLeft != 17.1 || got.DraftBadgeTop != 16.1 || got.DraftBadgeWidth != 7.1 || got.DraftBadgeHeight != 17.7 || got.DraftBadgeGapX != 1.25 || got.DraftBadgeGapY != 0.9 || got.DraftBadgeColumns != 8 {
 		t.Fatalf("legacy config lost badge defaults: %+v", got)
 	}
 	if !got.ShowDraft {
@@ -134,5 +134,52 @@ func TestOverlayDraftBadgeCalibrationValidation(t *testing.T) {
 	expected.DraftCardBadges = false
 	if settings != expected {
 		t.Fatalf("legacy/default calibration = %+v, want %+v", settings, expected)
+	}
+}
+
+func TestOverlayDraftBadgePresetMigration(t *testing.T) {
+	legacy := DefaultOverlaySettings()
+	legacy.DraftBadgeLeft = 18.7
+	legacy.DraftBadgeTop = 28.5
+	legacy.DraftBadgeWidth = 7.9
+	legacy.DraftBadgeHeight = 31.6
+	legacy.DraftBadgeGapX = 1.3
+	legacy.DraftBadgeGapY = 1.6
+	legacy.DraftBadgeColumns = 8
+	legacy.DraftCardBadges = false
+	legacy.ShowDeck = false
+	legacy.Shortcut = "Ctrl+Alt+P"
+	for _, custom := range []bool{false, true} {
+		t.Run(map[bool]string{false: "old preset", true: "custom position"}[custom], func(t *testing.T) {
+			stored := legacy
+			if custom {
+				stored.DraftBadgeLeft = 19
+			}
+			raw, err := json.Marshal(stored)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got OverlaySettings
+			if err := json.Unmarshal(raw, &got); err != nil {
+				t.Fatal(err)
+			}
+			want := stored
+			if !custom {
+				want = DefaultOverlaySettings()
+				want.DraftCardBadges = stored.DraftCardBadges
+				want.ShowDeck = stored.ShowDeck
+				want.Shortcut = stored.Shortcut
+			}
+			if got != want {
+				t.Fatalf("decoded = %+v, want %+v", got, want)
+			}
+		})
+	}
+	var fresh OverlaySettings
+	if err := json.Unmarshal([]byte(`{}`), &fresh); err != nil {
+		t.Fatal(err)
+	}
+	if fresh != DefaultOverlaySettings() {
+		t.Fatalf("fresh defaults = %+v", fresh)
 	}
 }

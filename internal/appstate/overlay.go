@@ -29,12 +29,12 @@ type OverlaySettings struct {
 func DefaultOverlaySettings() OverlaySettings {
 	return OverlaySettings{
 		DraftCardBadges:   true,
-		DraftBadgeLeft:    18.7,
-		DraftBadgeTop:     28.5,
-		DraftBadgeWidth:   7.9,
-		DraftBadgeHeight:  31.6,
-		DraftBadgeGapX:    1.3,
-		DraftBadgeGapY:    1.6,
+		DraftBadgeLeft:    17.1,
+		DraftBadgeTop:     16.1,
+		DraftBadgeWidth:   7.1,
+		DraftBadgeHeight:  17.7,
+		DraftBadgeGapX:    1.25,
+		DraftBadgeGapY:    0.9,
 		DraftBadgeColumns: 8,
 		ShowDeck:          true,
 		ShowOpponent:      true,
@@ -54,6 +54,20 @@ func (s *OverlaySettings) UnmarshalJSON(data []byte) error {
 	settings := plain(DefaultOverlaySettings())
 	if err := json.Unmarshal(data, &settings); err != nil {
 		return err
+	}
+	// The first experimental grid was measured from a cropped screenshot.
+	// Migrate only that exact preset, leaving calibrated layouts and toggles intact.
+	if settings.DraftBadgeLeft == 18.7 && settings.DraftBadgeTop == 28.5 &&
+		settings.DraftBadgeWidth == 7.9 && settings.DraftBadgeHeight == 31.6 &&
+		settings.DraftBadgeGapX == 1.3 && settings.DraftBadgeGapY == 1.6 && settings.DraftBadgeColumns == 8 {
+		defaults := DefaultOverlaySettings()
+		settings.DraftBadgeLeft = defaults.DraftBadgeLeft
+		settings.DraftBadgeTop = defaults.DraftBadgeTop
+		settings.DraftBadgeWidth = defaults.DraftBadgeWidth
+		settings.DraftBadgeHeight = defaults.DraftBadgeHeight
+		settings.DraftBadgeGapX = defaults.DraftBadgeGapX
+		settings.DraftBadgeGapY = defaults.DraftBadgeGapY
+		settings.DraftBadgeColumns = defaults.DraftBadgeColumns
 	}
 	*s = OverlaySettings(settings)
 	return nil

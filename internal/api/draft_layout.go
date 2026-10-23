@@ -14,7 +14,7 @@ import (
 )
 
 // draftDisplayPack mirrors the Arena draft layout observed in the client:
-// rarity, color, mana value, then title. Keep the original pack untouched for
+// rarity, color, then title. Keep the original pack untouched for
 // consumers that need log order. Missing local metadata disables positioning.
 func draftDisplayPack(ctx context.Context, pack []model.DraftPickCard) []model.DraftPickCard {
 	if len(pack) == 0 || len(pack) > rawCardLookupBatchMax {
@@ -43,27 +43,27 @@ func draftDisplayPack(ctx context.Context, pack []model.DraftPickCard) []model.D
 		placeholders[i] = "?"
 		args[i] = card.CardID
 	}
-	rows, err := raw.QueryContext(ctx, `SELECT GrpId, Order_MythicToCommon, Order_ColorOrder, Order_CMCWithXLast, Order_Title FROM Cards WHERE GrpId IN (`+strings.Join(placeholders, ",")+`)`, args...)
+	rows, err := raw.QueryContext(ctx, `SELECT GrpId, Order_MythicToCommon, Order_ColorOrder, Order_Title FROM Cards WHERE GrpId IN (`+strings.Join(placeholders, ",")+`)`, args...)
 	if err != nil {
 		return nil
 	}
 	defer rows.Close()
 	type order struct {
-		rarity, color, mana int64
-		title               string
+		rarity, color int64
+		title         string
 	}
 	orders := make(map[int64]order, len(pack))
 	for rows.Next() {
 		var id int64
-		var rarity, color, mana sql.NullInt64
+		var rarity, color sql.NullInt64
 		var title sql.NullString
-		if err := rows.Scan(&id, &rarity, &color, &mana, &title); err != nil {
+		if err := rows.Scan(&id, &rarity, &color, &title); err != nil {
 			return nil
 		}
-		if !rarity.Valid || !color.Valid || !mana.Valid || !title.Valid || strings.TrimSpace(title.String) == "" {
+		if !rarity.Valid || !color.Valid || !title.Valid || strings.TrimSpace(title.String) == "" {
 			return nil
 		}
-		orders[id] = order{rarity.Int64, color.Int64, mana.Int64, title.String}
+		orders[id] = order{rarity.Int64, color.Int64, title.String}
 	}
 	if rows.Err() != nil {
 		return nil
@@ -80,9 +80,6 @@ func draftDisplayPack(ctx context.Context, pack []model.DraftPickCard) []model.D
 			return n
 		}
 		if n := cmp.Compare(x.color, y.color); n != 0 {
-			return n
-		}
-		if n := cmp.Compare(x.mana, y.mana); n != 0 {
 			return n
 		}
 		return cmp.Compare(x.title, y.title)

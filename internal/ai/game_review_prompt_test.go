@@ -121,3 +121,87 @@ func TestBuildGameReviewPromptDoesNotPresentOfferedActionsAsTaken(t *testing.T) 
 		t.Fatal("prompt included offered actions without a recorded user action")
 	}
 }
+
+func TestBuildGameReviewPromptSkipsUneventfulFramesAndBookkeeping(t *testing.T) {
+	turn := int64(3)
+	life := int64(20)
+	pilotSeat := int64(1)
+	opponentSeat := int64(2)
+	board := []model.MatchReplayFrameObjectRow{
+		{InstanceID: 200, CardID: 10, CardName: "Shock", PlayerSide: "self", ControllerSeatID: &pilotSeat, ZoneType: "stack"},
+		{InstanceID: 300, CardID: 20, CardName: "Grizzly Bears", PlayerSide: "opponent", ControllerSeatID: &opponentSeat, ZoneType: "battlefield"},
+	}
+	frame := func(annotations string, changes ...model.MatchReplayChangeRow) model.MatchReplayFrameRow {
+		return model.MatchReplayFrameRow{
+			TurnNumber:        &turn,
+			Phase:             "main1",
+			SelfLifeTotal:     &life,
+			OpponentLifeTotal: &life,
+			WinningPlayerSide: "unknown",
+			AnnotationsJSON:   annotations,
+			Objects:           board,
+			Changes:           changes,
+		}
+	}
+	castFrame := frame(`{"annotations":[{"type":["AnnotationType_ObjectIdChanged"],"details":[{"key":"orig_id","valueInt32":[150]},{"key":"new_id","valueInt32":[200]}]},{"affectorId":1,"affectedIds":[200],"details":[{"key":"actionType","valueInt32":[1]}],"type":["AnnotationType_UserActionTaken"]}],` +
+		`"persistentAnnotations":[{"id":9,"affectorId":200,"affectedIds":[300],"type":["AnnotationType_TargetSpec"]}]}`)
+	castFrame.ActionsJSON = `[{"seatId":1,"action":{"actionType":"ActionType_Cast","instanceId":150,"manaCost":[{"color":["ManaColor_Generic"],"count":1},{"color":["ManaColor_Red"],"count":1}]}},` +
+		`{"seatId":1,"action":{"actionType":"ActionType_Cast","instanceId":200,"manaCost":[{"color":["ManaColor_Generic"],"count":1},{"color":["ManaColor_Red"],"count":1}]}},` +
+		`{"seatId":1,"action":{"actionType":"ActionType_Activate_Mana","instanceId":400}}]`
+	input := GameReviewInput{
+		Match: model.MatchRow{ID: 1},
+		Game:  model.GameRow{GameNumber: 1},
+		Frames: []model.MatchReplayFrameRow{
+			frame(""),
+			frame("", model.MatchReplayChangeRow{CardName: "Grizzly Bears", PlayerSide: "opponent", FromZoneType: "battlefield", ToZoneType: "battlefield", Action: "move_public"}),
+			frame(`{"annotations":[{"affectorId":1,"affectedIds":[400],"details":[{"key":"actionType","valueInt32":[4]}],"type":["AnnotationType_UserActionTaken"]}]}`),
+			castFrame,
+			frame(`{"annotations":[{"affectorId":200,"affectedIds":[300],"details":[{"key":"damage","valueInt32":[2]}],"type":["AnnotationType_DamageDealt"]}],` +
+				`"persistentAnnotations":[{"id":9,"affectorId":200,"affectedIds":[300],"type":["AnnotationType_TargetSpec"]}]}`),
+			frame(`{"annotations":[{"affectorId":500,"affectedIds":[501],"type":["AnnotationType_AbilityInstanceCreated"]},` +
+				`{"affectorId":500,"affectedIds":[501],"type":["AnnotationType_AbilityInstanceDeleted"]}]}`),
+			frame(""),
+		},
+	}
+	ended := frame("")
+	ended.WinningPlayerSide = "opponent"
+	ended.WinReason = "Concede"
+	afterEnd := frame("")
+	afterEnd.WinReason = "Concede"
+	input.Frames = append(input.Frames, ended, afterEnd)
+
+	prompt := BuildGameReviewPrompt(input)
+	for _, expected := range []string{
+		"- Game end: opponent won; reason Concede",
+		"(not actions necessarily taken): pilot cast: Shock {1}{R}\n",
+		"pilot cast Shock",
+		"Shock targets Grizzly Bears",
+		"Shock dealt 2 damage to Grizzly Bears",
+	} {
+		if !strings.Contains(prompt, expected) {
+			t.Errorf("prompt missing %q", expected)
+		}
+	}
+	for _, unexpected := range []string{
+		"unknown won",
+		"battlefield -> battlefield",
+		"Step 2 ",
+		"Step 3 ",
+		"Step 6 ",
+		"ability put on the stack",
+		"AnnotationType_",
+		"ActionType_",
+		"object 400",
+		"object 150",
+	} {
+		if strings.Contains(prompt, unexpected) {
+			t.Errorf("prompt unexpectedly contains %q", unexpected)
+		}
+	}
+	if count := strings.Count(prompt, "targets Grizzly Bears"); count != 1 {
+		t.Errorf("persistent target reported %d times, want 1", count)
+	}
+	if count := strings.Count(prompt, "- Opponent battlefield:"); count != 2 {
+		t.Errorf("unchanged board repeated %d times, want first and last step only", count)
+	}
+}

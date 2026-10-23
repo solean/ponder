@@ -173,8 +173,10 @@ func (p *CLIProvider) Generate(ctx context.Context, model, prompt string, onDelt
 		model = DefaultClaudeModel
 	}
 
+	// The prompt goes over stdin: replay-heavy prompts can exceed per-argument
+	// limits (ARG_MAX, or wrappers such as cmux's claude shim).
 	args := []string{
-		"-p", prompt,
+		"-p",
 		"--output-format", "stream-json",
 		"--include-partial-messages",
 		"--verbose",
@@ -188,6 +190,7 @@ func (p *CLIProvider) Generate(ctx context.Context, model, prompt string, onDelt
 	// Run from a neutral directory so the CLI doesn't pick up project context
 	// (CLAUDE.md, local settings) from wherever the app was launched.
 	cmd.Dir = os.TempDir()
+	cmd.Stdin = strings.NewReader(prompt)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

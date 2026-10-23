@@ -173,3 +173,46 @@ test("opponent hand renders only identities known in the selected snapshot", asy
   expect(container.textContent).not.toContain("Known Island");
   expect(container.querySelector('[aria-label="Face-down card"]')).not.toBeNull();
 });
+
+
+for (const mode of ["frames", "observed"] as const) {
+  for (const zone of ["graveyard", "exile"] as const) {
+    for (const speed of [1, 4]) {
+      test(`${mode} ${zone} inspection pauses at ${speed}× until explicitly resumed`, () => {
+        const rows = Array.from({ length: 3 }, (_, i) => ({ id: i + 1, turnNumber: i + 1 }));
+        const object = { id: 1, frameId: 1, instanceId: 1, cardId: 100, cardName: "Inspected card", playerSide: "self" as const, zoneType: zone, isToken: false, isTapped: false, hasSummoningSickness: false };
+        act(() => root.render(mode === "frames"
+          ? <MatchReplayFrameBoard gameNumber={1} frames={rows.map(row => ({ ...row, objects: [object] }))} gameSummary={null} previewByCardID={new Map()} />
+          : <MatchTimelineBoard gameNumber={1} plays={rows.map(row => ({ ...row, instanceId: row.id, cardId: 100, cardName: "Inspected card", playerSide: "self", firstPublicZone: zone }))} previewByCardID={new Map()} />));
+        const speedButton = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === `${speed}×`)!;
+        act(() => speedButton.click());
+        act(() => transport().click());
+        tick();
+        expect(position()).toBe(2);
+        expect([...timers.values()][0]!.delay).toBe(1200 / speed);
+        const zoneButton = [...container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="dialog"]')].find(button => button.getAttribute("aria-label")?.includes(`You ${zone}`))!;
+        act(() => zoneButton.click());
+        expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+        const inspectedText = document.querySelector('[role="dialog"]')?.textContent;
+        expect(inspectedText).toContain(mode === "frames" ? "this step" : "in this game");
+        expect(position()).toBe(2);
+        expect(transport().textContent).toContain("Play");
+        expect(timers.size).toBe(0);
+        for (const key of ["ArrowRight", " ", "Home", "End"]) {
+          act(() => document.body.dispatchEvent(new dom.KeyboardEvent("keydown", { key, bubbles: true }) as unknown as Event));
+        }
+        expect(position()).toBe(2);
+        expect(timers.size).toBe(0);
+        expect(document.querySelector('[role="dialog"]')?.textContent).toBe(inspectedText);
+        act(() => document.querySelector<HTMLButtonElement>(".match-replay-zone-dialog-close")!.click());
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
+        expect(position()).toBe(2);
+        expect(timers.size).toBe(0);
+        act(() => transport().click());
+        expect([...timers.values()][0]!.delay).toBe(1200 / speed);
+        tick();
+        expect(position()).toBe(3);
+      });
+    }
+  }
+}

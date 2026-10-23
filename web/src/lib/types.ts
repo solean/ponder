@@ -179,6 +179,7 @@ export type MatchReplayFrameObject = {
 
 export type MatchReplayStatus = {
   revision: string;
+  /** Match completion used for polling; not replay recording completeness. */
   complete: boolean;
 };
 

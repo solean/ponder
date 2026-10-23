@@ -100,9 +100,18 @@ export function useMatchReplay(matchId: number, enabled: boolean) {
     replayQuery.fetchStatus,
   ]);
 
+  const retry = async () => {
+    const status = await statusQuery.refetch();
+    await queryClient.invalidateQueries({ queryKey: ["match-timeline", matchId], exact: true });
+    if (status.isSuccess) await replayQuery.refetch();
+  };
   const error = statusQuery.error ?? replayQuery.error;
   return {
     data: replayQuery.data,
+    // The API complete flag describes the match, never recording coverage.
+    matchComplete: statusQuery.data?.complete,
+    isRetrying: statusQuery.isFetching || replayQuery.isFetching,
+    retry,
     isPending: replayQuery.isPending && !error,
     error,
   };

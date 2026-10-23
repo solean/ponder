@@ -198,9 +198,24 @@ type GameRow struct {
 	OpeningHandSource     string                   `json:"openingHandSource,omitempty"`
 	OpeningHandConfidence string                   `json:"openingHandConfidence"`
 	OpeningHands          []OpeningHandRow         `json:"openingHands"`
+	LandAnalytics         *GameLandAnalytics       `json:"landAnalytics,omitempty"`
 	TurnStats             []GameTurnStatRow        `json:"turnStats"`
 	Flags                 []GameFlagRow            `json:"flags"`
 	SideboardChanges      *GameSideboardChangesRow `json:"sideboardChanges,omitempty"`
+}
+
+// GameLandAnalytics describes only observed gameplay draw events and land opportunities.
+type GameLandAnalytics struct {
+	Turns []GameLandTurn `json:"turns"`
+}
+type GameLandTurn struct {
+	TurnNumber     int64  `json:"turnNumber"`
+	IsPlayerTurn   *bool  `json:"isPlayerTurn,omitempty"`
+	LandsDrawn     int64  `json:"landsDrawn"`
+	SpellsDrawn    int64  `json:"spellsDrawn"`
+	UnknownDrawn   int64  `json:"unknownDrawn"`
+	LandsPlayed    int64  `json:"landsPlayed"`
+	LandDropStatus string `json:"landDropStatus"`
 }
 
 // GameTurnStatRow is one turn's derived shape. Life, hand size, and land-in-hand

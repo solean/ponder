@@ -12559,3 +12559,11 @@ html.overlay-document body::before {
 .match-replay-saved-bookmarks summary { cursor: pointer; }
 .match-replay-saved-bookmarks form, .match-replay-saved-bookmarks li { display: flex; gap: 8px; margin: 8px 0; }
 .match-replay-saved-bookmarks input { min-width: 200px; flex: 1; }
+.game-land-analytics { padding: 0.85rem 0.9rem 0.95rem; border-bottom: 1px solid var(--line); }
+.game-land-analytics .match-game-empty { padding: 0; }
+.game-land-analytics h4 { margin-bottom: 0.5rem; }
+.game-land-table-wrap { overflow-x: auto; }
+.game-land-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.game-land-table th, .game-land-table td { padding: 0.65rem 0.75rem; text-align: left; border-bottom: 1px solid var(--line); }
+.game-land-table thead { color: var(--muted-strong); }
+.game-land-table td { font-variant-numeric: tabular-nums; }

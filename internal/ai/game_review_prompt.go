@@ -173,12 +173,15 @@ func writeDerivedReviewData(b *strings.Builder, game model.GameRow, turnOwners m
 }
 
 func writeReplayEvidence(b *strings.Builder, frames []model.MatchReplayFrameRow, turnOwners map[int64]string) {
-	b.WriteString("\nReplay evidence (ordered observations; snapshots do not prove every available choice):\n")
+	b.WriteString("\nReplay evidence (ordered observations; snapshots do not prove every available choice; visible state is repeated only when it changed):\n")
 	if len(frames) == 0 {
 		b.WriteString("- No replay frames were recorded.\n")
 		return
 	}
 	var previous model.MatchReplayFrameRow
+	var lastState string
+	seenTargets := map[int64]bool{}
+	gameEndReported := false
 	for index, frame := range frames {
 		firstOrLast := index == 0 || index == len(frames)-1
 		turnChanged := index == 0 || optionalInt(frame.TurnNumber) != optionalInt(previous.TurnNumber)
@@ -186,8 +189,15 @@ func writeReplayEvidence(b *strings.Builder, frames []model.MatchReplayFrameRow,
 		lifeChanged := index == 0 ||
 			optionalInt(frame.SelfLifeTotal) != optionalInt(previous.SelfLifeTotal) ||
 			optionalInt(frame.OpponentLifeTotal) != optionalInt(previous.OpponentLifeTotal)
-		hasDecisionEvidence := replayAnnotationHasDecisionEvidence(frame.AnnotationsJSON)
-		hasEvent := len(frame.Changes) > 0 || hasDecisionEvidence || lifeChanged || frame.WinningPlayerSide != ""
+		changes := reviewZoneChanges(frame.Changes)
+		refs := replayAnnotationRefs(frame)
+		annotations := summarizeReplayAnnotations(frame.AnnotationsJSON, refs, seenTargets)
+		// Ingest records "unknown" on every frame without a result, so only a
+		// resolved side or a win reason marks the end of the game. Frames after
+		// the result can repeat it with the side unresolved; report it once.
+		gameEnded := !gameEndReported &&
+			(frame.WinningPlayerSide == "self" || frame.WinningPlayerSide == "opponent" || frame.WinReason != "")
+		hasEvent := len(changes) > 0 || len(annotations.events) > 0 || lifeChanged || gameEnded
 		if !firstOrLast && !phaseChanged && !hasEvent {
 			previous = frame
 			continue
@@ -210,7 +220,7 @@ func writeReplayEvidence(b *strings.Builder, frames []model.MatchReplayFrameRow,
 		if frame.GameStage != "" || (firstOrLast && frame.GameStateType != "") {
 			fmt.Fprintf(b, "- State: %s / %s\n", fallback(frame.GameStage, "unknown stage"), fallback(frame.GameStateType, "unknown type"))
 		}
-		for _, change := range frame.Changes {
+		for _, change := range changes {
 			fmt.Fprintf(b, "- Zone change: %s %s %s -> %s (%s)\n",
 				fallback(change.PlayerSide, "unknown side"),
 				reviewCardName(change.CardID, change.CardName),
@@ -219,40 +229,239 @@ func writeReplayEvidence(b *strings.Builder, frames []model.MatchReplayFrameRow,
 				fallback(change.Action, "observed"),
 			)
 		}
-		if strings.Contains(frame.AnnotationsJSON, "AnnotationType_UserActionTaken") {
-			writeCompactJSON(b, "Actions Arena offered before the recorded user action (not actions necessarily taken)", frame.ActionsJSON)
+		if annotations.userAction {
+			if offered := summarizeOfferedActions(frame.ActionsJSON, refs); offered != "" {
+				fmt.Fprintf(b, "- Actions Arena offered before the recorded user action (not actions necessarily taken): %s\n", offered)
+			}
 		}
-		if hasDecisionEvidence {
-			writeCompactJSON(b, "Decision/combat annotations", frame.AnnotationsJSON)
+		if len(annotations.events) > 0 {
+			fmt.Fprintf(b, "- Observed events: %s\n", strings.Join(annotations.events, "; "))
 		}
 		if firstOrLast || turnChanged || hasEvent {
-			writeVisibleReviewState(b, frame.Objects)
+			if state := visibleReviewState(frame.Objects); state != lastState || firstOrLast || turnChanged {
+				b.WriteString(state)
+				lastState = state
+			}
 		}
-		if frame.WinningPlayerSide != "" {
-			fmt.Fprintf(b, "- Game end: %s won; reason %s\n", frame.WinningPlayerSide, fallback(frame.WinReason, "unknown"))
+		if gameEnded {
+			fmt.Fprintf(b, "- Game end: %s won; reason %s\n", fallback(frame.WinningPlayerSide, "unknown"), fallback(frame.WinReason, "unknown"))
+			gameEndReported = true
 		}
 		previous = frame
 	}
 }
 
-func replayAnnotationHasDecisionEvidence(raw string) bool {
-	for _, marker := range []string{
-		"AnnotationType_UserActionTaken",
-		"AnnotationType_DamageDealt",
-		"AnnotationType_TargetSpec",
-		"AnnotationType_Attacker",
-		"AnnotationType_Blocker",
-		"AnnotationType_Resolution",
-		"AnnotationType_AbilityInstance",
-	} {
-		if strings.Contains(raw, marker) {
+// reviewZoneChanges drops same-zone moves, which are Arena reordering objects
+// within a zone rather than anything a player did.
+func reviewZoneChanges(changes []model.MatchReplayChangeRow) []model.MatchReplayChangeRow {
+	kept := make([]model.MatchReplayChangeRow, 0, len(changes))
+	for _, change := range changes {
+		if change.FromZoneType != "" && strings.EqualFold(change.FromZoneType, change.ToZoneType) {
+			continue
+		}
+		kept = append(kept, change)
+	}
+	return kept
+}
+
+type replayAnnotation struct {
+	ID          int64    `json:"id"`
+	Type        []string `json:"type"`
+	AffectorID  int64    `json:"affectorId"`
+	AffectedIDs []int64  `json:"affectedIds"`
+	Details     []struct {
+		Key         string   `json:"key"`
+		ValueInt32  []int64  `json:"valueInt32"`
+		ValueString []string `json:"valueString"`
+	} `json:"details"`
+}
+
+func (a replayAnnotation) is(annotationType string) bool {
+	for _, t := range a.Type {
+		if t == "AnnotationType_"+annotationType {
 			return true
 		}
 	}
 	return false
 }
 
-func writeVisibleReviewState(b *strings.Builder, objects []model.MatchReplayFrameObjectRow) {
+func (a replayAnnotation) detailInt(key string) (int64, bool) {
+	for _, detail := range a.Details {
+		if detail.Key == key && len(detail.ValueInt32) > 0 {
+			return detail.ValueInt32[0], true
+		}
+	}
+	return 0, false
+}
+
+func (a replayAnnotation) detailString(key string) string {
+	for _, detail := range a.Details {
+		if detail.Key == key && len(detail.ValueString) > 0 {
+			return detail.ValueString[0]
+		}
+	}
+	return ""
+}
+
+type replayAnnotationSummary struct {
+	events     []string
+	userAction bool
+}
+
+// summarizeReplayAnnotations renders the decision-relevant GRE annotations as
+// short sentences with instance ids resolved to card names. Raw annotation
+// JSON is several KB per frame and mostly bookkeeping (mana payments, id
+// changes, persistent markers). seenTargets carries persistent TargetSpec ids
+// across frames so each targeting choice is reported once. Objects that
+// changed instance id this frame are added to refs under their old id too.
+func summarizeReplayAnnotations(raw string, refs replayRefs, seenTargets map[int64]bool) replayAnnotationSummary {
+	var summary replayAnnotationSummary
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return summary
+	}
+	var parsed struct {
+		Annotations           []replayAnnotation `json:"annotations"`
+		PersistentAnnotations []replayAnnotation `json:"persistentAnnotations"`
+	}
+	if json.Unmarshal([]byte(raw), &parsed) != nil {
+		return summary
+	}
+
+	ref, refList := refs.name, refs.list
+
+	// Mana abilities never use the stack: Arena creates and deletes their
+	// ability instances in the same frame.
+	resolvedImmediately := map[int64]bool{}
+	for _, annotation := range parsed.Annotations {
+		if annotation.is("ObjectIdChanged") {
+			origID, hasOrig := annotation.detailInt("orig_id")
+			newID, hasNew := annotation.detailInt("new_id")
+			if name, known := refs[newID]; hasOrig && hasNew && known {
+				if _, taken := refs[origID]; !taken {
+					refs[origID] = name
+				}
+			}
+		}
+		if annotation.is("AbilityInstanceDeleted") {
+			for _, id := range annotation.AffectedIDs {
+				resolvedImmediately[id] = true
+			}
+		}
+	}
+
+	for _, annotation := range parsed.Annotations {
+		switch {
+		case annotation.is("UserActionTaken"):
+			actionType, _ := annotation.detailInt("actionType")
+			verb := ""
+			switch actionType {
+			case 1:
+				verb = "cast"
+			case 2:
+				verb = "activated"
+			case 3:
+				verb = "played"
+			case 4:
+				// Mana abilities; the resulting spell or ability is reported separately.
+				continue
+			case 5:
+				verb = "passed with"
+			default:
+				verb = fmt.Sprintf("took action type %d on", actionType)
+			}
+			summary.userAction = true
+			summary.events = append(summary.events, fmt.Sprintf("%s %s %s", ref(annotation.AffectorID), verb, refList(annotation.AffectedIDs)))
+		case annotation.is("DamageDealt"):
+			damage, _ := annotation.detailInt("damage")
+			summary.events = append(summary.events, fmt.Sprintf("%s dealt %d damage to %s", ref(annotation.AffectorID), damage, refList(annotation.AffectedIDs)))
+		case annotation.is("ModifiedLife"):
+			life, _ := annotation.detailInt("life")
+			summary.events = append(summary.events, fmt.Sprintf("%s life %+d", refList(annotation.AffectedIDs), life))
+		case annotation.is("AbilityInstanceCreated"):
+			if len(annotation.AffectedIDs) > 0 && resolvedImmediately[annotation.AffectedIDs[0]] {
+				continue
+			}
+			summary.events = append(summary.events, fmt.Sprintf("%s ability put on the stack", ref(annotation.AffectorID)))
+		case annotation.is("TokenCreated"):
+			summary.events = append(summary.events, fmt.Sprintf("%s created %s", ref(annotation.AffectorID), refList(annotation.AffectedIDs)))
+		case annotation.is("CounterAdded"), annotation.is("CounterRemoved"):
+			amount, _ := annotation.detailInt("transaction_amount")
+			counterType := annotation.detailString("counter_type")
+			if counterType == "" {
+				if value, ok := annotation.detailInt("counter_type"); ok {
+					counterType = fmt.Sprintf("type %d", value)
+				}
+			}
+			sign := "+"
+			if annotation.is("CounterRemoved") {
+				sign = "-"
+			}
+			summary.events = append(summary.events, fmt.Sprintf("%s %s%d %s counter", refList(annotation.AffectedIDs), sign, amount, fallback(counterType, "unknown")))
+		}
+	}
+	for _, annotation := range parsed.PersistentAnnotations {
+		if annotation.is("TargetSpec") && !seenTargets[annotation.ID] {
+			seenTargets[annotation.ID] = true
+			summary.events = append(summary.events, fmt.Sprintf("%s targets %s", ref(annotation.AffectorID), refList(annotation.AffectedIDs)))
+		}
+	}
+	return summary
+}
+
+// replayRefs names the players (by seat) and objects (by instance id) that a
+// frame's annotations and offered actions reference.
+type replayRefs map[int64]string
+
+func (r replayRefs) name(id int64) string {
+	if name, ok := r[id]; ok {
+		return name
+	}
+	return fmt.Sprintf("object %d", id)
+}
+
+func (r replayRefs) list(ids []int64) string {
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		names = append(names, r.name(id))
+	}
+	return strings.Join(names, ", ")
+}
+
+func replayAnnotationRefs(frame model.MatchReplayFrameRow) replayRefs {
+	refs := replayRefs{}
+	addSeat := func(seat *int64, side string) {
+		if seat == nil {
+			return
+		}
+		switch strings.ToLower(side) {
+		case "self":
+			refs[*seat] = "pilot"
+		case "opponent":
+			refs[*seat] = "opponent"
+		}
+	}
+	for _, object := range frame.Objects {
+		addSeat(object.ControllerSeatID, object.PlayerSide)
+	}
+	for _, change := range frame.Changes {
+		addSeat(change.OwnerSeatID, change.PlayerSide)
+	}
+	for _, change := range frame.Changes {
+		if change.InstanceID > 0 {
+			refs[change.InstanceID] = reviewCardName(change.CardID, change.CardName)
+		}
+	}
+	for _, object := range frame.Objects {
+		if object.InstanceID > 0 {
+			refs[object.InstanceID] = reviewCardName(object.CardID, object.CardName)
+		}
+	}
+	return refs
+}
+
+func visibleReviewState(objects []model.MatchReplayFrameObjectRow) string {
+	var b strings.Builder
 	zones := []struct {
 		label string
 		side  string
@@ -289,23 +498,106 @@ func writeVisibleReviewState(b *strings.Builder, objects []model.MatchReplayFram
 			labels = append(labels, label)
 		}
 		if len(labels) > 0 {
-			fmt.Fprintf(b, "- %s: [%s]\n", wanted.label, strings.Join(labels, ", "))
+			fmt.Fprintf(&b, "- %s: [%s]\n", wanted.label, strings.Join(labels, ", "))
 		}
 	}
+	return b.String()
 }
 
-func writeCompactJSON(b *strings.Builder, label, raw string) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || raw == "[]" || raw == "{}" || raw == "null" {
-		return
+// summarizeOfferedActions condenses Arena's offered-action list (several KB
+// per frame) into card names grouped by player and action type. Mana
+// abilities are omitted: every untapped land offers one.
+func summarizeOfferedActions(raw string, refs replayRefs) string {
+	var offered []struct {
+		SeatID int64 `json:"seatId"`
+		Action struct {
+			ActionType string `json:"actionType"`
+			InstanceID int64  `json:"instanceId"`
+			ManaCost   []struct {
+				Color []string `json:"color"`
+				Count int64    `json:"count"`
+			} `json:"manaCost"`
+		} `json:"action"`
 	}
-	var value any
-	if json.Unmarshal([]byte(raw), &value) == nil {
-		if compact, err := json.Marshal(value); err == nil {
-			raw = string(compact)
+	if json.Unmarshal([]byte(strings.TrimSpace(raw)), &offered) != nil {
+		return ""
+	}
+
+	type offeredGroup struct {
+		label string
+		items []string
+	}
+	var groups []*offeredGroup
+	byLabel := map[string]*offeredGroup{}
+	seen := map[string]bool{}
+	for _, entry := range offered {
+		actionType := strings.TrimPrefix(entry.Action.ActionType, "ActionType_")
+		if actionType == "" || actionType == "Activate_Mana" {
+			continue
 		}
+		player, ok := refs[entry.SeatID]
+		if !ok {
+			player = fmt.Sprintf("seat %d", entry.SeatID)
+		}
+		label := player + " " + strings.ToLower(strings.ReplaceAll(actionType, "_", " "))
+
+		var cost strings.Builder
+		for _, mana := range entry.Action.ManaCost {
+			symbols := make([]string, 0, len(mana.Color))
+			for _, color := range mana.Color {
+				symbols = append(symbols, reviewManaSymbol(strings.TrimPrefix(color, "ManaColor_")))
+			}
+			symbol := strings.Join(symbols, "/")
+			if symbol == "Generic" {
+				fmt.Fprintf(&cost, "{%d}", mana.Count)
+				continue
+			}
+			for i := int64(0); i < mana.Count; i++ {
+				fmt.Fprintf(&cost, "{%s}", symbol)
+			}
+		}
+		item := refs.name(entry.Action.InstanceID)
+		if cost.Len() > 0 {
+			item += " " + cost.String()
+		}
+		if seen[label+"\x00"+item] {
+			continue
+		}
+		seen[label+"\x00"+item] = true
+
+		group := byLabel[label]
+		if group == nil {
+			group = &offeredGroup{label: label}
+			byLabel[label] = group
+			groups = append(groups, group)
+		}
+		group.items = append(group.items, item)
 	}
-	fmt.Fprintf(b, "- %s: %s\n", label, raw)
+
+	parts := make([]string, 0, len(groups))
+	for _, group := range groups {
+		parts = append(parts, group.label+": "+strings.Join(group.items, ", "))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func reviewManaSymbol(color string) string {
+	switch color {
+	case "White":
+		return "W"
+	case "Blue":
+		return "U"
+	case "Black":
+		return "B"
+	case "Red":
+		return "R"
+	case "Green":
+		return "G"
+	case "Colorless":
+		return "C"
+	default:
+		return color
+	}
 }
 
 func reviewCardName(cardID int64, name string) string {

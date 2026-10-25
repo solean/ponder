@@ -1,3 +1,4 @@
+import { readReplayPosition, saveReplayPosition, type ReplayPositionOptions } from "./position";
 import { useEffect, useState } from "react";
 import { replayNavigationIndex } from "./navigation";
 
@@ -21,6 +22,7 @@ type ReplayPlayer = {
   setSpeed: (next: number) => void;
   /** Highest valid index (0 when the timeline is empty). */
   lastIndex: number;
+  missingPosition: boolean;
 };
 
 /**
@@ -34,13 +36,29 @@ export function useReplayPlayer(
   length: number,
   initialIndex: number,
   decisionIndices?: number[],
+  position?: ReplayPositionOptions,
 ): ReplayPlayer {
-  const [index, setIndex] = useState(initialIndex);
+  const [saved] = useState(() => position ? readReplayPosition(position.key) : null);
+  const [index, setRawIndex] = useState(initialIndex);
+  const [frameId, setFrameId] = useState<number | undefined>(() => position?.bookmarkFrameId ?? saved?.frameId ?? position?.ids[initialIndex]);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1);
+  const [speed, setSpeed] = useState(saved?.speed ?? 1);
   const lastIndex = length > 0 ? length - 1 : 0;
-  const safeIndex = Math.min(index, lastIndex);
-  const canPlay = length > 1;
+  const identifiedIndex = frameId !== undefined && position ? position.ids.indexOf(frameId) : -1;
+  const missingPosition = Boolean(position && frameId !== undefined && identifiedIndex < 0);
+  const safeIndex = position && frameId !== undefined ? Math.max(0, identifiedIndex) : Math.max(0, Math.min(index, lastIndex));
+  const canPlay = length > 1 && !missingPosition;
+  const setIndex = (next: number | ((current: number) => number)) => {
+    const value = Math.max(0, Math.min(lastIndex, typeof next === "function" ? next(safeIndex) : next));
+    setRawIndex(value);
+    if (position) setFrameId(position.ids[value]);
+  };
+  useEffect(() => {
+    if (position && !missingPosition && position.ids[safeIndex] !== undefined) {
+      saveReplayPosition(position.key, { frameId: position.ids[safeIndex]!, speed });
+    }
+  }, [position?.key, position?.ids[safeIndex], speed, missingPosition]);
+  useEffect(() => { if (missingPosition) setIsPlaying(false); }, [missingPosition]);
   const playLabel = isPlaying
     ? "Pause"
     : canPlay && safeIndex === lastIndex
@@ -60,15 +78,15 @@ export function useReplayPlayer(
 
   useEffect(() => {
     if (length === 0) {
-      setIndex(0);
+      if (!position) setRawIndex(0);
       setIsPlaying(false);
       return;
     }
-    setIndex((current) => Math.min(current, length - 1));
+    if (!position) setRawIndex((current) => Math.min(current, length - 1));
   }, [length]);
 
   useEffect(() => {
-    if (!isPlaying) {
+    if (!isPlaying || missingPosition) {
       return;
     }
     if (safeIndex >= lastIndex) {
@@ -81,7 +99,7 @@ export function useReplayPlayer(
     }, BASE_AUTOPLAY_INTERVAL_MS / speed);
 
     return () => window.clearTimeout(timeoutID);
-  }, [isPlaying, lastIndex, safeIndex, speed, decisionIndices, length]);
+  }, [isPlaying, lastIndex, safeIndex, speed, decisionIndices, length, missingPosition]);
 
   return {
     index: safeIndex,
@@ -94,5 +112,6 @@ export function useReplayPlayer(
     speed,
     setSpeed,
     lastIndex,
+    missingPosition,
   };
 }

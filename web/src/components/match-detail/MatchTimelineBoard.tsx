@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { formatDateTime } from "../../lib/format";
 import {
   boardPlayMeta,
@@ -42,6 +42,11 @@ export function MatchTimelineBoard({
   } = useReplayPlayer(plays.length, plays.length > 0 ? plays.length - 1 : 0);
   const [zoneDialogState, setZoneDialogState] =
     useState<MatchReplayZoneDialogState | null>(null);
+  const openZone = useCallback((state: MatchReplayZoneDialogState) => {
+    setIsPlaying(false);
+    setZoneDialogState(state);
+  }, [setIsPlaying]);
+  const closeZone = useCallback(() => setZoneDialogState(null), []);
 
   const currentAction = plays[selectedActionIndex] ?? null;
   const visiblePlays = useMemo(
@@ -103,6 +108,7 @@ export function MatchTimelineBoard({
   };
 
   useReplayKeyboard({
+    enabled: zoneDialogState === null,
     onStepBackward: goToPrevAction,
     onStepForward: goToNextAction,
     onPrevTurn: goToPrevActionTurn,
@@ -239,7 +245,7 @@ export function MatchTimelineBoard({
           <MatchReplaySideSummary
             side="opponent"
             plays={opponentVisiblePlays}
-            onOpenZone={setZoneDialogState}
+            onOpenZone={openZone}
           />
 
           <section
@@ -278,7 +284,7 @@ export function MatchTimelineBoard({
           <MatchReplaySideSummary
             side="self"
             plays={selfVisiblePlays}
-            onOpenZone={setZoneDialogState}
+            onOpenZone={openZone}
           />
         </aside>
 
@@ -323,7 +329,7 @@ export function MatchTimelineBoard({
       <MatchReplayZoneDialog
         state={zoneDialogState}
         previewByCardID={previewByCardID}
-        onClose={() => setZoneDialogState(null)}
+        onClose={closeZone}
       />
     </article>
   );

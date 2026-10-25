@@ -1,5 +1,5 @@
 import { isReplayDecision, replayNavigationIndex } from "../../lib/replay/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePersistedFlag } from "../../lib/persistedFlag";
 import {
   boardZoneKind,
@@ -87,6 +87,12 @@ export function MatchReplayFrameBoard({
   } = useReplayPlayer(frames.length, preferredReplayFrameIndex(frames), decisionMode ? decisionIndices : undefined);
   const [zoneDialogState, setZoneDialogState] =
     useState<MatchReplayZoneDialogState | null>(null);
+  const openZone = useCallback((state: MatchReplayZoneDialogState) => {
+    setIsPlaying(false);
+    setZoneDialogState(state);
+  }, [setIsPlaying]);
+  const closeZone = useCallback(() => setZoneDialogState(null), []);
+
   const [focusedConnectionInstanceId, setFocusedConnectionInstanceId] =
     useState<number | null>(null);
   const [moveListCollapsed, setMoveListCollapsed] = usePersistedFlag(
@@ -485,6 +491,7 @@ export function MatchReplayFrameBoard({
   };
 
   useReplayKeyboard({
+    enabled: zoneDialogState === null,
     onStepBackward: goToPrevStep,
     onStepForward: goToNextStep,
     onPrevTurn: goToPrevTurn,
@@ -659,7 +666,7 @@ export function MatchReplayFrameBoard({
               side="opponent"
               objects={currentObjects}
               variant="rail"
-              onOpenZone={setZoneDialogState}
+              onOpenZone={openZone}
               endpointId={replayPlayerConnectionId("opponent")}
               onRegisterEndpoint={registerCardShell}
               attackSummary={
@@ -718,7 +725,7 @@ export function MatchReplayFrameBoard({
             side="self"
             objects={currentObjects}
             variant="rail"
-            onOpenZone={setZoneDialogState}
+            onOpenZone={openZone}
             endpointId={replayPlayerConnectionId("self")}
             onRegisterEndpoint={registerCardShell}
             attackSummary={
@@ -753,7 +760,7 @@ export function MatchReplayFrameBoard({
       <MatchReplayZoneDialog
         state={zoneDialogState}
         previewByCardID={previewByCardID}
-        onClose={() => setZoneDialogState(null)}
+        onClose={closeZone}
       />
     </article>
   );

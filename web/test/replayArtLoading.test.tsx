@@ -108,3 +108,21 @@ for (const mode of ["frames", "observed"] as const) {
     });
   });
 }
+
+
+test("mixed games retain fallback selection and fallback card art", () => {
+  let view!: ReturnType<typeof useMatchReplayView>;
+  function Harness() {
+    view = useMatchReplayView({
+      timelineRows: [{ ...play(200), gameNumber: 2 }],
+      replayFrames: [{ id: 1, gameNumber: 1, objects: [object(100)] }],
+      matchResult: "win", games: [], selectedTimelineGameNumber: 2,
+    });
+    return null;
+  }
+  act(() => root.render(<QueryClientProvider client={client}><Harness /></QueryClientProvider>));
+  expect(view.timelineGameNumbers).toEqual([1, 2]);
+  expect(view.activeReplayGroup).toBeNull();
+  expect(view.activeTimelineGroup?.[0]).toBe(2);
+  expect(view.boardPreviewCards.map(card => card.cardId)).toEqual([100, 200]);
+});

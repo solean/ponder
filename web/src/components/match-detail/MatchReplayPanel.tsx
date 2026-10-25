@@ -1,5 +1,6 @@
 import type { useMatchReplay } from "../../lib/replay/useMatchReplay";
 import type { MatchReplayView } from "../../lib/replay/useMatchReplayView";
+import { replayRecordingCoverage } from "../../lib/replay/recordingCoverage";
 import type { Match } from "../../lib/types";
 import { StatusMessage } from "../StatusMessage";
 import type { MatchGameTabState } from "./MatchGameTabs";
@@ -32,14 +33,24 @@ export function MatchReplayPanel({
     handleTimelineGameTabKeyDown,
   } = gameTabs;
   const {
-    timelineRows,
-    hasReplayFrames,
+    replayFrames,
     activeTimelineGameAnalytics,
     activeReplayGroup,
     activeTimelineGroup,
     boardPreviewByCardID,
     isBoardCardPreviewLoading,
   } = view;
+  const rawGameFrames = replayFrames.filter(frame => (frame.gameNumber && frame.gameNumber > 0 ? frame.gameNumber : 1) === (activeTimelineGameNumber ?? 1));
+  const hasPlayableReplay = (activeReplayGroup?.frames.length ?? 0) > 0;
+  const hasFallback = (activeTimelineGroup?.[1].length ?? 0) > 0;
+  const coverage = replayRecordingCoverage({
+    frames: rawGameFrames,
+    hasFallback,
+    matchComplete: replayQuery.matchComplete,
+    gameEnded: Boolean(activeTimelineGameAnalytics?.endedAt),
+    isLatestGame: activeTimelineGameNumber === timelineGameNumbers[timelineGameNumbers.length - 1],
+  });
+  const canDescribeCoverage = !replayQuery.isPending && ((!replayQuery.error && !timelineError) || rawGameFrames.length > 0 || hasFallback);
   return (
     <section className="panel match-replay-panel">
       <div className="panel-head match-timeline-toolbar">
@@ -66,23 +77,32 @@ export function MatchReplayPanel({
         />
       ) : null}
       <div className="stack-md">
-        {!hasReplayFrames ? (
-          <p className="match-board-disclaimer">
-            First-sighting fallback: this board shows when cards were first
-            publicly observed. Replay frames and the live stack are unavailable.
-          </p>
+        {replayQuery.error || timelineError ? (
+          <div className="match-replay-recording-error">
+            <StatusMessage tone="error">
+              Unable to {replayQuery.error ? "load or refresh the recording" : "load first public sightings"}. Retry to check the saved data again.
+              {hasPlayableReplay || hasFallback ? " Previously loaded data remains available below." : ""}
+            </StatusMessage>
+            <button className="match-replay-button" type="button" disabled={replayQuery.isRetrying} onClick={() => void replayQuery.retry()}>
+              {replayQuery.isRetrying ? "Retrying…" : "Retry loading replay"}
+            </button>
+          </div>
         ) : null}
-        {replayQuery.isPending ? (
-          <StatusMessage>Loading replay frames…</StatusMessage>
-        ) : hasReplayFrames ? (
-          activeReplayGroup ? (
-            <div
-              id={showTimelineGameTabs ? activeTimelineGamePanelID : undefined}
-              role={showTimelineGameTabs ? "tabpanel" : undefined}
-              aria-labelledby={
-                showTimelineGameTabs ? activeTimelineGameTabID : undefined
-              }
-            >
+        {canDescribeCoverage ? (
+          <div className="match-replay-recording" data-recording-state={coverage.state}>
+            <p><strong>{activeTimelineGameNumber !== null ? `Game ${activeTimelineGameNumber} · ` : ""}{coverage.label}</strong></p>
+            <p>{coverage.detail}</p>
+          </div>
+        ) : null}
+        {replayQuery.isPending && !hasPlayableReplay && !hasFallback ? (
+          <StatusMessage>Checking replay recording…</StatusMessage>
+        ) : (
+          <div
+            id={showTimelineGameTabs ? activeTimelineGamePanelID : undefined}
+            role={showTimelineGameTabs ? "tabpanel" : undefined}
+            aria-labelledby={showTimelineGameTabs ? activeTimelineGameTabID : undefined}
+          >
+            {hasPlayableReplay && activeReplayGroup ? (
               <MatchReplayFrameBoard
                 key={activeReplayGroup.gameNumber}
                 gameNumber={activeReplayGroup.gameNumber}
@@ -91,42 +111,20 @@ export function MatchReplayPanel({
                 gameSummary={activeReplayGroup.summary}
                 previewByCardID={boardPreviewByCardID}
               />
-            </div>
-          ) : (
-            <StatusMessage>
-              No observed replay data for this match yet.
-            </StatusMessage>
-          )
-        ) : timelineError ? (
-          <StatusMessage tone="error">{timelineError.message}</StatusMessage>
-        ) : timelineRows.length === 0 ? (
-          <StatusMessage>
-            No observed replay data for this match yet.
-          </StatusMessage>
-        ) : activeTimelineGroup ? (
-          <div
-            id={showTimelineGameTabs ? activeTimelineGamePanelID : undefined}
-            role={showTimelineGameTabs ? "tabpanel" : undefined}
-            aria-labelledby={
-              showTimelineGameTabs ? activeTimelineGameTabID : undefined
-            }
-          >
-            <MatchTimelineBoard
-              gameNumber={activeTimelineGroup[0]}
-              plays={activeTimelineGroup[1]}
-              previewByCardID={boardPreviewByCardID}
-            />
+            ) : hasFallback && activeTimelineGroup ? (
+              <>
+                {coverage.state !== "fallback" ? <p className="match-board-disclaimer">First-sighting fallback: only first public card sightings are shown; later moves and the live stack cannot be reconstructed.</p> : null}
+                <MatchTimelineBoard
+                  gameNumber={activeTimelineGroup[0]}
+                  plays={activeTimelineGroup[1]}
+                  previewByCardID={boardPreviewByCardID}
+                />
+              </>
+            ) : rawGameFrames.length > 0 ? (
+              <StatusMessage>No playable board states were saved for this game.</StatusMessage>
+            ) : null}
           </div>
-        ) : (
-          <StatusMessage>
-            No observed replay data for this match yet.
-          </StatusMessage>
         )}
-        {replayQuery.error ? (
-          <StatusMessage tone="error">
-            {replayQuery.error.message}
-          </StatusMessage>
-        ) : null}
         {isBoardCardPreviewLoading ? (
           <StatusMessage>Loading replay card art…</StatusMessage>
         ) : null}

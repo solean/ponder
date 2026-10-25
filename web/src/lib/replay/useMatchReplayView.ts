@@ -13,6 +13,7 @@ import {
   type PreviewCard,
   type ReplayGameGroup,
 } from "./index";
+import { replayGameNumbers } from "./recordingCoverage";
 import { cardPreviewQueryKey } from "./cardPreviewQuery";
 
 export function useMatchReplayView({
@@ -59,14 +60,13 @@ export function useMatchReplayView({
           }
         }
       }
-    } else {
-      for (const play of timelineRows) {
-        if (play.cardId > 0 && !uniqueCards.has(play.cardId)) {
-          uniqueCards.set(play.cardId, {
-            cardId: play.cardId,
-            cardName: play.cardName,
-          });
-        }
+    }
+    for (const play of timelineRows) {
+      if (play.cardId > 0 && !uniqueCards.has(play.cardId)) {
+        uniqueCards.set(play.cardId, {
+          cardId: play.cardId,
+          cardName: play.cardName,
+        });
       }
     }
 
@@ -108,12 +108,10 @@ export function useMatchReplayView({
 
     return Array.from(byGame.entries()).sort((a, b) => a[0] - b[0]);
   }, [timelineRows]);
-  const timelineGameNumbers = useMemo(() => {
-    if (hasReplayFrames) {
-      return replayGroups.map((group) => group.gameNumber);
-    }
-    return timelineGroups.map(([gameNumber]) => gameNumber);
-  }, [hasReplayFrames, replayGroups, timelineGroups]);
+  const timelineGameNumbers = useMemo(
+    () => replayGameNumbers(replayFrames, timelineRows, games),
+    [replayFrames, timelineRows, games],
+  );
   const activeTimelineGameNumber =
     selectedTimelineGameNumber ?? timelineGameNumbers[0] ?? null;
   const gameAnalyticsByNumber = useMemo(
@@ -138,6 +136,7 @@ export function useMatchReplayView({
         ) ?? null);
   return {
     timelineRows,
+    replayFrames,
     hasReplayFrames,
     boardPreviewCards,
     boardPreviewByCardID,

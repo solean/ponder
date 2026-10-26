@@ -20,6 +20,7 @@ import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { formatArenaDeck } from "../lib/arenaDeck";
 import { copyTextToClipboard } from "../lib/clipboard";
+import { deckVersionChangeTotals, deckVersionChanges, type DeckVersionChange } from "../lib/deckVersionChanges";
 import { parseEventName } from "../lib/events";
 import { formatDateTime, formatDuration, formatGameFormat } from "../lib/format";
 import { fetchCardPreview, type CardPreview, type CardRarity } from "../lib/scryfall";
@@ -42,12 +43,6 @@ type FloatingPopoverPosition = {
 type ManaCostPart = { kind: "symbol"; token: string } | { kind: "separator"; value: string };
 type DeckDisplayMode = "list" | "curve" | "visual";
 type DeckSection = "decklist" | "performance" | "guide" | "matches";
-type DeckVersionChange = {
-  section: string;
-  cardId: number;
-  cardName?: string;
-  quantityDelta: number;
-};
 
 const DECK_SECTIONS: Array<{ id: DeckSection; label: string }> = [
   { id: "decklist", label: "Decklist" },
@@ -135,40 +130,6 @@ const BASIC_LAND_ORDER: Record<string, number> = {
   mountain: 3,
   plains: 4,
 };
-function deckVersionChanges(version: DeckVersion, previousVersion: DeckVersion): DeckVersionChange[] {
-  const changes = new Map<string, DeckVersionChange>();
-
-  for (const card of previousVersion.cards) {
-    const key = `${card.section}:${card.cardId}`;
-    changes.set(key, {
-      section: card.section,
-      cardId: card.cardId,
-      cardName: card.cardName,
-      quantityDelta: -card.quantity,
-    });
-  }
-
-  for (const card of version.cards) {
-    const key = `${card.section}:${card.cardId}`;
-    const existing = changes.get(key);
-    changes.set(key, {
-      section: card.section,
-      cardId: card.cardId,
-      cardName: card.cardName || existing?.cardName,
-      quantityDelta: (existing?.quantityDelta ?? 0) + card.quantity,
-    });
-  }
-
-  return Array.from(changes.values())
-    .filter((change) => change.quantityDelta !== 0)
-    .sort((a, b) => {
-      if (a.section !== b.section) {
-        return a.section.localeCompare(b.section);
-      }
-      return cardDisplayName(a).localeCompare(cardDisplayName(b), undefined, { sensitivity: "base" });
-    });
-}
-
 function cardDisplayName(card: Pick<DeckListCard, "cardId" | "cardName">): string {
   return card.cardName?.trim() || `Card ${card.cardId}`;
 }
@@ -297,6 +258,18 @@ function formatSectionLabel(section: string): string {
     return "Other";
   }
   return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`;
+}
+
+// A main-deck change fed by the sideboard names the move instead of the section.
+function formatChangeSectionLabel(change: DeckVersionChange): string {
+  if (change.movedQuantity === 0) {
+    return formatSectionLabel(change.section);
+  }
+  const direction = change.quantityDelta > 0 ? "from" : "to";
+  if (change.movedQuantity === Math.abs(change.quantityDelta)) {
+    return `${direction} sideboard`;
+  }
+  return `${formatSectionLabel(change.section)} · ${change.movedQuantity} ${direction} sideboard`;
 }
 
 function parseDeckDisplayMode(value: string | null): DeckDisplayMode {
@@ -955,14 +928,8 @@ function DeckVersionHistory({
                 .reduce((sum, card) => sum + card.quantity, 0);
               const sideboardCards = totalCards - mainCards;
               const previousVersion = versions[index + 1];
-              const changes = previousVersion ? deckVersionChanges(version, previousVersion) : [];
-              const additions = changes.reduce(
-                (sum, change) => sum + Math.max(0, change.quantityDelta),
-                0,
-              );
-              const removals = changes.reduce(
-                (sum, change) => sum + Math.max(0, -change.quantityDelta),
-                0,
+              const { additions, removals } = deckVersionChangeTotals(
+                previousVersion ? deckVersionChanges(version, previousVersion) : [],
               );
               const isSelected = version.id === selectedVersion?.id;
 
@@ -1068,7 +1035,7 @@ function DeckVersionChanges({
                       quantity: Math.abs(change.quantityDelta),
                     }}
                   />
-                  <small>{formatSectionLabel(change.section)}</small>
+                  <small>{formatChangeSectionLabel(change)}</small>
                 </li>
               ))}
             </ul>
@@ -1093,7 +1060,7 @@ function DeckVersionChanges({
                       quantity: Math.abs(change.quantityDelta),
                     }}
                   />
-                  <small>{formatSectionLabel(change.section)}</small>
+                  <small>{formatChangeSectionLabel(change)}</small>
                 </li>
               ))}
             </ul>

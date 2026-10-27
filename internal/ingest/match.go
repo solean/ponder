@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -66,13 +68,43 @@ type roomStateEnvelope struct {
 }
 
 // archiveCompletedMatchReplay compacts a finished match's replay frame rows
-// into the compressed archive so the row tables only ever hold live matches.
-func (p *Parser) archiveCompletedMatchReplay(ctx context.Context, tx *sql.Tx, arenaMatchID, result string) error {
+// into the compressed archive so the row tables only ever hold live matches,
+// and queues analytics to be derived after the ingest batch commits.
+func (p *Parser) archiveCompletedMatchReplay(ctx context.Context, tx *sql.Tx, state *parseState, arenaMatchID, result string) error {
 	if result != "win" && result != "loss" && result != "draw" {
 		return nil
 	}
-	_, err := p.store.ArchiveMatchReplay(ctx, tx, arenaMatchID)
-	return err
+	if _, err := p.store.ArchiveMatchReplay(ctx, tx, arenaMatchID); err != nil {
+		return err
+	}
+	if !state.reconstructingCheckpoint {
+		var matchID int64
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM matches WHERE arena_match_id = ?`, arenaMatchID).Scan(&matchID); err != nil {
+			return fmt.Errorf("lookup completed match for analytics: %w", err)
+		}
+		if state.analyticsMatches == nil {
+			state.analyticsMatches = make(map[int64]struct{})
+		}
+		state.analyticsMatches[matchID] = struct{}{}
+	}
+	return nil
+}
+
+// ParseFile still holds the writer slot here, but its transaction must be
+// committed: RefreshMatchAnalytics reads the replay and opens its own write tx.
+func (p *Parser) refreshCompletedMatchAnalytics(ctx context.Context, state *parseState) error {
+	matchIDs := make([]int64, 0, len(state.analyticsMatches))
+	for matchID := range state.analyticsMatches {
+		matchIDs = append(matchIDs, matchID)
+	}
+	sort.Slice(matchIDs, func(i, j int) bool { return matchIDs[i] < matchIDs[j] })
+	for _, matchID := range matchIDs {
+		if err := p.store.RefreshMatchAnalytics(ctx, matchID); err != nil {
+			return fmt.Errorf("refresh analytics after ingest for match %d: %w", matchID, err)
+		}
+		delete(state.analyticsMatches, matchID)
+	}
+	return nil
 }
 
 func parseRoomTimestamp(raw string) string {
@@ -243,7 +275,7 @@ func (p *Parser) handleRoomStateJSON(ctx context.Context, tx *sql.Tx, stats *mod
 				return err
 			} else if err := p.queueCompletedMatchIfRankPending(ctx, tx, config.MatchID, result, changed); err != nil {
 				return err
-			} else if err := p.archiveCompletedMatchReplay(ctx, tx, config.MatchID, result); err != nil {
+			} else if err := p.archiveCompletedMatchReplay(ctx, tx, state, config.MatchID, result); err != nil {
 				return err
 			}
 		}

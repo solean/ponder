@@ -60,7 +60,10 @@ func NewParser(store *db.Store) *Parser {
 
 type parseState struct {
 	// Legacy prefix recovery must not hydrate old diffs from newer stored frames.
-	reconstructingCheckpoint  bool
+	reconstructingCheckpoint bool
+	// Analytics read committed replay data. This batch-local set is drained
+	// after commit and is deliberately excluded from parser checkpoints.
+	analyticsMatches          map[int64]struct{}
 	personaID                 string
 	playerName                string
 	activeMatchID             string
@@ -695,6 +698,9 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("commit tx: %w", err)
 		}
+		if err := p.refreshCompletedMatchAnalytics(ctx, state); err != nil {
+			return err
+		}
 		newTx, beginErr := p.store.BeginTx(ctx)
 		if beginErr != nil {
 			tx = nil
@@ -749,6 +755,9 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 
 	if err := tx.Commit(); err != nil {
 		return stats, fmt.Errorf("commit final tx: %w", err)
+	}
+	if err := p.refreshCompletedMatchAnalytics(ctx, state); err != nil {
+		return stats, err
 	}
 
 	// Historical imports reconcile older rows once after parsing. Live polls
@@ -1154,7 +1163,7 @@ func (p *Parser) handleOutgoing(ctx context.Context, tx *sql.Tx, stats *model.Pa
 			if err := p.queueCompletedMatchIfRankPending(ctx, tx, evt.MatchID, result, changed); err != nil {
 				return err
 			}
-			if err := p.archiveCompletedMatchReplay(ctx, tx, evt.MatchID, result); err != nil {
+			if err := p.archiveCompletedMatchReplay(ctx, tx, state, evt.MatchID, result); err != nil {
 				return err
 			}
 		}

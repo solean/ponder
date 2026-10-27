@@ -54,6 +54,8 @@ type OpponentObservedCardRow struct {
 }
 
 type MatchCardPlayRow struct {
+	IsCopy          bool   `json:"isCopy"`
+	CastConfirmed   bool   `json:"castConfirmed"`
 	ID              int64  `json:"id"`
 	GameNumber      *int64 `json:"gameNumber,omitempty"`
 	InstanceID      int64  `json:"instanceId"`
@@ -82,6 +84,8 @@ type MatchReplayChangeRow struct {
 	ToZonePosition   *int64 `json:"toZonePosition,omitempty"`
 	ClassLevel       *int64 `json:"classLevel,omitempty"`
 	IsToken          bool   `json:"isToken"`
+	IsCopy           bool   `json:"isCopy"`
+	CastConfirmed    bool   `json:"castConfirmed"`
 }
 
 type MatchReplayFrameObjectRow struct {
@@ -107,6 +111,8 @@ type MatchReplayFrameObjectRow struct {
 	AttackState          string `json:"attackState,omitempty"`
 	BlockState           string `json:"blockState,omitempty"`
 	IsToken              bool   `json:"isToken"`
+	IsCopy               bool   `json:"isCopy"`
+	CastConfirmed        bool   `json:"castConfirmed"`
 	IsTapped             bool   `json:"isTapped"`
 	HasSummoningSickness bool   `json:"hasSummoningSickness"`
 }

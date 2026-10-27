@@ -129,6 +129,9 @@ func Init(ctx context.Context, db *sql.DB) error {
 	if err := migrateAnalyticsTables(ctx, conn); err != nil {
 		return err
 	}
+	if err := migrateSpellCopyColumns(ctx, conn); err != nil {
+		return err
+	}
 
 	if err := prepareCardStatsBackfill(ctx, conn); err != nil {
 		return err

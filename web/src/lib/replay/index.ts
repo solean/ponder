@@ -281,6 +281,7 @@ export function boardTurnLabel(turnNumber?: number): string {
 
 export function boardPlayMeta(play: MatchCardPlay): string {
   const parts = [boardTurnLabel(play.turnNumber)];
+  if (play.isCopy) parts.push(play.castConfirmed ? "Cast a copy" : "Copy observed");
   const phase = timelinePhaseLabel(play.phase);
   if (phase !== "-") {
     parts.push(phase);
@@ -1011,6 +1012,8 @@ export function replayObjectStatePills(
 ): ReplayCounterSummary[] {
   const pills: ReplayCounterSummary[] = [];
 
+  if (object.isCopy) pills.push({ label: "Copy", count: 1 });
+
   if (object.isTapped) {
     pills.push({ label: "Tapped", count: 1 });
   }
@@ -1049,6 +1052,7 @@ export function replayObjectStatusText(
     timelinePlayerLabel(object.playerSide),
     timelineZoneLabel(object.zoneType),
   ];
+  if (object.isCopy) parts.push("Copy");
   const ptLabel = replayObjectPTLabel(object, preview);
   if (ptLabel) {
     parts.push(ptLabel);
@@ -1698,10 +1702,7 @@ function replayPossessive(name: string): string {
 
 export function describeReplayChange(change: MatchReplayChange): string {
   const actor = timelinePlayerLabel(change.playerSide);
-  const name = cardDisplayName({
-    cardId: change.cardId,
-    cardName: change.cardName,
-  });
+  const name = replayChangeName(change);
 
   if (change.action === "enter_public") {
     return `${actor} showed ${name} in ${timelineZoneLabel(change.toZoneType ?? "")}.`;
@@ -2089,7 +2090,8 @@ function replayObjectPTSuffix(
 }
 
 function replayChangeName(change: MatchReplayChange): string {
-  return cardDisplayName({ cardId: change.cardId, cardName: change.cardName });
+  const name = cardDisplayName({ cardId: change.cardId, cardName: change.cardName });
+  return change.isCopy ? `a copy of ${name}` : name;
 }
 
 function replaySignedStatModifier(value: number): string {
@@ -2365,7 +2367,9 @@ export function buildReplayBeat(
     const lead = casts[0]!;
     const triggers = relationships.triggerEventsByFrameId.get(frame.id) ?? [];
     return {
-      text: `${replayActorVerb(lead.playerSide, "cast")} ${replayChangeName(lead)}`,
+      text: lead.isCopy && !lead.castConfirmed
+        ? `A copy of ${cardDisplayName(lead)} appears on the stack`
+        : `${replayActorVerb(lead.playerSide, "cast")} ${replayChangeName(lead)}`,
       note:
         triggers.length > 0
           ? `triggers ${replayTriggerSourceListLabel(triggers)}`

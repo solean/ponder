@@ -217,7 +217,7 @@ func (s *Store) ListMatchGameDeckCards(
 }
 
 // GetLiveKnownSelfCardCounts counts the player's non-token cards in every
-// tracked zone outside the library in the latest frame for a game. available
+// tracked zone outside the library and Limbo in the latest frame for a game. available
 // is false until a frame with a known player seat has been captured.
 func (s *Store) GetLiveKnownSelfCardCounts(
 	ctx context.Context,
@@ -245,7 +245,9 @@ func (s *Store) GetLiveKnownSelfCardCounts(
 			AND o.card_id > 0
 			AND COALESCE(o.is_token, 0) = 0
 			AND COALESCE(o.owner_seat_id, o.controller_seat_id) = latest.player_seat_id
-			AND LOWER(TRIM(COALESCE(o.zone_type, ''))) <> 'library'
+			-- Limbo keeps the stale instance a card left behind when it changed
+			-- zones, so counting it would see one card twice.
+			AND LOWER(TRIM(COALESCE(o.zone_type, ''))) NOT IN ('library', 'limbo')
 		GROUP BY latest.frame_id, o.card_id
 	`, matchID, gameNumber)
 	if err != nil {

@@ -2,8 +2,11 @@ package db
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
+
+	"github.com/solean/ponder/internal/model"
 )
 
 func TestGetLiveMatchID(t *testing.T) {
@@ -238,5 +241,123 @@ func TestGetLiveMatchIDActiveSinceUsesStartBeforeFirstFrame(t *testing.T) {
 		t.Fatalf("GetLiveMatchIDActiveSince: %v", err)
 	} else if !ok || id != startedID {
 		t.Fatalf("GetLiveMatchIDActiveSince = %d, %v, want %d, true", id, ok, startedID)
+	}
+}
+
+func liveCountsTestObject(instanceID, cardID, seatID int64, zoneType string) model.MatchReplayFrameObjectRow {
+	return model.MatchReplayFrameObjectRow{
+		InstanceID:       instanceID,
+		CardID:           cardID,
+		OwnerSeatID:      int64Ptr(seatID),
+		ControllerSeatID: int64Ptr(seatID),
+		ZoneType:         zoneType,
+		Visibility:       "public",
+	}
+}
+
+func TestGetMatchDetailCountsLiveOpponentCopiesFromFrames(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := newReplayArchiveTestStore(t)
+	const (
+		recast   = int64(7001)
+		pair     = int64(7002)
+		stale    = int64(7003)
+		instant  = int64(7004)
+		arenaID  = "match-live-opponent"
+		oppSeat  = int64(2)
+		selfSeat = int64(1)
+	)
+	tx := mustBeginTx(t, store)
+	if _, err := store.UpsertMatchStart(ctx, tx, arenaID, "Traditional_Ladder", selfSeat, "2026-03-12T19:06:52Z"); err != nil {
+		t.Fatalf("UpsertMatchStart: %v", err)
+	}
+	frames := [][]model.MatchReplayFrameObjectRow{
+		{
+			liveCountsTestObject(10, recast, oppSeat, "battlefield"),
+			liveCountsTestObject(30, stale, oppSeat, "battlefield"),
+			liveCountsTestObject(40, instant, oppSeat, "stack"),
+		},
+		// The recast card dies and comes back: every move leaves a new
+		// instance id and a stale one in Limbo, but it is still one card.
+		{
+			liveCountsTestObject(10, recast, oppSeat, "limbo"),
+			liveCountsTestObject(11, recast, oppSeat, "graveyard"),
+			liveCountsTestObject(20, pair, oppSeat, "battlefield"),
+			liveCountsTestObject(21, pair, oppSeat, "hand"),
+			liveCountsTestObject(30, stale, oppSeat, "battlefield"),
+			liveCountsTestObject(31, stale, oppSeat, "battlefield"),
+			liveCountsTestObject(40, instant, oppSeat, "limbo"),
+			liveCountsTestObject(41, instant, oppSeat, "graveyard"),
+		},
+		{
+			liveCountsTestObject(11, recast, oppSeat, "limbo"),
+			liveCountsTestObject(12, recast, oppSeat, "battlefield"),
+		},
+	}
+	for i, objects := range frames {
+		insertReplayTestFrame(t, store, tx, arenaID, 1, int64(i+1), 1, `{"1":20,"2":20}`, objects)
+		for _, object := range objects {
+			if err := store.UpsertMatchOpponentCardInstance(ctx, tx, arenaID, 1, object.InstanceID, object.CardID, "2026-03-12T19:07:00Z", "gre_public_replay"); err != nil {
+				t.Fatalf("UpsertMatchOpponentCardInstance: %v", err)
+			}
+		}
+	}
+	mustCommit(t, tx)
+	matchID := matchRowID(t, store, arenaID)
+	// Analytics derived earlier in the match are stale and lower than what
+	// the frames now show.
+	if _, err := store.db.ExecContext(ctx, `
+		INSERT INTO match_opponent_card_counts (match_id, card_id, max_copies, derived_at)
+		VALUES (?, ?, 1, '2026-03-12T19:06:59Z')
+	`, matchID, stale); err != nil {
+		t.Fatalf("insert stale opponent count: %v", err)
+	}
+
+	detail, err := store.GetMatchDetail(ctx, matchID)
+	if err != nil {
+		t.Fatalf("GetMatchDetail: %v", err)
+	}
+	got := map[int64]int64{}
+	for _, card := range detail.OpponentObservedCards {
+		got[card.CardID] = card.Quantity
+	}
+	want := map[int64]int64{recast: 1, pair: 2, stale: 2, instant: 1}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("opponent observed quantities = %v, want %v", got, want)
+	}
+}
+
+func TestGetLiveKnownSelfCardCountsSkipsLimbo(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := newReplayArchiveTestStore(t)
+	const arenaID = "match-live-self"
+	tx := mustBeginTx(t, store)
+	if _, err := store.UpsertMatchStart(ctx, tx, arenaID, "Traditional_Ladder", 1, "2026-03-12T19:06:52Z"); err != nil {
+		t.Fatalf("UpsertMatchStart: %v", err)
+	}
+	insertReplayTestFrame(t, store, tx, arenaID, 1, 1, 1, `{"1":20,"2":20}`, []model.MatchReplayFrameObjectRow{
+		// A resolved spell: its stack instance lingers in Limbo next to the
+		// graveyard instance that replaced it.
+		liveCountsTestObject(50, 8001, 1, "limbo"),
+		liveCountsTestObject(51, 8001, 1, "graveyard"),
+		liveCountsTestObject(52, 8002, 1, "hand"),
+		liveCountsTestObject(53, 8003, 1, "library"),
+	})
+	mustCommit(t, tx)
+
+	counts, available, err := store.GetLiveKnownSelfCardCounts(ctx, matchRowID(t, store, arenaID), 1)
+	if err != nil {
+		t.Fatalf("GetLiveKnownSelfCardCounts: %v", err)
+	}
+	if !available {
+		t.Fatalf("GetLiveKnownSelfCardCounts: expected state available")
+	}
+	want := map[int64]int64{8001: 1, 8002: 1}
+	if !reflect.DeepEqual(counts, want) {
+		t.Fatalf("known self counts = %v, want %v", counts, want)
 	}
 }

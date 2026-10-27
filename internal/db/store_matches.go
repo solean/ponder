@@ -706,20 +706,52 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 			SELECT pg.card_id, MAX(pg.quantity_in_game) AS quantity
 			FROM per_game pg
 			GROUP BY pg.card_id
+		),
+		-- Mirrors deriveOpponentCardCopies over the relational frames of a
+		-- match still in progress, which match_opponent_card_counts only
+		-- reflects once analytics are derived after the match.
+		live_per_frame AS (
+			SELECT
+				o.card_id,
+				COUNT(DISTINCT CASE
+					WHEN LOWER(TRIM(COALESCE(o.zone_type, ''))) IN ('battlefield', 'hand') THEN o.instance_id
+				END) AS copies
+			FROM match_replay_frames rf
+			JOIN matches m ON m.id = rf.match_id
+			JOIN match_replay_frame_objects o ON o.frame_id = rf.id
+			WHERE rf.match_id = ?
+				AND m.player_seat_id > 0
+				AND o.card_id > 0
+				AND o.instance_id > 0
+				AND COALESCE(o.is_token, 0) = 0
+				AND COALESCE(o.controller_seat_id, o.owner_seat_id) > 0
+				AND COALESCE(o.controller_seat_id, o.owner_seat_id) <> m.player_seat_id
+			GROUP BY rf.id, o.card_id
+		),
+		live AS (
+			SELECT card_id, MAX(1, MAX(copies)) AS max_copies
+			FROM live_per_frame
+			GROUP BY card_id
 		)
 		SELECT
 			f.card_id,
-			-- Prefer the simultaneous-copies estimate from replay frames, which
-			-- is not inflated by a single card's instance id churning across
-			-- zones; fall back to distinct instances per game when no frames.
-			COALESCE(mcc.max_copies, f.quantity) AS quantity,
+			-- Prefer the simultaneous-copies estimates from replay frames, which
+			-- are not inflated by a single card's instance id churning across
+			-- zones. Both are lower bounds, so the larger wins; fall back to
+			-- distinct instances per game only when no frame saw the card.
+			CASE
+				WHEN live.max_copies IS NULL THEN COALESCE(mcc.max_copies, f.quantity)
+				WHEN mcc.max_copies IS NULL THEN live.max_copies
+				ELSE MAX(live.max_copies, mcc.max_copies)
+			END AS quantity,
 			COALESCE(cc.name, '')
 		FROM fallback f
+		LEFT JOIN live ON live.card_id = f.card_id
 		LEFT JOIN match_opponent_card_counts mcc
 			ON mcc.match_id = ? AND mcc.card_id = f.card_id
 		LEFT JOIN card_catalog cc ON cc.arena_id = f.card_id
 		ORDER BY quantity DESC, cc.name ASC, f.card_id ASC
-	`, matchID, matchID)
+	`, matchID, matchID, matchID)
 	if err != nil {
 		return out, fmt.Errorf("get observed opponent cards: %w", err)
 	}

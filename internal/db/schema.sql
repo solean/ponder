@@ -400,6 +400,8 @@ CREATE TABLE IF NOT EXISTS match_card_plays (
   first_public_zone TEXT,
   turn_number INTEGER,
   phase TEXT,
+  is_copy INTEGER NOT NULL DEFAULT 0,
+  cast_confirmed INTEGER NOT NULL DEFAULT 0,
   source TEXT,
   played_at TEXT,
   created_at TEXT NOT NULL,
@@ -461,6 +463,8 @@ CREATE TABLE IF NOT EXISTS match_replay_frame_objects (
   counter_summary_json TEXT,
   details_json TEXT,
   is_token INTEGER NOT NULL DEFAULT 0,
+  is_copy INTEGER NOT NULL DEFAULT 0,
+  cast_confirmed INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   UNIQUE(frame_id, instance_id),
   FOREIGN KEY(frame_id) REFERENCES match_replay_frames(id) ON DELETE CASCADE

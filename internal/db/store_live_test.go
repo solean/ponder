@@ -327,6 +327,13 @@ func TestGetMatchDetailCountsLiveOpponentCopiesFromFrames(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("opponent observed quantities = %v, want %v", got, want)
 	}
+	batched, err := store.ListMatchOpponentCardQuantities(ctx, []int64{matchID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(batched[matchID], want) {
+		t.Fatalf("batched live quantities = %v, want %v", batched[matchID], want)
+	}
 }
 
 func TestGetLiveKnownSelfCardCountsSkipsLimbo(t *testing.T) {

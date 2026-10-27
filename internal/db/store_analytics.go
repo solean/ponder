@@ -556,6 +556,7 @@ func (s *Store) loadCardPlayCardFacts(ctx context.Context, matchID int64) (map[i
 		FROM match_card_plays cp
 		JOIN matches m ON m.id = cp.match_id
 		WHERE cp.match_id = ?
+		  AND cp.is_copy = 0
 		  AND cp.owner_seat_id IS NOT NULL
 		  AND cp.owner_seat_id = m.player_seat_id
 		GROUP BY cp.game_number, cp.card_id
@@ -658,6 +659,10 @@ func (s *Store) RefreshMatchAnalytics(ctx context.Context, matchID int64) error 
 		if err != nil {
 			return err
 		}
+	}
+	model.PopulateReplayCopyFlags(frames)
+	if err := s.reconcileMatchCopyFacts(ctx, matchID, frames); err != nil {
+		return err
 	}
 	facts, err := s.loadCardPlayGameFacts(ctx, matchID)
 	if err != nil {

@@ -54,6 +54,7 @@ func (s *Store) loadSelfCardPlays(ctx context.Context, matchID int64) ([]selfCar
 		  AND cp.owner_seat_id IS NOT NULL
 		  AND cp.owner_seat_id = m.player_seat_id
 		  AND cp.turn_number IS NOT NULL
+		  AND (cp.is_copy = 0 OR cp.cast_confirmed = 1)
 		ORDER BY cp.game_number, cp.turn_number, cp.id
 	`, matchID)
 	if err != nil {
@@ -140,7 +141,7 @@ func deriveOpponentCardCopies(frames []model.MatchReplayFrameRow) map[int64]int6
 	for _, frame := range frames {
 		perCard := make(map[int64]map[int64]struct{})
 		for _, object := range frame.Objects {
-			if object.PlayerSide != "opponent" || object.IsToken {
+			if object.PlayerSide != "opponent" || object.IsToken || object.IsCopy {
 				continue
 			}
 			if object.CardID <= 0 || object.InstanceID <= 0 {

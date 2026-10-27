@@ -75,6 +75,8 @@ type replayArchiveObject struct {
 	CounterSummaryJSON   string `json:"counterSummaryJson,omitempty"`
 	DetailsJSON          string `json:"detailsJson,omitempty"`
 	IsToken              bool   `json:"isToken,omitempty"`
+	IsCopy               bool   `json:"isCopy,omitempty"`
+	CastConfirmed        bool   `json:"castConfirmed,omitempty"`
 }
 
 var (
@@ -289,7 +291,7 @@ func loadReplayArchiveRowFrames(ctx context.Context, q querier, matchID int64) (
 			COALESCE(o.block_attacker_ids_json, ''),
 			COALESCE(o.counter_summary_json, ''),
 			COALESCE(o.details_json, ''),
-			o.is_token
+			o.is_token, o.is_copy, o.cast_confirmed
 		FROM match_replay_frame_objects o
 		JOIN match_replay_frames f ON f.id = o.frame_id
 		WHERE f.match_id = ?
@@ -342,7 +344,7 @@ func loadReplayArchiveRowFrames(ctx context.Context, q querier, matchID int64) (
 			&obj.BlockAttackerIDsJSON,
 			&obj.CounterSummaryJSON,
 			&obj.DetailsJSON,
-			&isToken,
+			&isToken, &obj.IsCopy, &obj.CastConfirmed,
 		); err != nil {
 			return nil, fmt.Errorf("scan replay frame object for archive: %w", err)
 		}
@@ -540,6 +542,8 @@ func (s *Store) loadArchivedMatchReplayFrames(ctx context.Context, matchID int64
 				AttackState:          obj.AttackState,
 				BlockState:           obj.BlockState,
 				IsToken:              obj.IsToken,
+				IsCopy:               obj.IsCopy,
+				CastConfirmed:        obj.CastConfirmed,
 				IsTapped:             obj.IsTapped,
 				HasSummoningSickness: obj.HasSummoningSickness,
 			})

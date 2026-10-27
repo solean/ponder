@@ -283,7 +283,7 @@ export function MatchTimelineBoard({
                   {timelinePlayerLabel(currentAction.playerSide)}
                 </p>
                 <h5>{currentName}</h5>
-                <p>{timelineZoneLabel(currentAction.firstPublicZone)}</p>
+                <p>{currentAction.isCopy ? (currentAction.castConfirmed ? "Cast a copy" : "Copy observed") : timelineZoneLabel(currentAction.firstPublicZone)}</p>
                 <p>{boardPlayMeta(currentAction)}</p>
                 <p>
                   {currentAction.playedAt

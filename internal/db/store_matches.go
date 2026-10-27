@@ -551,23 +551,8 @@ func (s *Store) ListMatchOpponentCardQuantities(ctx context.Context, matchIDs []
 			args = append(args, matchID)
 		}
 
-		query := fmt.Sprintf(`
-			WITH per_game AS (
-				SELECT
-					match_id,
-					card_id,
-					game_number,
-					COUNT(*) AS quantity_in_game
-				FROM match_opponent_card_instances
-				WHERE match_id IN (%s)
-				GROUP BY match_id, card_id, game_number
-			)
-			SELECT
-				match_id,
-				card_id,
-				MAX(quantity_in_game) AS quantity
-			FROM per_game
-			GROUP BY match_id, card_id
+		query := fmt.Sprintf(opponentCardQuantitiesCTE+`
+			SELECT match_id, card_id, quantity FROM opponent_quantities
 		`, strings.Join(placeholders, ","))
 
 		rows, err := s.db.QueryContext(ctx, query, args...)
@@ -692,66 +677,12 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 		return out, fmt.Errorf("get match detail: %w", err)
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
-		WITH per_game AS (
-			SELECT
-				oc.card_id,
-				oc.game_number,
-				COUNT(*) AS quantity_in_game
-			FROM match_opponent_card_instances oc
-			WHERE oc.match_id = ?
-			GROUP BY oc.card_id, oc.game_number
-		),
-		fallback AS (
-			SELECT pg.card_id, MAX(pg.quantity_in_game) AS quantity
-			FROM per_game pg
-			GROUP BY pg.card_id
-		),
-		-- Mirrors deriveOpponentCardCopies over the relational frames of a
-		-- match still in progress, which match_opponent_card_counts only
-		-- reflects once analytics are derived after the match.
-		live_per_frame AS (
-			SELECT
-				o.card_id,
-				COUNT(DISTINCT CASE
-					WHEN LOWER(TRIM(COALESCE(o.zone_type, ''))) IN ('battlefield', 'hand') THEN o.instance_id
-				END) AS copies
-			FROM match_replay_frames rf
-			JOIN matches m ON m.id = rf.match_id
-			JOIN match_replay_frame_objects o ON o.frame_id = rf.id
-			WHERE rf.match_id = ?
-				AND m.player_seat_id > 0
-				AND o.card_id > 0
-				AND o.instance_id > 0
-				AND COALESCE(o.is_token, 0) = 0
-				AND COALESCE(o.controller_seat_id, o.owner_seat_id) > 0
-				AND COALESCE(o.controller_seat_id, o.owner_seat_id) <> m.player_seat_id
-			GROUP BY rf.id, o.card_id
-		),
-		live AS (
-			SELECT card_id, MAX(1, MAX(copies)) AS max_copies
-			FROM live_per_frame
-			GROUP BY card_id
-		)
-		SELECT
-			f.card_id,
-			-- Prefer the simultaneous-copies estimates from replay frames, which
-			-- are not inflated by a single card's instance id churning across
-			-- zones. Both are lower bounds, so the larger wins; fall back to
-			-- distinct instances per game only when no frame saw the card.
-			CASE
-				WHEN live.max_copies IS NULL THEN COALESCE(mcc.max_copies, f.quantity)
-				WHEN mcc.max_copies IS NULL THEN live.max_copies
-				ELSE MAX(live.max_copies, mcc.max_copies)
-			END AS quantity,
-			COALESCE(cc.name, '')
-		FROM fallback f
-		LEFT JOIN live ON live.card_id = f.card_id
-		LEFT JOIN match_opponent_card_counts mcc
-			ON mcc.match_id = ? AND mcc.card_id = f.card_id
-		LEFT JOIN card_catalog cc ON cc.arena_id = f.card_id
-		ORDER BY quantity DESC, cc.name ASC, f.card_id ASC
-	`, matchID, matchID, matchID)
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(opponentCardQuantitiesCTE, "?")+`
+		SELECT q.card_id, q.quantity, COALESCE(cc.name, '')
+		FROM opponent_quantities q
+		LEFT JOIN card_catalog cc ON cc.arena_id = q.card_id
+		ORDER BY q.quantity DESC, cc.name ASC, q.card_id ASC
+	`, matchID)
 	if err != nil {
 		return out, fmt.Errorf("get observed opponent cards: %w", err)
 	}
@@ -817,7 +748,7 @@ func (s *Store) ListMatchCardPlays(ctx context.Context, matchID int64) ([]model.
 			COALESCE(cp.first_public_zone, ''),
 			cp.turn_number,
 			COALESCE(cp.phase, ''),
-			COALESCE(cp.played_at, '')
+			COALESCE(cp.played_at, ''), cp.is_copy, cp.cast_confirmed
 		FROM match_card_plays cp
 		JOIN matches m ON m.id = cp.match_id
 		LEFT JOIN card_catalog cc ON cc.arena_id = cp.card_id
@@ -846,7 +777,7 @@ func (s *Store) ListMatchCardPlays(ctx context.Context, matchID int64) ([]model.
 			&row.FirstPublicZone,
 			&turnNo,
 			&row.Phase,
-			&row.PlayedAt,
+			&row.PlayedAt, &row.IsCopy, &row.CastConfirmed,
 		); err != nil {
 			return nil, fmt.Errorf("scan match card play row: %w", err)
 		}

@@ -27,6 +27,8 @@ type replayCardState struct {
 	AttackState          string
 	BlockState           string
 	IsToken              bool
+	IsCopy               bool
+	CastConfirmed        bool
 	IsTapped             bool
 	HasSummoningSickness bool
 	SummoningSickTurn    int64
@@ -199,6 +201,7 @@ type greGameObject struct {
 	BlockState           *string         `json:"blockState"`
 	BlockInfo            *greBlockInfo   `json:"blockInfo"`
 	IsToken              bool            `json:"isToken"`
+	IsCopy               bool            `json:"isCopy"`
 }
 
 func (o *greGameObject) UnmarshalJSON(data []byte) error {
@@ -489,6 +492,7 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 			}
 		}
 
+		castInstances := model.ReplayCastInstances(string(combineGREAnnotationPayload(msg.GameStateMessage)))
 		for _, obj := range msg.GameStateMessage.GameObjects {
 			if obj.InstanceID <= 0 {
 				continue
@@ -586,6 +590,8 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 					current.BlockAttackerIDsJSON = ""
 				}
 			}
+			current.IsCopy = current.IsCopy || obj.IsCopy || model.ReplayObjectIsCopy(current.DetailsJSON)
+			current.CastConfirmed = current.CastConfirmed || castInstances[obj.InstanceID]
 			if obj.IsToken || strings.EqualFold(strings.TrimSpace(obj.Type), "GameObjectType_Token") {
 				current.IsToken = true
 			}
@@ -618,6 +624,12 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 				}
 			} else if current.ZoneID > 0 {
 				removeReplayInstanceFromAllZones(replayState, obj.InstanceID)
+			}
+		}
+		for id := range castInstances {
+			if object, ok := replayState.Objects[id]; ok {
+				object.CastConfirmed = true
+				replayState.Objects[id] = object
 			}
 		}
 		applyReplayAnnotations(replayState, msg.GameStateMessage.Annotations)
@@ -701,7 +713,16 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 				continue
 			}
 			if previous, alreadyPublic := previousPublicByInstance[instanceID]; alreadyPublic && previous.CardID > 0 {
-				continue
+				if current.IsCopy && (!previous.IsCopy || current.CastConfirmed != previous.CastConfirmed) {
+					if err := p.store.MarkMatchCardPlayCopy(ctx, tx, matchID, gameNumber, instanceID, current.CastConfirmed); err != nil {
+						return err
+					}
+				}
+				// A prepared copy may have been visible in exile before it
+				// was cast. Preserve the later confirmed cast observation.
+				if !(current.IsCopy && current.CastConfirmed && current.ZoneType == "stack" && previous.ZoneType != "stack") {
+					continue
+				}
 			}
 			ownerSeatID := int64(0)
 			if current.OwnerSeatID != nil {
@@ -714,7 +735,13 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 				}
 			}
 
-			if selfSeat <= 0 || current.IsToken || ownerSeatID <= 0 || ownerSeatID == selfSeat {
+			if current.IsCopy {
+				if err := p.store.MarkMatchCardPlayCopy(ctx, tx, matchID, gameNumber, instanceID, current.CastConfirmed); err != nil {
+					return err
+				}
+			}
+
+			if selfSeat <= 0 || current.IsToken || current.IsCopy || ownerSeatID <= 0 || ownerSeatID == selfSeat {
 				continue
 			}
 			if err := p.store.UpsertMatchOpponentCardInstance(ctx, tx, matchID, gameNumber, current.InstanceID, current.CardID, eventTS, "gre_public_replay"); err != nil {
@@ -811,6 +838,8 @@ func hydrateReplayStateFromFrameObjects(replay *replayPublicState, latestTurnNum
 			AttackState:          strings.TrimSpace(obj.AttackState),
 			BlockState:           strings.TrimSpace(obj.BlockState),
 			IsToken:              obj.IsToken,
+			IsCopy:               obj.IsCopy || model.ReplayObjectIsCopy(obj.DetailsJSON),
+			CastConfirmed:        obj.CastConfirmed,
 			IsTapped:             obj.IsTapped,
 			HasSummoningSickness: obj.HasSummoningSickness,
 		}
@@ -929,6 +958,8 @@ func buildReplayPublicSnapshot(
 				CounterSummaryJSON:   strings.TrimSpace(current.CounterSummaryJSON),
 				DetailsJSON:          strings.TrimSpace(current.DetailsJSON),
 				IsToken:              current.IsToken,
+				IsCopy:               current.IsCopy,
+				CastConfirmed:        current.CastConfirmed,
 				IsTapped:             current.IsTapped,
 				HasSummoningSickness: current.HasSummoningSickness,
 			}

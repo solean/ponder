@@ -162,9 +162,9 @@ func (s *Store) ReplaceMatchReplayFrame(
 				block_attacker_ids_json,
 				counter_summary_json,
 				details_json,
-				is_token,
+				is_token, is_copy, cast_confirmed,
 				created_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`,
 			frameID,
 			obj.InstanceID,
@@ -185,7 +185,7 @@ func (s *Store) ReplaceMatchReplayFrame(
 			nullIfEmpty(strings.TrimSpace(obj.BlockAttackerIDsJSON)),
 			nullIfEmpty(strings.TrimSpace(obj.CounterSummaryJSON)),
 			nullIfEmpty(strings.TrimSpace(obj.DetailsJSON)),
-			boolToInt(obj.IsToken),
+			boolToInt(obj.IsToken), boolToInt(obj.IsCopy), boolToInt(obj.CastConfirmed),
 			nowUTC(),
 		); err != nil {
 			return 0, fmt.Errorf("insert match replay frame object: %w", err)
@@ -253,7 +253,7 @@ func (s *Store) LoadLatestMatchReplayFrameState(
 			COALESCE(o.block_attacker_ids_json, ''),
 			COALESCE(o.counter_summary_json, ''),
 			COALESCE(o.details_json, ''),
-			o.is_token
+			o.is_token, o.is_copy, o.cast_confirmed
 		FROM match_replay_frame_objects o
 		WHERE o.frame_id = ?
 		ORDER BY COALESCE(o.zone_id, 0) ASC, COALESCE(o.zone_position, 1000000) ASC, o.instance_id ASC
@@ -299,7 +299,7 @@ func (s *Store) LoadLatestMatchReplayFrameState(
 			&row.BlockAttackerIDsJSON,
 			&row.CounterSummaryJSON,
 			&row.DetailsJSON,
-			&isToken,
+			&isToken, &row.IsCopy, &row.CastConfirmed,
 		); err != nil {
 			return 0, 0, nil, nil, fmt.Errorf("scan latest match replay frame object: %w", err)
 		}
@@ -333,6 +333,7 @@ func (s *Store) ListMatchReplayFrames(ctx context.Context, matchID int64) ([]mod
 	}
 
 	frames := mergeReplayFrameRows(archived, live)
+	model.PopulateReplayCopyFlags(frames)
 	populateReplayClassLevels(frames)
 	populateReplayFrameChanges(frames)
 	return frames, nil
@@ -591,7 +592,7 @@ func (s *Store) listLiveMatchReplayFrames(ctx context.Context, matchID int64) ([
 			COALESCE(o.block_attacker_ids_json, ''),
 			COALESCE(o.counter_summary_json, ''),
 			COALESCE(o.details_json, ''),
-			o.is_token
+			o.is_token, o.is_copy, o.cast_confirmed
 		FROM match_replay_frame_objects o
 		JOIN match_replay_frames f ON f.id = o.frame_id
 		JOIN matches m ON m.id = f.match_id
@@ -647,7 +648,7 @@ func (s *Store) listLiveMatchReplayFrames(ctx context.Context, matchID int64) ([
 			&row.BlockAttackerIDsJSON,
 			&row.CounterSummaryJSON,
 			&row.DetailsJSON,
-			&isToken,
+			&isToken, &row.IsCopy, &row.CastConfirmed,
 		); err != nil {
 			return nil, fmt.Errorf("scan match replay frame object: %w", err)
 		}
@@ -799,6 +800,8 @@ func populateReplayFrameChanges(frames []model.MatchReplayFrameRow) {
 							ToZoneType:       obj.ZoneType,
 							ToZonePosition:   obj.ZonePosition,
 							IsToken:          obj.IsToken,
+							IsCopy:           obj.IsCopy,
+							CastConfirmed:    obj.CastConfirmed,
 						})
 						continue
 					}
@@ -813,6 +816,8 @@ func populateReplayFrameChanges(frames []model.MatchReplayFrameRow) {
 						ToZoneType:     obj.ZoneType,
 						ToZonePosition: obj.ZonePosition,
 						IsToken:        obj.IsToken,
+						IsCopy:         obj.IsCopy,
+						CastConfirmed:  obj.CastConfirmed,
 					})
 					continue
 				}
@@ -850,6 +855,8 @@ func populateReplayFrameChanges(frames []model.MatchReplayFrameRow) {
 						ToZoneType:       obj.ZoneType,
 						ToZonePosition:   obj.ZonePosition,
 						IsToken:          obj.IsToken,
+						IsCopy:           obj.IsCopy,
+						CastConfirmed:    obj.CastConfirmed,
 					})
 				}
 				if !sameReplayIntPtr(prev.ControllerSeatID, obj.ControllerSeatID) {
@@ -926,6 +933,8 @@ func populateReplayFrameChanges(frames []model.MatchReplayFrameRow) {
 					FromZoneType:     obj.ZoneType,
 					FromZonePosition: obj.ZonePosition,
 					IsToken:          obj.IsToken,
+					IsCopy:           obj.IsCopy,
+					CastConfirmed:    obj.CastConfirmed,
 				})
 			}
 		}
@@ -1061,6 +1070,8 @@ func replayStateChangeRow(object model.MatchReplayFrameObjectRow, action string)
 		ToZoneType:     object.ZoneType,
 		ToZonePosition: object.ZonePosition,
 		IsToken:        object.IsToken,
+		IsCopy:         object.IsCopy,
+		CastConfirmed:  object.CastConfirmed,
 	}
 }
 

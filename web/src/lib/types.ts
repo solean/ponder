@@ -120,6 +120,8 @@ export type OpponentObservedCard = {
 };
 
 export type MatchCardPlay = {
+  isCopy?: boolean;
+  castConfirmed?: boolean;
   id: number;
   gameNumber?: number;
   instanceId: number;
@@ -148,6 +150,8 @@ export type MatchReplayChange = {
   toZonePosition?: number;
   classLevel?: number;
   isToken: boolean;
+  isCopy?: boolean;
+  castConfirmed?: boolean;
 };
 
 export type MatchReplayFrameObject = {
@@ -173,6 +177,8 @@ export type MatchReplayFrameObject = {
   attackState?: string;
   blockState?: string;
   isToken: boolean;
+  isCopy?: boolean;
+  castConfirmed?: boolean;
   isTapped: boolean;
   hasSummoningSickness: boolean;
 };

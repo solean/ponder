@@ -67,6 +67,21 @@ function tick() {
   act(() => timer.callback());
 }
 
+test("copies stay visible and labeled in replay cards and observed replays", async () => {
+  const { MatchReplayObjectCard } = await import("../src/components/match-detail/CardPreviews");
+  const object = {
+    id: 1, frameId: 1, instanceId: 236, cardId: 106300, cardName: "Omit Variables",
+    playerSide: "self" as const, zoneType: "stack", isCopy: true, castConfirmed: true,
+    isToken: false, isTapped: false, hasSummoningSickness: false,
+  };
+  act(() => root.render(<MatchReplayObjectCard object={object} preview={null} size="stack" />));
+  expect(container.querySelector(".match-replay-card-chip")?.textContent).toContain("Copy");
+  expect(container.textContent).toContain("Omit Variables");
+  act(() => root.render(<MatchTimelineBoard gameNumber={1} plays={[{ ...object, firstPublicZone: "stack" }]} previewByCardID={new Map()} />));
+  expect(container.querySelector(".match-replay-card-chip")?.textContent).toContain("Copy");
+  expect(container.textContent).toContain("Cast a copy");
+});
+
 for (const mode of ["frames", "observed"] as const) {
   describe(`${mode} replay transport`, () => {
     function render(length: number) {

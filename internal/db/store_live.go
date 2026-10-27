@@ -244,6 +244,7 @@ func (s *Store) GetLiveKnownSelfCardCounts(
 			ON o.frame_id = latest.frame_id
 			AND o.card_id > 0
 			AND COALESCE(o.is_token, 0) = 0
+			AND o.is_copy = 0
 			AND COALESCE(o.owner_seat_id, o.controller_seat_id) = latest.player_seat_id
 			-- Limbo keeps the stale instance a card left behind when it changed
 			-- zones, so counting it would see one card twice.

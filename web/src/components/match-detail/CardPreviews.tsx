@@ -347,7 +347,7 @@ export function MatchReplayCard({
           </div>
         )}
         <span className="match-replay-card-chip">
-          {boardTurnLabel(play.turnNumber)}
+          {play.isCopy ? "Copy · " : ""}{boardTurnLabel(play.turnNumber)}
         </span>
       </a>
     </ReplayCardPreviewAnchor>
@@ -468,8 +468,8 @@ export function MatchReplayObjectCard({
             <span>{timelinePlayerLabel(object.playerSide)}</span>
           </div>
         )}
-        {chipLabel ? (
-          <span className="match-replay-card-chip">{chipLabel}</span>
+        {chipLabel || object.isCopy ? (
+          <span className="match-replay-card-chip">{[object.isCopy ? "Copy" : null, chipLabel].filter(Boolean).join(" · ")}</span>
         ) : null}
         {statBadge ? (
           <span className="match-replay-card-power">{statBadge}</span>

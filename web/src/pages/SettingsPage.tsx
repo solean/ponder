@@ -722,7 +722,7 @@ export function SettingsPage() {
                 <h4 className="settings-group-title">Processing</h4>
 
                 <label className="settings-field settings-field--narrow">
-                  <span>Scan Interval</span>
+                  <span>Fallback Scan Interval</span>
                   <select
                     className="settings-input"
                     value={String(form.pollIntervalSeconds)}
@@ -736,7 +736,7 @@ export function SettingsPage() {
                       </option>
                     ))}
                   </select>
-                  <small>Lower values update faster but keep the parser busier.</small>
+                  <small>Log changes are processed automatically. This controls how often Ponder checks for missed updates.</small>
                 </label>
               </div>
             </div>

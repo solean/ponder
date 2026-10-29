@@ -7,6 +7,7 @@ import { CardPreviewName } from "../components/CardPreviewName";
 import { DraftCardBadges } from "../components/DraftCardBadges";
 import { CardStatLine, useDraftCardStats, type DraftCardStats } from "../components/CardStats";
 import { api } from "../lib/api";
+import { useLiveDraft } from "../lib/useLiveDraft";
 import { pct } from "../lib/format";
 import { DEFAULT_OVERLAY_SETTINGS, overlayPanelWidth, overlayShortcutLabel } from "../lib/overlaySettings";
 import { fetchCardPreview } from "../lib/scryfall";
@@ -440,13 +441,7 @@ export function OverlayPage() {
     refetchIntervalInBackground: true,
   });
 
-  // Packs change every few seconds while drafting, so poll faster then.
-  const draftQuery = useQuery({
-    queryKey: ["live-draft"],
-    queryFn: api.liveDraft,
-    refetchInterval: (query) => (query.state.data?.draft ? 1000 : 5000),
-    refetchIntervalInBackground: true,
-  });
+  const draftQuery = useLiveDraft();
 
   // The native window is ordered out whenever Arena is not frontmost, which
   // can throttle or suspend this webview's timers; refetch on the way back in.

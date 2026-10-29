@@ -19,6 +19,9 @@ import (
 
 const defaultPollInterval = 2 * time.Second
 
+// Stat is cheap; only changed files enter the parser between regular polls.
+const liveLogCheckInterval = 100 * time.Millisecond
+
 const supportDirName = "ponder"
 
 type Options struct {
@@ -31,6 +34,9 @@ type Options struct {
 	DefaultPollInterval    time.Duration
 	Capabilities           Capabilities
 	OverlayShortcutChanged func(string) error
+	// LiveDataChanged runs after a successful live parse commits new lines.
+	// It must return promptly and is called without holding the service lock.
+	LiveDataChanged func()
 }
 
 // Capabilities advertises native-shell integrations available to the frontend.
@@ -129,6 +135,7 @@ type Service struct {
 
 	updateMu               sync.Mutex
 	overlayShortcutChanged func(string) error
+	liveDataChanged        func()
 	mu                     sync.RWMutex
 	config                 Config
 	liveRunning            bool
@@ -209,6 +216,7 @@ func NewService(opts Options) (*Service, error) {
 		capabilities:           opts.Capabilities,
 		config:                 normalizeConfig(cfg, poll),
 		overlayShortcutChanged: opts.OverlayShortcutChanged,
+		liveDataChanged:        opts.LiveDataChanged,
 	}, nil
 }
 
@@ -500,19 +508,36 @@ func (s *Service) runLiveLoop(
 			s.lastError = ""
 		}
 		s.mu.Unlock()
+		if result.LinesRead > 0 && s.liveDataChanged != nil {
+			s.liveDataChanged()
+		}
 		return true
 	}
 
+	// Capture before parsing so writes arriving during a parse are noticed on
+	// the next check. The regular poll remains a fallback for missed changes.
+	lastInfo, _ := os.Stat(activeLogPath)
 	runTick(initialLogPaths)
 
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
+	changeTicker := time.NewTicker(liveLogCheckInterval)
+	defer changeTicker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			lastInfo, _ = os.Stat(activeLogPath)
+			runTick([]string{activeLogPath})
+		case <-changeTicker.C:
+			info, err := os.Stat(activeLogPath)
+			if err != nil || (lastInfo != nil && os.SameFile(lastInfo, info) &&
+				lastInfo.Size() == info.Size() && lastInfo.ModTime().Equal(info.ModTime())) {
+				continue
+			}
+			lastInfo = info
 			runTick([]string{activeLogPath})
 		}
 	}

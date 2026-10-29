@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ import (
 	"github.com/solean/ponder/internal/api"
 	"github.com/solean/ponder/internal/appstate"
 	"github.com/solean/ponder/internal/db"
+	"github.com/solean/ponder/internal/model"
 )
 
 const (
@@ -238,6 +240,7 @@ func (a *App) startup() {
 		DBPath:                 dbPath,
 		SupportDir:             supportDir,
 		OverlayShortcutChanged: a.updateOverlayShortcut,
+		LiveDataChanged:        a.wakeOverlayMonitor,
 		DefaultLogPath:         currentLogPath,
 		DefaultPrevLogPath:     prevLogPath,
 		Capabilities: appstate.Capabilities{
@@ -312,6 +315,11 @@ func (a *App) startup() {
 // was ordered out can have its webview timers throttled or suspended, so the
 // HUD would otherwise come back carrying whatever it last managed to poll.
 const overlayShownScript = "window.dispatchEvent(new Event('ponder:overlay-shown'))"
+
+func overlayDraftScript(draft *model.LiveDraft) string {
+	detail, _ := json.Marshal(draft)
+	return "window.dispatchEvent(new CustomEvent('ponder:draft-changed',{detail:" + string(detail) + "}))"
+}
 
 func overlayPointerScript(x, y float64, supported bool) string {
 	detail := "null"
@@ -424,6 +432,7 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 		attached := false
 		visible := false
 		hadReadError := false
+		var previousDraft *model.LiveDraft
 
 		setVisible := func(next bool) {
 			if next == visible {
@@ -446,11 +455,12 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 		updateState := func() {
 			now := time.Now()
 			_, isLive, err := store.GetLiveMatchIDActiveSince(ctx, now.Add(-liveMatchActivityWindow))
-			if err == nil && !isLive {
-				// The overlay also carries 17Lands ratings for the pack on screen.
-				draft, draftErr := store.GetLiveDraft(ctx, now)
+			// Check drafts even if an old match is still marked live. Send the
+			// committed state directly so completed picks clear stale badges
+			// without waiting for polling or card-name enrichment over HTTP.
+			draft, draftErr := store.GetLiveDraft(ctx, now)
+			if err == nil {
 				err = draftErr
-				isLive = draft != nil
 			}
 			if err != nil {
 				if !hadReadError {
@@ -460,6 +470,11 @@ func (a *App) startOverlayMonitor(ctx context.Context, store *db.Store) {
 				return
 			}
 			hadReadError = false
+			if !reflect.DeepEqual(previousDraft, draft) {
+				a.overlayWindow.ExecJS(overlayDraftScript(draft))
+				previousDraft = draft
+			}
+			isLive = isLive || draft != nil
 			a.mu.RLock()
 			hidden := a.overlayHidden
 			a.mu.RUnlock()

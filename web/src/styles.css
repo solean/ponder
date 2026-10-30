@@ -12116,9 +12116,14 @@ html.overlay-document body::before {
   text-align: right;
 }
 
+/* Arena's top navigation bar scales with window height and ends ~6.75% down
+   on the draft screen; the badge offsets in overlay settings assume the same. */
 .overlay-panel-draft {
   --overlay-accent: #b9a3f0;
   --overlay-accent-soft: rgba(185, 163, 240, 0.14);
+  margin-top: 6.75vh;
+  max-height: 93.25vh;
+  border-radius: 0 10px 10px 0;
 }
 
 /* The overlay is always dark, whatever the app theme. */
@@ -12154,22 +12159,22 @@ html.overlay-document body::before {
   flex-shrink: 0;
 }
 
-/* Reserve a full pack's height across picks, shrinking only to fit the viewport. */
-.overlay-draft-body {
+/* Fit the pack, compressing rows slightly rather than cutting off the final
+   cards when the viewport is short. */
+.overlay-draft-body,
+.overlay-draft-body > .overlay-card-list {
+  display: flex;
   flex: 0 1 auto;
-  height: calc(15 * (var(--overlay-row-height, 2rem) + 1px));
+  flex-direction: column;
   min-height: 0;
   overflow: hidden;
 }
 
-/* Compress full packs slightly rather than cutting off their final cards. */
-.overlay-draft-body > .overlay-card-list {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+.overlay-draft-body > .overlay-empty {
+  margin-block: auto;
 }
 
-/* One line per card keeps the fixed height enough for a full pack. */
+/* One line per card keeps every row at the same height. */
 .overlay-panel-draft .overlay-card-name .card-preview-trigger {
   overflow: hidden;
   text-overflow: ellipsis;

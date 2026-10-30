@@ -294,6 +294,13 @@ function DraftPackPanel({ draft, hoveredCard, shortcut }: { draft: LiveDraft; ho
     return rightRate - leftRate;
   }), [ordered, stats.byId]);
 
+  // The list fits the pack, so hold roughly the next pack's height while
+  // waiting rather than collapsing to the message between every pick.
+  const [waitingRows, setWaitingRows] = useState(0);
+  if (!draft.waiting && draft.pack.length - 1 !== waitingRows) {
+    setWaitingRows(draft.pack.length - 1);
+  }
+
   return (
     <aside className="overlay-panel overlay-panel-draft" aria-labelledby="overlay-draft-title">
       <header className="overlay-panel-head">
@@ -312,9 +319,9 @@ function DraftPackPanel({ draft, hoveredCard, shortcut }: { draft: LiveDraft; ho
         <span>Card</span>
         <span>GIH WR</span>
       </div>
-      {/* Fixed height: the transparent native window keeps stale pixels
-          wherever a shrinking panel stops painting. */}
-      <div className="overlay-draft-body">
+      <div className="overlay-draft-body" style={draft.waiting && waitingRows > 0
+        ? { minHeight: `calc(${waitingRows} * (var(--overlay-row-height, 2rem) + 1px))` }
+        : undefined}>
         {draft.waiting ? (
           <p className="overlay-empty">Pick made. Waiting for the next pack.</p>
         ) : (

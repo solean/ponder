@@ -815,20 +815,6 @@ export function PerformanceAnalyticsPanel({
 
           <div className="deck-analytics-buckets">
             <BucketTable
-              title="Kept hand size"
-              buckets={data.handSizes}
-              formatKey={(key) => `${key} cards`}
-              baseline={baseline}
-              emptyMessage="No opening hands captured yet."
-              totalGames={coverage.gameCount}
-              onDrill={(bucket) =>
-                setDrillDown({
-                  label: `${bucket.key}-card keeps`,
-                  params: { keptSize: bucket.key },
-                })
-              }
-            />
-            <BucketTable
               title="Mulligans"
               buckets={[...data.mulliganCounts].sort((a, b) => a.key - b.key)}
               formatKey={(key) => (key === 0 ? "None" : `${key}`)}

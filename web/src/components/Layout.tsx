@@ -2,8 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigationType } from "react-router-dom";
 
 import {
-  COLOR_SCHEMES,
+  MODE_STORAGE_KEY,
+  SCHEME_STORAGE_KEY,
   ThemeContext,
+  applyTheme,
+  readStoredModePreference,
+  readStoredScheme,
+  readSystemTheme,
   type ColorScheme,
   type ModePreference,
   type ThemeMode,
@@ -23,63 +28,9 @@ const tabs = [
   { to: "/settings", label: "Settings" },
 ];
 
-const MODE_STORAGE_KEY = "ponder.theme";
-const SCHEME_STORAGE_KEY = "ponder.scheme";
 // Temporary kill switch while investigating frontend jank from the fixed WebGL background.
 const ENABLE_BACKGROUND_ANIMATION = false;
 const scrollPositions = new Map<string, number>();
-
-function applyThemeColorMeta(mode: ThemeMode, scheme: ColorScheme) {
-  const head = document.head;
-  if (!head) return;
-
-  let metaThemeColor = document.querySelector('meta[name="theme-color"]');
-  if (!metaThemeColor) {
-    metaThemeColor = document.createElement("meta");
-    metaThemeColor.setAttribute("name", "theme-color");
-    head.appendChild(metaThemeColor);
-  }
-
-  const themeColors: Record<ColorScheme, Record<ThemeMode, string>> = {
-    ember: { dark: "#020101", light: "#f4ece1" },
-    dimir: { dark: "#020507", light: "#f7f9fa" },
-    steel: { dark: "#040608", light: "#eef0f3" },
-    bamboo: { dark: "#1c1e1b", light: "#fafaf0" },
-  };
-  metaThemeColor.setAttribute("content", themeColors[scheme][mode]);
-}
-
-/** Legacy single-key values "dimir"/"steel" migrate to mode=dark + that scheme. */
-function readStoredModePreference(): ModePreference {
-  if (typeof window === "undefined") return "dark";
-  try {
-    const stored = window.localStorage.getItem(MODE_STORAGE_KEY);
-    if (stored === "light" || stored === "system") return stored;
-    return "dark";
-  } catch {
-    return "dark";
-  }
-}
-
-function readStoredScheme(): ColorScheme {
-  if (typeof window === "undefined") return "bamboo";
-  try {
-    const stored = window.localStorage.getItem(SCHEME_STORAGE_KEY);
-    if ((COLOR_SCHEMES as readonly string[]).includes(stored ?? "")) {
-      return stored as ColorScheme;
-    }
-    const legacy = window.localStorage.getItem(MODE_STORAGE_KEY);
-    if (legacy === "dimir" || legacy === "steel") return legacy;
-    return "bamboo";
-  } catch {
-    return "bamboo";
-  }
-}
-
-function readSystemTheme(): ThemeMode {
-  if (typeof window === "undefined" || !window.matchMedia) return "dark";
-  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-}
 
 export function Layout() {
   const location = useLocation();
@@ -105,9 +56,7 @@ export function Layout() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = mode;
-    document.documentElement.dataset.scheme = scheme;
-    applyThemeColorMeta(mode, scheme);
+    applyTheme(mode, scheme);
     try {
       window.localStorage.setItem(MODE_STORAGE_KEY, modePreference);
       window.localStorage.setItem(SCHEME_STORAGE_KEY, scheme);

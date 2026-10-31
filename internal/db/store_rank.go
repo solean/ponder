@@ -53,8 +53,12 @@ func (s *Store) MatchHasRankSnapshot(ctx context.Context, tx *sql.Tx, arenaMatch
 	return true, nil
 }
 
-func (s *Store) UpsertMatchRankSnapshot(ctx context.Context, tx *sql.Tx, arenaMatchID string, snapshot MatchRankSnapshot) error {
+// UpsertMatchRankSnapshot links a match's first snapshot to the latest one
+// from the same Arena account, so an account switch never reads as a rank
+// change. personaID is empty when the account is unknown.
+func (s *Store) UpsertMatchRankSnapshot(ctx context.Context, tx *sql.Tx, arenaMatchID, personaID string, snapshot MatchRankSnapshot) error {
 	arenaMatchID = strings.TrimSpace(arenaMatchID)
+	persona := nullIfEmpty(strings.TrimSpace(personaID))
 	if arenaMatchID == "" {
 		return nil
 	}
@@ -86,9 +90,10 @@ func (s *Store) UpsertMatchRankSnapshot(ctx context.Context, tx *sql.Tx, arenaMa
 		err = tx.QueryRowContext(ctx, `
 			SELECT id
 			FROM match_rank_snapshots
+			WHERE persona_id IS ?
 			ORDER BY COALESCE(observed_at, created_at) DESC, id DESC
 			LIMIT 1
-		`).Scan(&prevID)
+		`, persona).Scan(&prevID)
 		if err == nil {
 			prevSnapshotID = prevID
 		} else if !errors.Is(err, sql.ErrNoRows) {
@@ -120,9 +125,10 @@ func (s *Store) UpsertMatchRankSnapshot(ctx context.Context, tx *sql.Tx, arenaMa
 			limited_leaderboard_place,
 			limited_matches_won,
 			limited_matches_lost,
+			persona_id,
 			created_at,
 			updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(match_id) DO UPDATE SET
 			prev_snapshot_id = COALESCE(match_rank_snapshots.prev_snapshot_id, excluded.prev_snapshot_id),
 			observed_at = COALESCE(excluded.observed_at, match_rank_snapshots.observed_at),
@@ -143,6 +149,7 @@ func (s *Store) UpsertMatchRankSnapshot(ctx context.Context, tx *sql.Tx, arenaMa
 			limited_leaderboard_place = COALESCE(excluded.limited_leaderboard_place, match_rank_snapshots.limited_leaderboard_place),
 			limited_matches_won = COALESCE(excluded.limited_matches_won, match_rank_snapshots.limited_matches_won),
 			limited_matches_lost = COALESCE(excluded.limited_matches_lost, match_rank_snapshots.limited_matches_lost),
+			persona_id = COALESCE(match_rank_snapshots.persona_id, excluded.persona_id),
 			updated_at = excluded.updated_at
 	`, matchID, prevSnapshotID, nullIfEmpty(snapshot.ObservedAt), snapshot.PayloadJSON,
 		nullableIntPtr(snapshot.ConstructedSeasonOrdinal), nullIfEmpty(snapshot.ConstructedRankClass),
@@ -153,7 +160,7 @@ func (s *Store) UpsertMatchRankSnapshot(ctx context.Context, tx *sql.Tx, arenaMa
 		nullableIntPtr(snapshot.LimitedLevel), nullableIntPtr(snapshot.LimitedStep),
 		snapshot.LimitedPercentile, nullableIntPtr(snapshot.LimitedLeaderboardPlace),
 		nullableIntPtr(snapshot.LimitedMatchesWon), nullableIntPtr(snapshot.LimitedMatchesLost),
-		now, now)
+		persona, now, now)
 	if err != nil {
 		return fmt.Errorf("upsert match rank snapshot: %w", err)
 	}

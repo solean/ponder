@@ -109,6 +109,9 @@ func Init(ctx context.Context, db *sql.DB) error {
 	if err := migrateRankSnapshots(ctx, conn); err != nil {
 		return err
 	}
+	if err := migrateArenaAccountColumns(ctx, conn); err != nil {
+		return err
+	}
 
 	if err := prepareEconomyBackfill(ctx, conn); err != nil {
 		return err
@@ -200,6 +203,10 @@ func Init(ctx context.Context, db *sql.DB) error {
 		}
 	}
 	if err := NewStore(db).RepairEventRunInstances(ctx); err != nil {
+		return err
+	}
+	// Last, so rows the repairs above recreated are assigned too.
+	if err := assignSingleArenaAccount(ctx, db); err != nil {
 		return err
 	}
 

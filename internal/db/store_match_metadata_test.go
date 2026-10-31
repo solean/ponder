@@ -21,7 +21,7 @@ func TestOverviewIncludesPlayerName(t *testing.T) {
 		t.Fatalf("BeginTx: %v", err)
 	}
 
-	if err := store.SavePlayerName(ctx, tx, "SelfRenamed"); err != nil {
+	if err := store.SavePlayerName(ctx, tx, "", "SelfRenamed"); err != nil {
 		t.Fatalf("SavePlayerName: %v", err)
 	}
 	if _, err := store.UpsertMatchStart(ctx, tx, "match-win", "Traditional_Ladder", 1, "2026-03-12T19:06:52Z"); err != nil {

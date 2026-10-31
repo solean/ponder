@@ -33,10 +33,12 @@ var (
 )
 
 type Parser struct {
-	store                   *db.Store
-	stateMu                 sync.Mutex
-	personaID               string
-	playerName              string
+	store      *db.Store
+	stateMu    sync.Mutex
+	personaID  string
+	playerName string
+	// playerNamePersonaID is the account playerName was last saved for.
+	playerNamePersonaID     string
 	pendingCompletedMatches []string
 	historicalReplayLogs    map[string]bool
 	headerZones             [headerKindCount]headerZone
@@ -63,7 +65,11 @@ type parseState struct {
 	reconstructingCheckpoint bool
 	// Analytics read committed replay data. This batch-local set is drained
 	// after commit and is deliberately excluded from parser checkpoints.
-	analyticsMatches          map[int64]struct{}
+	analyticsMatches map[int64]struct{}
+	// personaRowsSince marks where the open batch's rows begin, so they can be
+	// tagged with the account that was active while they were written. Batch
+	// local like analyticsMatches; nil outside a live ingest transaction.
+	personaRowsSince          db.PersonaWatermarks
 	personaID                 string
 	playerName                string
 	activeMatchID             string
@@ -423,17 +429,21 @@ func (p *Parser) rememberPersonaID(personaID string) {
 	p.personaID = personaID
 }
 
-func (p *Parser) rememberPlayerName(playerName string) bool {
+// rememberPlayerName reports whether the name is new for this account, so it
+// is saved once per account and name rather than on every log line.
+func (p *Parser) rememberPlayerName(personaID, playerName string) bool {
 	playerName = strings.TrimSpace(playerName)
 	if playerName == "" {
 		return false
 	}
+	personaID = strings.TrimSpace(personaID)
 	p.stateMu.Lock()
 	defer p.stateMu.Unlock()
-	if p.playerName == playerName {
+	if p.playerName == playerName && p.playerNamePersonaID == personaID {
 		return false
 	}
 	p.playerName = playerName
+	p.playerNamePersonaID = personaID
 	return true
 }
 
@@ -669,6 +679,9 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 			return stats, err
 		}
 	}
+	if state.personaRowsSince, err = p.store.PersonaWatermarks(ctx, tx); err != nil {
+		return stats, err
+	}
 
 	const batchSize = int64(500)
 	lineNo := startLine
@@ -690,7 +703,19 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		}
 		return p.store.SaveIngestCheckpoint(ctx, tx, logPath, byteOffset, lineNo, signature, contextJSON, parserJSON)
 	}
+	// Rows written before the batch learns its account wait for a later
+	// commit: the watermarks only advance once they have been claimed.
+	claimPersonaRows := func() (bool, error) {
+		if state.personaID == "" {
+			return false, nil
+		}
+		return true, p.store.ClaimPersonaRows(ctx, tx, state.personaID, state.personaRowsSince)
+	}
 	commit := func() error {
+		claimed, err := claimPersonaRows()
+		if err != nil {
+			return err
+		}
 		if err := saveCheckpoint(); err != nil {
 			return err
 		}
@@ -708,6 +733,11 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		}
 		tx = newTx
 		linesSinceCommit = 0
+		if claimed {
+			if state.personaRowsSince, err = p.store.PersonaWatermarks(ctx, tx); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 
@@ -749,6 +779,9 @@ func (p *Parser) ParseFile(ctx context.Context, logPath string, resume bool) (mo
 		}
 	}
 
+	if _, err := claimPersonaRows(); err != nil {
+		return stats, err
+	}
 	if err := saveCheckpoint(); err != nil {
 		return stats, err
 	}
@@ -810,10 +843,22 @@ func (p *Parser) processLine(ctx context.Context, tx *sql.Tx, stats *model.Parse
 		}
 		id := strings.TrimSpace(match[1])
 		if state.personaID != "" && state.personaID != id {
+			// The batch's rows so far belong to the former account.
+			rowsSince := state.personaRowsSince
+			if rowsSince != nil {
+				if err := p.store.ClaimPersonaRows(ctx, tx, state.personaID, rowsSince); err != nil {
+					return err
+				}
+				var err error
+				if rowsSince, err = p.store.PersonaWatermarks(ctx, tx); err != nil {
+					return err
+				}
+			}
 			// Discard the former account's match, deck and response context.
 			*state = parseState{
 				reconstructingCheckpoint: state.reconstructingCheckpoint,
 				lastUnityLogTimestamp:    state.lastUnityLogTimestamp,
+				personaRowsSince:         rowsSince,
 			}
 		}
 		state.personaID = id
@@ -829,8 +874,8 @@ func (p *Parser) processLine(ctx context.Context, tx *sql.Tx, stats *model.Parse
 		}
 	}
 	if state.playerName != "" {
-		if p.rememberPlayerName(state.playerName) {
-			if err := p.store.SavePlayerName(ctx, tx, state.playerName); err != nil {
+		if p.rememberPlayerName(state.personaID, state.playerName) {
+			if err := p.store.SavePlayerName(ctx, tx, state.personaID, state.playerName); err != nil {
 				return err
 			}
 		}

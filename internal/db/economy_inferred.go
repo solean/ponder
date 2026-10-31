@@ -22,6 +22,7 @@ const (
 
 type economyBalanceSnapshot struct {
 	id          int64
+	personaID   string
 	observedAt  string
 	sequenceID  int64
 	gold        int64
@@ -49,11 +50,13 @@ func (s *Store) ListEconomyLedger(ctx context.Context) ([]model.EconomyTransacti
 // ListInferredEconomyTransactions reconciles consecutive inventory snapshots
 // against their reported Changes and returns a row for every unexplained
 // residual. Derived at read time, so it needs no backfill and stays correct
-// when log files are ingested out of order.
+// when log files are ingested out of order. Each Arena account's snapshots are
+// reconciled separately; a switch between accounts is not a balance change.
 func (s *Store) ListInferredEconomyTransactions(ctx context.Context) ([]model.EconomyTransaction, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT
 			id,
+			COALESCE(persona_id, ''),
 			observed_at,
 			sequence_id,
 			gold,
@@ -83,6 +86,7 @@ func (s *Store) ListInferredEconomyTransactions(ctx context.Context) ([]model.Ec
 		var boostersJSON string
 		if err := rows.Scan(
 			&snapshot.id,
+			&snapshot.personaID,
 			&snapshot.observedAt,
 			&snapshot.sequenceID,
 			&snapshot.gold,
@@ -97,7 +101,7 @@ func (s *Store) ListInferredEconomyTransactions(ctx context.Context) ([]model.Ec
 		); err != nil {
 			return nil, fmt.Errorf("scan economy balance: %w", err)
 		}
-		key := fmt.Sprintf("%s|%d", snapshot.observedAt, snapshot.sequenceID)
+		key := fmt.Sprintf("%s|%s|%d", snapshot.personaID, snapshot.observedAt, snapshot.sequenceID)
 		if _, ok := seen[key]; ok {
 			continue
 		}
@@ -110,8 +114,12 @@ func (s *Store) ListInferredEconomyTransactions(ctx context.Context) ([]model.Ec
 	}
 
 	out := make([]model.EconomyTransaction, 0)
-	for index := 1; index < len(snapshots); index++ {
-		out = append(out, inferEconomyResidual(snapshots[index-1], snapshots[index])...)
+	previous := make(map[string]economyBalanceSnapshot)
+	for _, snapshot := range snapshots {
+		if prior, ok := previous[snapshot.personaID]; ok {
+			out = append(out, inferEconomyResidual(prior, snapshot)...)
+		}
+		previous[snapshot.personaID] = snapshot
 	}
 	return out, nil
 }

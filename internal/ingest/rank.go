@@ -107,7 +107,7 @@ func (p *Parser) handleMethodResponse(ctx context.Context, tx *sql.Tx, stats *mo
 		return nil
 	}
 
-	if err := p.store.UpsertMatchRankSnapshot(ctx, tx, arenaMatchID, db.MatchRankSnapshot{
+	if err := p.store.UpsertMatchRankSnapshot(ctx, tx, arenaMatchID, state.personaID, db.MatchRankSnapshot{
 		ObservedAt:                  observedAt,
 		PayloadJSON:                 line,
 		ConstructedSeasonOrdinal:    payload.ConstructedSeasonOrdinal,

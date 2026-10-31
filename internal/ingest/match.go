@@ -225,8 +225,8 @@ func (p *Parser) handleRoomStateJSON(ctx context.Context, tx *sql.Tx, stats *mod
 			}
 			if playerName != "" && playerName != state.playerName {
 				state.playerName = playerName
-				if p.rememberPlayerName(playerName) {
-					if err := p.store.SavePlayerName(ctx, tx, playerName); err != nil {
+				if p.rememberPlayerName(personaID, playerName) {
+					if err := p.store.SavePlayerName(ctx, tx, personaID, playerName); err != nil {
 						return err
 					}
 				}

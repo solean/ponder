@@ -209,21 +209,29 @@ func (s *Store) ParserCheckpoint(ctx context.Context) (string, error) {
 	return data, nil
 }
 
-func (s *Store) SavePlayerName(ctx context.Context, tx *sql.Tx, playerName string) error {
+// SavePlayerName records the latest player name and, when the account is
+// known, that account's own name, which a later account cannot overwrite.
+func (s *Store) SavePlayerName(ctx context.Context, tx *sql.Tx, personaID, playerName string) error {
 	playerName = strings.TrimSpace(playerName)
 	if playerName == "" {
 		return nil
 	}
 
-	_, err := tx.ExecContext(ctx, `
-		INSERT INTO app_metadata (key, value, updated_at)
-		VALUES (?, ?, ?)
-		ON CONFLICT(key) DO UPDATE SET
-			value = excluded.value,
-			updated_at = excluded.updated_at
-	`, appMetadataPlayerNameKey, playerName, nowUTC())
-	if err != nil {
-		return fmt.Errorf("save player name: %w", err)
+	keys := []string{appMetadataPlayerNameKey}
+	if personaID = strings.TrimSpace(personaID); personaID != "" {
+		keys = append(keys, playerNameKey(personaID))
+	}
+	for _, key := range keys {
+		_, err := tx.ExecContext(ctx, `
+			INSERT INTO app_metadata (key, value, updated_at)
+			VALUES (?, ?, ?)
+			ON CONFLICT(key) DO UPDATE SET
+				value = excluded.value,
+				updated_at = excluded.updated_at
+		`, key, playerName, nowUTC())
+		if err != nil {
+			return fmt.Errorf("save player name: %w", err)
+		}
 	}
 	return nil
 }

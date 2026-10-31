@@ -46,6 +46,9 @@ CREATE TABLE IF NOT EXISTS event_runs (
   ended_at TEXT,
   wins INTEGER NOT NULL DEFAULT 0,
   losses INTEGER NOT NULL DEFAULT 0,
+  -- Arena account (PersonaId) the row was ingested under; NULL if unknown.
+  -- Matches, decks, drafts, courses, and economy and rank snapshots carry it too.
+  persona_id TEXT,
   updated_at TEXT NOT NULL
 );
 
@@ -62,6 +65,7 @@ CREATE TABLE IF NOT EXISTS event_courses (
   losses INTEGER NOT NULL DEFAULT 0,
   first_observed_at TEXT,
   observed_at TEXT,
+  persona_id TEXT,
   updated_at TEXT NOT NULL
 );
 
@@ -75,6 +79,7 @@ CREATE TABLE IF NOT EXISTS decks (
   format TEXT,
   source TEXT,
   last_updated TEXT,
+  persona_id TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -194,6 +199,7 @@ CREATE TABLE IF NOT EXISTS matches (
   win_reason TEXT,
   turn_count INTEGER,
   seconds_count INTEGER,
+  persona_id TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -509,6 +515,7 @@ CREATE TABLE IF NOT EXISTS match_rank_snapshots (
   limited_leaderboard_place INTEGER,
   limited_matches_won INTEGER,
   limited_matches_lost INTEGER,
+  persona_id TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE,
@@ -535,6 +542,7 @@ CREATE TABLE IF NOT EXISTS economy_snapshots (
   boosters_json TEXT NOT NULL DEFAULT '[]',
   vouchers_json TEXT NOT NULL DEFAULT '{}',
   changes_json TEXT NOT NULL DEFAULT '[]',
+  persona_id TEXT,
   created_at TEXT NOT NULL
 );
 
@@ -583,6 +591,7 @@ CREATE TABLE IF NOT EXISTS draft_sessions (
   is_bot_draft INTEGER NOT NULL,
   started_at TEXT,
   completed_at TEXT,
+  persona_id TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE(draft_id, is_bot_draft)

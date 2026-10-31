@@ -59,12 +59,12 @@ func personaOf(t *testing.T, db *sql.DB, query string) sql.NullString {
 
 func TestInitAssignsUntaggedRowsToTheOnlyArenaAccount(t *testing.T) {
 	db := openTempSQLiteDB(t)
-	seedLegacyAccountData(t, db, "E3UPUWUTNRDMFH6NWTWQ7RYB2I", "E3UPUWUTNRDMFH6NWTWQ7RYB2I")
+	seedLegacyAccountData(t, db, "ONLY_ACCOUNT", "ONLY_ACCOUNT")
 	if err := Init(context.Background(), db); err != nil {
 		t.Fatal(err)
 	}
 
-	want := sql.NullString{String: "E3UPUWUTNRDMFH6NWTWQ7RYB2I", Valid: true}
+	want := sql.NullString{String: "ONLY_ACCOUNT", Valid: true}
 	for _, query := range []string{
 		`SELECT persona_id FROM matches WHERE arena_match_id = 'legacy-match'`,
 		`SELECT persona_id FROM economy_snapshots`,
@@ -74,7 +74,7 @@ func TestInitAssignsUntaggedRowsToTheOnlyArenaAccount(t *testing.T) {
 		}
 	}
 	var name string
-	if err := db.QueryRow(`SELECT value FROM app_metadata WHERE key = 'player_name:E3UPUWUTNRDMFH6NWTWQ7RYB2I'`).Scan(&name); err != nil {
+	if err := db.QueryRow(`SELECT value FROM app_metadata WHERE key = 'player_name:ONLY_ACCOUNT'`).Scan(&name); err != nil {
 		t.Fatal(err)
 	}
 	if name != "bhris" {

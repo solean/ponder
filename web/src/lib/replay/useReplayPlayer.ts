@@ -40,7 +40,7 @@ export function useReplayPlayer(
 ): ReplayPlayer {
   const [saved] = useState(() => position ? readReplayPosition(position.key) : null);
   const [index, setRawIndex] = useState(initialIndex);
-  const [frameId, setFrameId] = useState<number | undefined>(() => position?.bookmarkFrameId ?? saved?.frameId ?? position?.ids[initialIndex]);
+  const [frameId, setFrameId] = useState<number | undefined>(() => saved?.frameId ?? position?.ids[initialIndex]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(saved?.speed ?? 1);
   const lastIndex = length > 0 ? length - 1 : 0;

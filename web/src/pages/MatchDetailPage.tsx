@@ -1,4 +1,4 @@
-import { parseReplayBookmark, readReplayGame, saveReplayGame } from "../lib/replay/position";
+import { readReplayGame, saveReplayGame } from "../lib/replay/position";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useState, type KeyboardEvent } from "react";
 import { useLocation, useParams } from "react-router-dom";
@@ -36,20 +36,17 @@ type MatchSection = (typeof MATCH_SECTIONS)[number]["id"];
 export function MatchDetailPage() {
   const params = useParams();
   const location = useLocation();
-  return <MatchDetailContent key={`${params.matchId}:${location.search}:${location.key}`} />;
+  return <MatchDetailContent key={`${params.matchId}:${location.key}`} />;
 }
 
 function MatchDetailContent() {
   const params = useParams();
   const matchId = Number(params.matchId);
-  const location = useLocation();
-  const bookmarkResult = parseReplayBookmark(location.search);
-  const [bookmarkApplied, setBookmarkApplied] = useState(false);
   const isValidMatchID = Number.isFinite(matchId);
   const [activeSection, setActiveSection] = useState<MatchSection>("replay");
   const [selectedTimelineGameNumber, setSelectedTimelineGameNumber] = useState<
     number | null
-  >(() => bookmarkResult.bookmark?.game ?? readReplayGame(matchId));
+  >(() => readReplayGame(matchId));
   useEffect(() => {
     if (selectedTimelineGameNumber !== null) saveReplayGame(matchId, selectedTimelineGameNumber);
   }, [matchId, selectedTimelineGameNumber]);
@@ -221,9 +218,6 @@ function MatchDetailContent() {
         >
           <MatchReplayPanel
             matchId={matchId}
-            bookmarkResult={bookmarkResult}
-            applyBookmark={!bookmarkApplied}
-            onBookmarkApplied={() => setBookmarkApplied(true)}
             bestOf={match.bestOf}
             replayQuery={replayQuery}
             timelineError={timelineQuery.error}

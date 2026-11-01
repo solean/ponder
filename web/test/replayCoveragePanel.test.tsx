@@ -40,7 +40,7 @@ function render(query: Partial<ReturnType<typeof useMatchReplay>> = {}, override
   const replayQuery: ReturnType<typeof useMatchReplay> = {
     data: [], matchComplete: true, isPending: false, error: null, isRetrying: false, retry: async () => {}, ...query,
   };
-  act(() => root.render(<MemoryRouter><MatchReplayPanel matchId={12} bookmarkResult={{ bookmark: null, error: null }} applyBookmark={false} onBookmarkApplied={() => {}} bestOf="bo3" replayQuery={replayQuery} timelineError={timelineError} view={view} gameTabs={{ ...tabs, timelineGameNumbers: view.timelineGameNumbers }} /></MemoryRouter>));
+  act(() => root.render(<MemoryRouter><MatchReplayPanel matchId={12} bestOf="bo3" replayQuery={replayQuery} timelineError={timelineError} view={view} gameTabs={{ ...tabs, timelineGameNumbers: view.timelineGameNumbers }} /></MemoryRouter>));
 }
 test("historical empty game has permanent recovery copy and all BO3 tabs", () => {
   render();

@@ -38,31 +38,24 @@ async function render(search: string) {
  await act(async () => resolveReplay([{ id: 101, gameNumber: 1, turnNumber: 1 }, { id: 201, gameNumber: 2, turnNumber: 1 }, { id: 202, gameNumber: 2, turnNumber: 1 }].map(frame => ({ ...frame, changes: [{ instanceId: frame.id, cardId: 0, action: "attack", playerSide: "self" as const, isToken: false }] }))));
  await flush();
 }
-for (const source of ["bookmark", "saved"] as const) {
- test(`${source} game 2 survives empty initial queries and async replay arrival`, async () => {
-  if (source === "saved") window.localStorage.setItem("ponder.replay.game.55", "2");
-  await render(source === "bookmark" ? "?replayGame=2&replayFrame=201&replayKind=frame" : "");
-  expect(container.querySelector('[aria-label="Replay game selector"] [role="tab"][aria-selected="true"]')?.textContent).toBe("Game 2");
-  expect(container.querySelector('[role="slider"]')?.getAttribute("aria-valuenow")).toBe(source === "bookmark" ? "1" : "2");
- });
-}
-test("missing explicit game remains an unavailable target after async replay arrival", async () => {
- await render("?replayGame=99&replayFrame=201&replayKind=frame");
- expect(container.textContent).toContain("no longer available");
- expect(container.querySelector('[role="slider"]')).toBeNull();
- expect(window.localStorage.getItem("ponder.replay.game.55")).toBe("99");
+test("saved game 2 survives empty initial queries and async replay arrival", async () => {
+ window.localStorage.setItem("ponder.replay.game.55", "2");
+ await render("");
+ expect(container.querySelector('[aria-label="Replay game selector"] [role="tab"][aria-selected="true"]')?.textContent).toBe("Game 2");
+ expect(container.querySelector('[role="slider"]')?.getAttribute("aria-valuenow")).toBe("2");
 });
-test("consumed bookmark does not replace newer position when returning from analytics", async () => {
- await render("?replayGame=2&replayFrame=201&replayKind=frame");
- act(() => container.querySelectorAll<HTMLButtonElement>(".match-replay-movelist-beat")[1]!.click());
+test("chosen position survives returning from analytics and switching games", async () => {
+ window.localStorage.setItem("ponder.replay.game.55", "2");
+ await render("");
+ act(() => container.querySelectorAll<HTMLButtonElement>(".match-replay-movelist-beat")[0]!.click());
  const section = (name: string) => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(button => button.textContent === name)!;
  act(() => section("Game Analytics").click());
  act(() => section("Replay").click());
- expect(container.querySelector('[role="slider"]')?.getAttribute("aria-valuenow")).toBe("2");
+ expect(container.querySelector('[role="slider"]')?.getAttribute("aria-valuenow")).toBe("1");
  const game = (number: number) => [...container.querySelectorAll<HTMLButtonElement>('[aria-label="Replay game selector"] button')].find(button => button.textContent === `Game ${number}`)!;
  act(() => game(1).click());
  act(() => game(2).click());
- expect(container.querySelector('[role="slider"]')?.getAttribute("aria-valuenow")).toBe("2");
+ expect(container.querySelector('[role="slider"]')?.getAttribute("aria-valuenow")).toBe("1");
 });
 
 test("missing locally saved game is not normalized to the first available game", async () => {
@@ -85,7 +78,7 @@ test("unavailable locally saved recording kind requires explicit recovery", asyn
  await render("");
  expect(container.textContent).toContain("no longer available");
  expect(container.querySelector('[role="slider"]')).toBeNull();
- act(() => [...container.querySelectorAll<HTMLAnchorElement>("a")].find(link => link.textContent === "Open this match without the bookmark")!.click());
+ act(() => [...container.querySelectorAll<HTMLAnchorElement>("a")].find(link => link.textContent === "Start from the first game")!.click());
  await flush(); await flush();
  expect(container.querySelector('[role="slider"]')).not.toBeNull();
  expect(window.localStorage.getItem("ponder.replay.kind.55.1")).toBe("frame");
@@ -93,7 +86,9 @@ test("unavailable locally saved recording kind requires explicit recovery", asyn
 
 
 test("explicit missing-frame recovery persists when returning from analytics", async () => {
- await render("?replayGame=2&replayFrame=9999&replayKind=frame");
+ window.localStorage.setItem("ponder.replay.game.55", "2");
+ window.localStorage.setItem("ponder.replay.position.55.2.frame", JSON.stringify({ frameId: 9999, speed: 1 }));
+ await render("");
  expect(container.textContent).toContain("position is no longer available");
  act(() => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Start from the first step")!.click());
  const section = (name: string) => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(button => button.textContent === name)!;

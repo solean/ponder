@@ -1,5 +1,4 @@
 import { replayPositionKey, saveReplayKind } from "../../lib/replay/position";
-import { ReplayBookmarkControl } from "./ReplayBookmarkControl";
 import { isReplayDecision, replayNavigationIndex } from "../../lib/replay/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePersistedFlag } from "../../lib/persistedFlag";
@@ -62,8 +61,6 @@ const REPLAY_MOVELIST_COLLAPSED_KEY = "ponder.replayMoveListCollapsed";
 export function MatchReplayFrameBoard({
   gameNumber,
   matchId,
-  bookmarkFrameId,
-  onPositionRecovered,
   playDraw,
   frames,
   gameSummary,
@@ -71,8 +68,6 @@ export function MatchReplayFrameBoard({
 }: {
   gameNumber: number;
   matchId?: number;
-  bookmarkFrameId?: number;
-  onPositionRecovered?: () => void;
   playDraw?: "play" | "draw" | "";
   frames: MatchReplayFrame[];
   gameSummary: ReplayGameSummary | null;
@@ -94,7 +89,7 @@ export function MatchReplayFrameBoard({
     speed,
     setSpeed,
     lastIndex: lastFrameIndex,
-  } = useReplayPlayer(frames.length, preferredReplayFrameIndex(frames), decisionMode ? decisionIndices : undefined, matchId === undefined ? undefined : { key: replayPositionKey(matchId, gameNumber, "frame"), ids: frames.map(row => row.id), bookmarkFrameId });
+  } = useReplayPlayer(frames.length, preferredReplayFrameIndex(frames), decisionMode ? decisionIndices : undefined, matchId === undefined ? undefined : { key: replayPositionKey(matchId, gameNumber, "frame"), ids: frames.map(row => row.id) });
   const [zoneDialogState, setZoneDialogState] =
     useState<MatchReplayZoneDialogState | null>(null);
   const openZone = useCallback((state: MatchReplayZoneDialogState) => {
@@ -523,7 +518,7 @@ export function MatchReplayFrameBoard({
     replayCardShellsRef.current.delete(instanceId);
   }
 
-  if (missingPosition) return <StatusMessage tone="error">This saved replay position is no longer available. <button type="button" onClick={() => { setSelectedFrameIndex(0); onPositionRecovered?.(); }}>Start from the first step</button></StatusMessage>;
+  if (missingPosition) return <StatusMessage tone="error">This saved replay position is no longer available. <button type="button" onClick={() => { setSelectedFrameIndex(0); }}>Start from the first step</button></StatusMessage>;
 
   if (!currentFrame) {
     return (
@@ -628,7 +623,6 @@ export function MatchReplayFrameBoard({
 
           <div className="match-replay-controls-aux">
             <MatchReplaySpeedControl speed={speed} onSelectSpeed={setSpeed} />
-            {matchId !== undefined ? <ReplayBookmarkControl matchId={matchId} game={gameNumber} frameId={frames[safeSelectedFrameIndex]!.id} kind="frame" /> : null}
             <label className="match-replay-decision-mode"><input type="checkbox" checked={decisionMode} onChange={event => setDecisionMode(event.target.checked)} /> Decisions only</label>
           </div>
         </div>

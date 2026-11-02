@@ -1,5 +1,3 @@
-import { MemoryRouter, useLocation } from "react-router-dom";
-import { ReplaySavedBookmarks } from "../src/components/match-detail/ReplaySavedBookmarks";
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { Window } from "happy-dom";
 import { act } from "react";
@@ -233,8 +231,8 @@ for (const mode of ["frames", "observed"] as const) {
     }
   }
 }
-function renderSavedReplay(game: number, ids: number[], bookmarkFrameId?: number) {
-  act(() => root.render(<MatchReplayFrameBoard key={game} matchId={55} gameNumber={game} frames={ids.map(id => ({ id, turnNumber: 1 }))} gameSummary={null} previewByCardID={new Map()} bookmarkFrameId={bookmarkFrameId} />));
+function renderSavedReplay(game: number, ids: number[]) {
+  act(() => root.render(<MatchReplayFrameBoard key={game} matchId={55} gameNumber={game} frames={ids.map(id => ({ id, turnNumber: 1 }))} gameSummary={null} previewByCardID={new Map()} />));
 }
 function seekReplayStep(index: number) {
   act(() => container.querySelectorAll<HTMLButtonElement>(".match-replay-movelist-beat")[index]!.click());
@@ -262,19 +260,11 @@ test("saved identity survives live append and insertion before current step", ()
   expect(position()).toBe(2);
   renderSavedReplay(1, [10, 11, 12, 13, 14]);
   expect(position()).toBe(3);
-  expect(container.querySelector('.match-replay-bookmark a')?.getAttribute("href")).toContain("replayFrame=12");
 });
 
-test("bookmark overrides saved position and opens paused at exact stable frame", () => {
-  window.localStorage.setItem("ponder.replay.position.55.1.frame", JSON.stringify({ frameId: 13, speed: 4 }));
-  renderSavedReplay(1, [11, 12, 13], 12);
-  expect(position()).toBe(2);
-  expect(transport().textContent).toContain("Play");
-  expect(timers.size).toBe(0);
-});
-
-test("deleted bookmark shows an explicit message instead of an unrelated board", () => {
-  renderSavedReplay(1, [11, 12, 13], 999);
+test("deleted saved position shows an explicit message instead of an unrelated board", () => {
+  window.localStorage.setItem("ponder.replay.position.55.1.frame", JSON.stringify({ frameId: 999, speed: 1 }));
+  renderSavedReplay(1, [11, 12, 13]);
   expect(container.textContent).toContain("no longer available");
   expect(container.querySelector('[role="slider"]')).toBeNull();
   act(() => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.includes("Start from"))!.click());
@@ -298,25 +288,3 @@ test("observed fallback stores its own stable action identity and speed", () => 
   expect(position()).toBe(1);
 });
 
-test("save bookmark records stable identity locally and does not change playback", () => {
-  renderSavedReplay(1, [11, 12, 13]);
-  act(() => transport().click());
-  act(() => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Save bookmark")!.click());
-  expect(position()).toBe(1);
-  expect(transport().textContent).toContain("Pause");
-  const saved = JSON.parse(window.localStorage.getItem("ponder.replay.bookmarks.55")!);
-  expect(saved).toEqual([{ matchId: 55, game: 1, frameId: 11, kind: "frame" }]);
-  expect(container.textContent).toContain("saved on this device");
-});
-
-function BookmarkLocation() {
- const location = useLocation();
- return <output>{location.pathname}{location.search}</output>;
-}
-test("saved bookmark list opens a private replay using the app router", () => {
- window.localStorage.setItem("ponder.replay.bookmarks.55", JSON.stringify([{ matchId: 55, game: 2, frameId: 987, kind: "frame" }]));
- act(() => root.render(<MemoryRouter initialEntries={["/matches/55"]}><ReplaySavedBookmarks matchId={55} /><BookmarkLocation /></MemoryRouter>));
- const open = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.includes("Frame 987"))!;
- act(() => open.click());
- expect(container.querySelector("output")?.textContent).toBe("/matches/55?replayGame=2&replayFrame=987&replayKind=frame");
-});

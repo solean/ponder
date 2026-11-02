@@ -1,8 +1,5 @@
-import { ReplaySavedBookmarks } from "./ReplaySavedBookmarks";
-import { useEffect } from "react";
 import { clearReplayKind, readReplayKind, saveReplayGame } from "../../lib/replay/position";
 import { Link } from "react-router-dom";
-import type { ReplayBookmark } from "../../lib/replay/position";
 import type { useMatchReplay } from "../../lib/replay/useMatchReplay";
 import type { MatchReplayView } from "../../lib/replay/useMatchReplayView";
 import { replayRecordingCoverage } from "../../lib/replay/recordingCoverage";
@@ -16,9 +13,6 @@ import { MatchTimelineBoard } from "./MatchTimelineBoard";
 
 export function MatchReplayPanel({
   matchId,
-  bookmarkResult,
-  applyBookmark,
-  onBookmarkApplied,
   bestOf,
   replayQuery,
   timelineError,
@@ -26,9 +20,6 @@ export function MatchReplayPanel({
   gameTabs,
 }: {
   matchId: number;
-  applyBookmark: boolean;
-  onBookmarkApplied: () => void;
-  bookmarkResult: { bookmark: ReplayBookmark | null; error: string | null };
   bestOf: Match["bestOf"];
   replayQuery: ReturnType<typeof useMatchReplay>;
   timelineError: Error | null;
@@ -64,14 +55,10 @@ export function MatchReplayPanel({
     isLatestGame: activeTimelineGameNumber === timelineGameNumbers[timelineGameNumbers.length - 1],
   });
   const canDescribeCoverage = !replayQuery.isPending && ((!replayQuery.error && !timelineError) || rawGameFrames.length > 0 || hasFallback);
-  const bookmark = bookmarkResult.bookmark;
   const missingGame = activeTimelineGameNumber !== null && !timelineGameNumbers.includes(activeTimelineGameNumber);
-  const selectedKind = applyBookmark && bookmark?.game === activeTimelineGameNumber ? bookmark.kind : activeTimelineGameNumber === null ? null : readReplayKind(matchId, activeTimelineGameNumber);
+  const selectedKind = activeTimelineGameNumber === null ? null : readReplayKind(matchId, activeTimelineGameNumber);
   const wrongKind = (selectedKind === "frame" && !hasPlayableReplay) || (selectedKind === "observed" && !hasFallback);
-  const positionError = bookmarkResult.error ?? (!replayQuery.isPending && (missingGame || wrongKind) ? "This saved replay game or recording is no longer available." : null);
-  useEffect(() => {
-    if (applyBookmark && bookmark && !replayQuery.isPending && !positionError && bookmark.game === activeTimelineGameNumber && (bookmark.kind === "frame" ? activeReplayGroup?.frames : activeTimelineGroup?.[1])?.some(row => row.id === bookmark.frameId)) onBookmarkApplied();
-  }, [applyBookmark, bookmark?.game, replayQuery.isPending, positionError, activeTimelineGameNumber, activeReplayGroup, activeTimelineGroup, onBookmarkApplied]);
+  const positionError = !replayQuery.isPending && (missingGame || wrongKind) ? "This saved replay game or recording is no longer available." : null;
   return (
     <section className="panel match-replay-panel">
       <div className="panel-head match-timeline-toolbar">
@@ -97,7 +84,6 @@ export function MatchReplayPanel({
           changes={activeTimelineGameAnalytics?.sideboardChanges}
         />
       ) : null}
-      <ReplaySavedBookmarks matchId={matchId} />
       <div className="stack-md">
         {replayQuery.error || timelineError ? (
           <div className="match-replay-recording-error">
@@ -116,7 +102,7 @@ export function MatchReplayPanel({
             <p>{coverage.detail}</p>
           </div>
         ) : null}
-        {positionError ? <StatusMessage tone="error">{positionError} <Link to={`/matches/${matchId}`} onClick={() => { const game = timelineGameNumbers[0]; if (game !== undefined) { clearReplayKind(matchId, game); saveReplayGame(matchId, game); setSelectedTimelineGameNumber(game); } }}>Open this match without the bookmark</Link></StatusMessage> : replayQuery.isPending && !hasPlayableReplay ? (
+        {positionError ? <StatusMessage tone="error">{positionError} <Link to={`/matches/${matchId}`} onClick={() => { const game = timelineGameNumbers[0]; if (game !== undefined) { clearReplayKind(matchId, game); saveReplayGame(matchId, game); setSelectedTimelineGameNumber(game); } }}>Start from the first game</Link></StatusMessage> : replayQuery.isPending && !hasPlayableReplay ? (
           <StatusMessage>Checking replay recording…</StatusMessage>
         ) : (
           <div
@@ -128,8 +114,6 @@ export function MatchReplayPanel({
               <MatchReplayFrameBoard
                 key={`${matchId}:${activeReplayGroup.gameNumber}`}
                 matchId={matchId}
-                onPositionRecovered={onBookmarkApplied}
-                bookmarkFrameId={applyBookmark && bookmark?.game === activeReplayGroup.gameNumber && bookmark.kind === "frame" ? bookmark.frameId : undefined}
                 gameNumber={activeReplayGroup.gameNumber}
                 playDraw={activeTimelineGameAnalytics?.playDrawConfidence !== "unknown" ? activeTimelineGameAnalytics?.playDraw : undefined}
                 frames={activeReplayGroup.frames}
@@ -142,8 +126,6 @@ export function MatchReplayPanel({
                 <MatchTimelineBoard
                   key={`${matchId}:${activeTimelineGroup[0]}`}
                   matchId={matchId}
-                  onPositionRecovered={onBookmarkApplied}
-                  bookmarkFrameId={applyBookmark && bookmark?.game === activeTimelineGroup[0] && bookmark.kind === "observed" ? bookmark.frameId : undefined}
                   gameNumber={activeTimelineGroup[0]}
                   plays={activeTimelineGroup[1]}
                   previewByCardID={boardPreviewByCardID}

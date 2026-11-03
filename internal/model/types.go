@@ -654,6 +654,7 @@ type LiveDraft struct {
 }
 
 type LiveMatch struct {
+	Mana                  *LiveMana                 `json:"mana,omitempty"`
 	Match                 MatchRow                  `json:"match"`
 	OpponentObservedCards []OpponentObservedCardRow `json:"opponentObservedCards"`
 	Deck                  []LiveDeckCardRow         `json:"deck"`
@@ -662,6 +663,23 @@ type LiveMatch struct {
 	DeckSource            string                    `json:"deckSource"`
 	GameNumber            int64                     `json:"gameNumber"`
 	TurnNumber            int64                     `json:"turnNumber"`
+}
+
+// LiveMana estimates production from each usable permanent once. Color counts
+// are alternatives: a dual land contributes to both colors, but only one total.
+type LiveMana struct {
+	LandsKnown bool             `json:"landsKnown"`
+	Lands      int64            `json:"lands"`
+	Available  int64            `json:"available"`
+	ByColor    map[string]int64 `json:"byColor"`
+	Floating   int64            `json:"floating"`
+	PoolKnown  bool             `json:"poolKnown"`
+	Unresolved int64            `json:"unresolved"`
+}
+
+type ManaPoolEntry struct {
+	Color string `json:"color"`
+	Count int64  `json:"count"`
 }
 
 type SetInfo struct {

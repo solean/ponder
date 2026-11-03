@@ -2,7 +2,18 @@ export type LiveDeckCard = DeckCard & {
   remaining?: number;
 };
 
+export type LiveMana = {
+  landsKnown: boolean;
+  lands: number;
+  available: number;
+  byColor: Partial<Record<"W" | "U" | "B" | "R" | "G" | "C", number>>;
+  floating: number;
+  poolKnown: boolean;
+  unresolved: number;
+};
+
 export type LiveMatch = {
+  mana?: LiveMana;
   match: Match;
   opponentObservedCards: OpponentObservedCard[];
   deck: LiveDeckCard[];

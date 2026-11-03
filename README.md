@@ -90,6 +90,14 @@ Arena's window. Your side lists the cards left in your library, and the
 opponent's side lists the cards they've revealed. Both are sorted by mana
 value, with lands last. Hover any row to see the card.
 
+A compact strip beneath your battlefield lands shows lands you control, estimated available
+mana, floating mana, and available mana by color. It counts untapped lands and
+other fixed-output mana sources, including mana rocks and ready mana creatures.
+Color counts overlap for flexible sources: a dual land counts toward both of its
+colors but only once in the total. Conditional abilities, spending restrictions,
+and unknown sources are flagged; replacement effects and combos are not modeled.
+You can hide this panel separately in **Settings → Overlay**.
+
 The overlay only appears while Arena is the frontmost app and a match is in
 progress. It never captures clicks or scrolling, so everything passes through
 to Arena.

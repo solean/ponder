@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Reac
 import { createPortal } from "react-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
+import { OverlayManaPanel } from "../components/OverlayManaPanel";
 import { ManaSymbol } from "../components/ManaSymbol";
 import { CardPreviewName } from "../components/CardPreviewName";
 import { DraftCardBadges } from "../components/DraftCardBadges";
@@ -488,7 +489,8 @@ export function OverlayPage() {
   }
 
   return (
-    <main className="overlay-hud" aria-label="Ponder game overlay" ref={hudRef}>
+    <main className={`overlay-hud${settings.showMana ? " has-mana-panel" : ""}`} aria-label="Ponder game overlay" ref={hudRef}>
+      {settings.showMana && <OverlayManaPanel mana={live.mana} />}
       {settings.showDeck && <DeckPanel key={`${live.match.id}:${live.gameNumber}`} live={live} hoveredCard={activePreview} shortcut={settings.shortcut} />}
       {settings.showOpponent && <OpponentPanel live={live} hoveredCard={activePreview} />}
     </main>

@@ -12569,3 +12569,69 @@ html.overlay-document body::before {
 .game-land-table th, .game-land-table td { padding: 0.65rem 0.75rem; text-align: left; border-bottom: 1px solid var(--line); }
 .game-land-table thead { color: var(--muted-strong); }
 .game-land-table td { font-variant-numeric: tabular-nums; }
+
+/* Anchor to Arena's lower battlefield, above the graveyard and library. Use
+   viewport offsets so the strip follows the board as the game window resizes. */
+.overlay-hud.has-mana-panel .overlay-panel-deck {
+  max-height: calc(77vh - 4.5rem);
+}
+
+.overlay-panel-mana {
+  position: absolute;
+  bottom: 23vh;
+  left: 14vw;
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  width: max-content;
+  max-width: calc(86vw - 0.75rem);
+  border-radius: 6px;
+  padding: 0.45rem 0.65rem;
+  gap: 0.3rem 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.overlay-mana-totals {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.overlay-mana-totals > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.overlay-mana-totals strong {
+  color: #fff;
+  font: 600 0.875rem/1 var(--font-mono);
+}
+
+.overlay-mana-totals span,
+.overlay-mana-note {
+  color: #c0c7d1;
+  font-size: 0.625rem;
+  line-height: 1.4;
+}
+
+.overlay-mana-colors {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.overlay-mana-colors > span {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font: 600 var(--overlay-card-font-size, 0.75rem)/1 var(--font-mono);
+}
+
+.overlay-mana-colors .mana-symbol-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.overlay-mana-note { grid-column: 1 / -1; margin: 0; }

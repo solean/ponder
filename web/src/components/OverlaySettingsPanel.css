@@ -25,3 +25,11 @@
 .overlay-badge-calibration summary { cursor: pointer; font-size: var(--text-sm); }
 .overlay-badge-calibration > .settings-note { margin: .75rem 0; }
 .overlay-badge-calibration .settings-field { margin-top: .65rem; }
+
+.overlay-settings-samples .overlay-panel-mana {
+  position: static;
+  grid-template-columns: 1fr;
+  width: min(100%, var(--sample-width));
+  --overlay-opacity: var(--sample-opacity);
+  --overlay-card-font-size: var(--sample-font-size);
+}

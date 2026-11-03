@@ -1,3 +1,4 @@
+import { OverlayManaPanel } from "./OverlayManaPanel";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { OverlaySaveQueue } from "../lib/overlaySaveQueue";
@@ -89,6 +90,7 @@ export function OverlaySettingsPanel() {
           <fieldset className="overlay-settings-fields">
             <div className="overlay-settings-controls">
               <div>
+                <SettingToggle checked={settings.showMana} onChange={(value) => change("showMana", value)}>Show mana summary</SettingToggle>
                 <SettingToggle checked={settings.showDeck} onChange={(value) => change("showDeck", value)}>Show your deck</SettingToggle>
                 <SettingToggle checked={settings.showOpponent} onChange={(value) => change("showOpponent", value)}>Show opponent cards</SettingToggle>
                 <SettingToggle checked={settings.showDraft} onChange={(value) => change("showDraft", value)}>Show 17Lands ratings while drafting</SettingToggle>
@@ -127,7 +129,8 @@ export function OverlaySettingsPanel() {
               <div className="overlay-settings-samples">
                 {settings.showDeck ? <SamplePanel title="Your deck" opponent={false} previews={settings.cardPreviews} delay={settings.hoverDelayMs} /> : null}
                 {settings.showOpponent ? <SamplePanel title="Opponent cards" opponent previews={settings.cardPreviews} delay={settings.hoverDelayMs} /> : null}
-                {!settings.showDeck && !settings.showOpponent ? <p className="settings-note">Both panels are hidden.</p> : null}
+                {settings.showMana && <OverlayManaPanel mana={{ landsKnown: true, lands: 5, available: 4, byColor: { U: 3, B: 2 }, floating: 0, poolKnown: true, unresolved: 0 }} />}
+                {!settings.showDeck && !settings.showOpponent && !settings.showMana ? <p className="settings-note">All match panels are hidden.</p> : null}
               </div>
               <small className="overlay-settings-preview-note">Sample cards · Hover a card to try the preview.</small>
             </div>

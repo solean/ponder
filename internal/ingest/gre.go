@@ -157,9 +157,10 @@ type greTurnInfo struct {
 }
 
 type grePlayer struct {
-	LifeTotal        int64 `json:"lifeTotal"`
-	SystemSeatNumber int64 `json:"systemSeatNumber"`
-	TeamID           int64 `json:"teamId"`
+	ManaPool         []model.ManaPoolEntry `json:"manaPool"`
+	LifeTotal        int64                 `json:"lifeTotal"`
+	SystemSeatNumber int64                 `json:"systemSeatNumber"`
+	TeamID           int64                 `json:"teamId"`
 }
 
 type greZone struct {
@@ -188,6 +189,7 @@ type greGameObject struct {
 	GrpID                int64           `json:"grpId"`
 	OverlayGrpID         int64           `json:"overlayGrpId"`
 	Type                 string          `json:"type"`
+	CardTypes            []string        `json:"cardTypes"`
 	ZoneID               int64           `json:"zoneId"`
 	Visibility           string          `json:"visibility"`
 	OwnerSeatID          int64           `json:"ownerSeatId"`
@@ -477,6 +479,10 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 				continue
 			}
 			replayState.PlayerLifeTotals[player.SystemSeatNumber] = player.LifeTotal
+			if err := p.store.UpdateLiveManaPool(ctx, tx, matchID, gameNumber,
+				player.SystemSeatNumber, msg.GameStateMessage.GameStateID, player.ManaPool); err != nil {
+				return err
+			}
 		}
 		clearExpiredReplaySummoningSickness(replayState, turnNumber, activePlayer)
 
@@ -547,6 +553,11 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 			}
 			if obj.IsTapped != nil {
 				current.IsTapped = *obj.IsTapped
+			} else if obj.CardTypes != nil {
+				// Arena omits false protobuf fields in complete object records,
+				// including the object sent when a land untaps. Sparse updates
+				// without cardTypes still preserve fields they do not mention.
+				current.IsTapped = false
 			}
 			if obj.HasSummoningSickness != nil {
 				current.HasSummoningSickness = *obj.HasSummoningSickness
@@ -557,6 +568,10 @@ func (p *Parser) handleGREJSON(ctx context.Context, tx *sql.Tx, line string, sta
 					current.SummoningSickTurn = 0
 					current.SummoningSickSeatID = 0
 				}
+			} else if obj.CardTypes != nil {
+				current.HasSummoningSickness = false
+				current.SummoningSickTurn = 0
+				current.SummoningSickSeatID = 0
 			} else if current.HasSummoningSickness &&
 				previousControllerSeatID > 0 &&
 				current.ControllerSeatID > 0 &&

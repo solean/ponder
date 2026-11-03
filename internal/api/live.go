@@ -130,7 +130,18 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 	}
 	deck, deckTotal, libraryCount := projectLiveDeck(deckCards, knownOutsideLibrary, stateAvailable)
 
+	objects, pool, manaAvailable, poolKnown, err := s.store.GetLiveManaState(ctx, id, gameForState)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var mana *model.LiveMana
+	if manaAvailable {
+		mana = projectLiveMana(objects, pool, poolKnown, liveManaAbilities(ctx, objects))
+	}
+
 	live := model.LiveMatch{
+		Mana:                  mana,
 		Match:                 matchRows[0],
 		OpponentObservedCards: opponentCards,
 		Deck:                  deck,

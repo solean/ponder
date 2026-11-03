@@ -7,6 +7,7 @@ export type OverlaySettings = {
   draftBadgeGapX: number;
   draftBadgeGapY: number;
   draftBadgeColumns: number;
+  showMana: boolean;
   showDeck: boolean;
   showOpponent: boolean;
   showDraft: boolean;
@@ -26,6 +27,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   draftBadgeGapX: 1.25,
   draftBadgeGapY: 0.9,
   draftBadgeColumns: 8,
+  showMana: true,
   showDeck: true,
   showOpponent: true,
   showDraft: true,

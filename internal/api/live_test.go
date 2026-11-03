@@ -119,6 +119,9 @@ func TestLiveEndpointProjectsTurnButStoreRetainsArenaTurn(t *testing.T) {
 	if response.Live == nil {
 		t.Fatal("live response is nil")
 	}
+	if response.Live.Mana != nil {
+		t.Fatal("mana should be unavailable before a frame")
+	}
 	if response.Live.TurnNumber != 2 {
 		t.Fatalf("displayed live turn = %d, want full turn 2", response.Live.TurnNumber)
 	}
@@ -226,6 +229,9 @@ func TestLiveEndpointUsesSubmittedDeckAndLatestKnownZones(t *testing.T) {
 	}
 	if response.Live == nil {
 		t.Fatal("live response is nil")
+	}
+	if response.Live.Mana == nil || response.Live.Mana.LandsKnown || response.Live.Mana.PoolKnown || response.Live.Mana.Unresolved != 2 {
+		t.Fatalf("expected incomplete mana state from controlled permanents: %+v", response.Live.Mana)
 	}
 	if response.Live.DeckSource != "submitted" || response.Live.GameNumber != 2 {
 		t.Fatalf("live deck source/game = %q/%d, want submitted/2", response.Live.DeckSource, response.Live.GameNumber)

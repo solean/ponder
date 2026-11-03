@@ -650,3 +650,13 @@ CREATE TABLE IF NOT EXISTS ai_usage_events (
 
 CREATE INDEX IF NOT EXISTS idx_ai_usage_events_created_at ON ai_usage_events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_events_provider ON ai_usage_events(provider);
+
+-- Latest observed pool per player; live-only state, independent of replay archives.
+CREATE TABLE IF NOT EXISTS live_mana_pools (
+  match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+  game_number INTEGER NOT NULL,
+  seat_id INTEGER NOT NULL,
+  game_state_id INTEGER NOT NULL,
+  pool_json TEXT NOT NULL,
+  PRIMARY KEY (match_id, game_number, seat_id)
+);

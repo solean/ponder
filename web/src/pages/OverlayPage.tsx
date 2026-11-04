@@ -488,9 +488,11 @@ export function OverlayPage() {
     return <main className="overlay-hud" aria-label="Ponder game overlay" />;
   }
 
+  const showMana = settings.showMana && !(live.mana?.landsKnown && live.mana.lands === 0);
+
   return (
-    <main className={`overlay-hud${settings.showMana ? " has-mana-panel" : ""}`} aria-label="Ponder game overlay" ref={hudRef}>
-      {settings.showMana && <OverlayManaPanel mana={live.mana} />}
+    <main className={`overlay-hud${showMana ? " has-mana-panel" : ""}`} aria-label="Ponder game overlay" ref={hudRef}>
+      {showMana && <OverlayManaPanel mana={live.mana} />}
       {settings.showDeck && <DeckPanel key={`${live.match.id}:${live.gameNumber}`} live={live} hoveredCard={activePreview} shortcut={settings.shortcut} />}
       {settings.showOpponent && <OpponentPanel live={live} hoveredCard={activePreview} />}
     </main>

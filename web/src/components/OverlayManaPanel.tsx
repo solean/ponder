@@ -5,6 +5,8 @@ const COLORS = ["W", "U", "B", "R", "G", "C"] as const;
 const COLOR_NAMES = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green", C: "Colorless" };
 
 export function OverlayManaPanel({ mana }: { mana?: LiveMana }) {
+  if (mana?.landsKnown && mana.lands === 0) return null;
+
   return (
     <aside className="overlay-panel overlay-panel-mana" aria-label="Your mana">
       <div className="overlay-mana-totals">

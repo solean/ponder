@@ -3,13 +3,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 mock.module("../src/components/ManaSymbol", () => ({ ManaSymbol: ({ token }: { token: string }) => <span>{token}</span> }));
 const { OverlayManaPanel } = await import("../src/components/OverlayManaPanel");
 
-test("mana summary distinguishes missing state from an empty battlefield", () => {
+test("mana summary waits for missing state and hides with zero lands", () => {
   const waiting = renderToStaticMarkup(<OverlayManaPanel />);
   expect(waiting).toContain("Waiting for game state");
   expect(waiting).toContain("White: unknown");
   const empty = renderToStaticMarkup(<OverlayManaPanel mana={{ landsKnown: true, lands: 0, available: 0, byColor: {}, floating: 0, poolKnown: true, unresolved: 0 }} />);
-  expect(empty).toContain("White: 0");
-  expect(empty).not.toContain("Waiting for game state");
+  expect(empty).toBe("");
 });
 
 test("mana summary labels estimates, overlapping colors and incomplete sources", () => {

@@ -12253,6 +12253,14 @@ html.overlay-document body::before {
   white-space: nowrap;
 }
 
+.overlay-draw-odds {
+  display: block;
+  text-align: right;
+  font-size: 0.625rem;
+  line-height: 1;
+  color: #b8c3cd;
+}
+
 .overlay-card-count strong {
   color: #fff;
   font-size: var(--overlay-card-font-size, 0.75rem);

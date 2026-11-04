@@ -9,6 +9,7 @@ import { DraftCardBadges } from "../components/DraftCardBadges";
 import { CardStatLine, useDraftCardStats, type DraftCardStats } from "../components/CardStats";
 import { api } from "../lib/api";
 import { useLiveDraft } from "../lib/useLiveDraft";
+import { frontFaceIsLand, landDrawOdds, nextDrawOdds } from "../lib/drawOdds";
 import { pct } from "../lib/format";
 import { DEFAULT_OVERLAY_SETTINGS, overlayPanelWidth, overlayShortcutLabel } from "../lib/overlaySettings";
 import { fetchCardPreview } from "../lib/scryfall";
@@ -45,13 +46,13 @@ function useOrderedCards<T extends { cardId: number; cardName?: string }>(cards:
       const metadata = previews[index]?.data;
       return {
         card,
-        isLand: /\bland\b/i.test(metadata?.typeLine?.split(" // ")[0] ?? ""),
+        isLand: frontFaceIsLand(metadata?.typeLine),
         manaCost: metadata?.manaCost ?? "",
         manaValue: metadata?.manaValue ?? Number.POSITIVE_INFINITY,
       };
     });
     ranked.sort((left, right) => {
-      if (left.isLand !== right.isLand) return left.isLand ? 1 : -1;
+      if (Boolean(left.isLand) !== Boolean(right.isLand)) return left.isLand ? 1 : -1;
       if (!left.isLand && left.manaValue !== right.manaValue) {
         return left.manaValue - right.manaValue;
       }
@@ -144,12 +145,14 @@ function OverlaySubmenu({ title, count, children }: { title: string; count: numb
   );
 }
 
-function DeckPanel({ live, hoveredCard, shortcut }: { live: LiveMatch; hoveredCard: string | null; shortcut: string }) {
+function DeckPanel({ live, hoveredCard, shortcut, showDrawOdds }: { live: LiveMatch; hoveredCard: string | null; shortcut: string; showDrawOdds: boolean }) {
   const cards = useOrderedCards(live.deck);
   const main = cards.filter((card) => card.section === "main" && !card.isLand);
   const lands = cards.filter((card) => card.section === "main" && card.isLand);
   const sideboard = cards.filter((card) => card.section === "sideboard");
   const libraryCount = live.libraryCount;
+  const oddsLibrary = showDrawOdds && live.deckSource === "submitted" ? libraryCount : undefined;
+  const landOdds = oddsLibrary ? landDrawOdds(cards, oddsLibrary) : undefined;
   const hasLibraryCount = libraryCount != null;
   const sourceLabel =
     live.deckSource === "submitted"
@@ -162,6 +165,7 @@ function DeckPanel({ live, hoveredCard, shortcut }: { live: LiveMatch; hoveredCa
     <ul className="overlay-card-list">
       {entries.map((card) => {
         const name = cardName(card);
+        const odds = card.section === "main" ? nextDrawOdds(card.remaining, oddsLibrary) : undefined;
         const remainingLabel = card.remaining == null ? "Unknown" : `${card.remaining} of ${card.quantity}`;
         return (
           <li className={card.section === "main" && card.remaining === 0 ? "is-empty" : undefined} key={`${card.section}:${card.cardId}`} data-overlay-card={`deck:${card.section}:${card.cardId}`}>
@@ -170,9 +174,10 @@ function DeckPanel({ live, hoveredCard, shortcut }: { live: LiveMatch; hoveredCa
               <CardPreviewName cardId={card.cardId} cardName={card.cardName} label={<span>{name}</span>} passiveHover={hoveredCard === `deck:${card.section}:${card.cardId}`} />
             </div>
             <OverlayManaCost cost={card.manaCost} />
-            <span className="overlay-card-count" aria-label={card.section === "sideboard" ? `${card.quantity} sideboard copies` : `${remainingLabel} copies left`}>
+            <span className="overlay-card-count" aria-label={card.section === "sideboard" ? `${card.quantity} sideboard copies` : `${remainingLabel} copies left${odds ? `, ${odds} chance of drawing next` : ""}`}>
               <strong>{card.section === "sideboard" ? card.quantity : card.remaining ?? "—"}</strong>
               {card.section === "main" && <span>/{card.quantity}</span>}
+              {odds && <small className="overlay-draw-odds">{odds}</small>}
             </span>
           </li>
         );
@@ -187,6 +192,7 @@ function DeckPanel({ live, hoveredCard, shortcut }: { live: LiveMatch; hoveredCa
           <p className="overlay-eyebrow">Your deck</p>
           <h1 id="overlay-deck-title">{live.match.deckName?.trim() || "Current deck"}</h1>
           <p className="overlay-panel-meta">{sourceLabel}</p>
+          {landOdds && <p className="overlay-panel-meta">Land on next draw <strong>{landOdds}</strong></p>}
         </div>
         <div className="overlay-total" aria-label={hasLibraryCount ? `${libraryCount} cards left in deck` : "Cards left unknown"}>
           <strong>{hasLibraryCount ? libraryCount : "—"}</strong>
@@ -491,7 +497,7 @@ export function OverlayPage() {
   return (
     <main className={`overlay-hud${settings.showMana ? " has-mana-panel" : ""}`} aria-label="Ponder game overlay" ref={hudRef}>
       {settings.showMana && <OverlayManaPanel mana={live.mana} />}
-      {settings.showDeck && <DeckPanel key={`${live.match.id}:${live.gameNumber}`} live={live} hoveredCard={activePreview} shortcut={settings.shortcut} />}
+      {settings.showDeck && <DeckPanel key={`${live.match.id}:${live.gameNumber}`} live={live} hoveredCard={activePreview} shortcut={settings.shortcut} showDrawOdds={settings.showDrawOdds} />}
       {settings.showOpponent && <OpponentPanel live={live} hoveredCard={activePreview} />}
     </main>
   );

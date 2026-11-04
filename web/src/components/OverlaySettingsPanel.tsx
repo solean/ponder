@@ -1,3 +1,4 @@
+import { nextDrawOdds } from "../lib/drawOdds";
 import { OverlayManaPanel } from "./OverlayManaPanel";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -92,6 +93,7 @@ export function OverlaySettingsPanel() {
               <div>
                 <SettingToggle checked={settings.showMana} onChange={(value) => change("showMana", value)}>Show mana summary</SettingToggle>
                 <SettingToggle checked={settings.showDeck} onChange={(value) => change("showDeck", value)}>Show your deck</SettingToggle>
+                <SettingToggle checked={settings.showDrawOdds} onChange={(value) => change("showDrawOdds", value)}>Show next-draw odds</SettingToggle>
                 <SettingToggle checked={settings.showOpponent} onChange={(value) => change("showOpponent", value)}>Show opponent cards</SettingToggle>
                 <SettingToggle checked={settings.showDraft} onChange={(value) => change("showDraft", value)}>Show 17Lands ratings while drafting</SettingToggle>
               </div>
@@ -127,7 +129,7 @@ export function OverlaySettingsPanel() {
             <div className="overlay-settings-preview" style={previewStyle}>
               <span className="overlay-settings-preview-label">Preview</span>
               <div className="overlay-settings-samples">
-                {settings.showDeck ? <SamplePanel title="Your deck" opponent={false} previews={settings.cardPreviews} delay={settings.hoverDelayMs} /> : null}
+                {settings.showDeck ? <SamplePanel title="Your deck" opponent={false} showDrawOdds={settings.showDrawOdds} previews={settings.cardPreviews} delay={settings.hoverDelayMs} /> : null}
                 {settings.showOpponent ? <SamplePanel title="Opponent cards" opponent previews={settings.cardPreviews} delay={settings.hoverDelayMs} /> : null}
                 {settings.showMana && <OverlayManaPanel mana={{ landsKnown: true, lands: 5, available: 4, byColor: { U: 3, B: 2 }, floating: 0, poolKnown: true, unresolved: 0 }} />}
                 {!settings.showDeck && !settings.showOpponent && !settings.showMana ? <p className="settings-note">All match panels are hidden.</p> : null}
@@ -147,17 +149,18 @@ export function OverlaySettingsPanel() {
   );
 }
 
-function SamplePanel({ title, opponent, previews, delay }: { title: string; opponent: boolean; previews: boolean; delay: number }) {
+function SamplePanel({ title, opponent, previews, delay, showDrawOdds }: { showDrawOdds?: boolean; title: string; opponent: boolean; previews: boolean; delay: number }) {
   return <div className="overlay-settings-sample">
     <strong>{title}</strong>
-    <small>{opponent ? "3 cards seen" : "Library · 53 cards"}</small>
-    <SampleCard name={opponent ? "Lightning Strike" : "Llanowar Elves"} quantity={4} mana={opponent ? ["1", "R"] : ["G"]} previews={previews} delay={delay} />
-    <SampleCard name={opponent ? "Monastery Swiftspear" : "Elvish Archdruid"} quantity={3} mana={opponent ? ["R"] : ["1", "G", "G"]} previews={previews} delay={delay} />
+    <small>{opponent ? "3 cards seen" : "Library · 53 cards"}{showDrawOdds && ` · Land on next draw ${nextDrawOdds(22, 53)}`}</small>
+    <SampleCard name={opponent ? "Lightning Strike" : "Llanowar Elves"} quantity={4} odds={showDrawOdds ? nextDrawOdds(4, 53) : undefined} mana={opponent ? ["1", "R"] : ["G"]} previews={previews} delay={delay} />
+    <SampleCard name={opponent ? "Monastery Swiftspear" : "Elvish Archdruid"} quantity={3} odds={showDrawOdds ? nextDrawOdds(3, 53) : undefined} mana={opponent ? ["R"] : ["1", "G", "G"]} previews={previews} delay={delay} />
     {!opponent ? <div className="overlay-settings-sample-menus"><span>Lands <span>›</span></span><span>Sideboard <span>›</span></span></div> : null}
   </div>;
 }
 
-function SampleCard({ name, quantity, mana, previews, delay }: {
+function SampleCard({ name, quantity, mana, previews, delay, odds }: {
+  odds?: string;
   name: string; quantity: number; mana: string[]; previews: boolean; delay: number;
 }) {
   const [hovered, setHovered] = useState(false);
@@ -175,7 +178,7 @@ function SampleCard({ name, quantity, mana, previews, delay }: {
     <div className="overlay-settings-sample-card" tabIndex={previews ? 0 : undefined}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>
-      <span>{quantity}</span>
+      <span>{quantity}{odds && <small className="overlay-draw-odds">{odds}</small>}</span>
       <CardPreviewName cardId={0} cardName={name} label={<span>{name}</span>}
         passiveHover={previews && active && ready} />
       <span className="overlay-settings-mana">{mana.map((token, index) => <ManaSymbol key={index} token={token} />)}</span>

@@ -9,6 +9,7 @@ export type OverlaySettings = {
   draftBadgeColumns: number;
   showMana: boolean;
   showDeck: boolean;
+  showDrawOdds: boolean;
   showOpponent: boolean;
   showDraft: boolean;
   panelSize: "compact" | "default" | "large";
@@ -29,6 +30,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   draftBadgeColumns: 8,
   showMana: true,
   showDeck: true,
+  showDrawOdds: true,
   showOpponent: true,
   showDraft: true,
   panelSize: "default",

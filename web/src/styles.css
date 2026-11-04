@@ -7903,7 +7903,9 @@ button.match-replay-zonechip.is-button {
   position: relative;
   flex: 0 0 auto;
   width: var(--draft-pick-thumb-width);
-  aspect-ratio: 626 / 457;
+  /* Explicit height (626 × 457 art crop) rather than aspect-ratio, for the same
+     WebKit reason as the tile art below. */
+  height: calc(var(--draft-pick-thumb-width) * 0.73003);
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 3px;
@@ -7911,9 +7913,8 @@ button.match-replay-zonechip.is-button {
   box-shadow: 0 0 0 1px var(--card-inner-border) inset;
 }
 
-/* Absolute inset, not height: 100% — a percentage height cannot resolve against
-   the box's aspect-ratio-derived (indefinite) height, so the art would render at
-   its intrinsic height and get clipped to a sliver by overflow: hidden. */
+/* Absolute inset, not height: 100% — the tile art box is sized by padding and
+   has zero content height, so a percentage height would collapse the image. */
 .draft-pick-thumb img,
 .draft-pick-tile-art img {
   position: absolute;
@@ -8057,7 +8058,9 @@ button.match-replay-zonechip.is-button {
 
 .draft-pick-tiles-row {
   display: grid;
-  grid-template-columns: 5.5rem repeat(var(--draft-pick-tile-columns, 14), minmax(5.5rem, 1fr));
+  /* Capped so a short (in-progress) draft keeps tile-sized columns. */
+  grid-template-columns: 5.5rem repeat(var(--draft-pick-tile-columns, 14), minmax(5.5rem, 9rem));
+  justify-content: start;
   gap: 0.55rem;
   align-items: stretch;
 }
@@ -8127,10 +8130,16 @@ button.draft-pick-tile:focus-visible {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
+/* Height comes from padding (a percentage of the tile's width), not
+   aspect-ratio: the image is absolutely positioned, so this box has no
+   content height, and WebKit (the macOS desktop app's web view) collapses an
+   aspect-ratio flex item with no content to zero height in a column flexbox. */
 .draft-pick-tile-art {
   position: relative;
   display: block;
-  aspect-ratio: 626 / 457;
+  flex: none;
+  height: 0;
+  padding-bottom: 73.003%; /* 457 / 626, the Scryfall art-crop shape */
   overflow: hidden;
   border-radius: 3px;
   background: linear-gradient(165deg, var(--surface-strong) 0%, var(--surface-faint) 100%);

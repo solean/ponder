@@ -32,19 +32,19 @@ export function useDraftCardStats(eventName: string): DraftCardStats {
   return { query, byId, mean: query.data?.meanGihWinRate ?? null };
 }
 
-function gihTone(gih: number | null, mean: number | null): "positive" | "negative" | "neutral" {
+export function gihTone(gih: number | null, mean: number | null): "positive" | "negative" | "neutral" {
   if (gih == null || mean == null) return "neutral";
   if (gih - mean >= GIH_TONE_THRESHOLD) return "positive";
   if (mean - gih >= GIH_TONE_THRESHOLD) return "negative";
   return "neutral";
 }
 
-function signedPoints(delta: number): string {
+export function signedPoints(delta: number): string {
   const points = (delta * 100).toFixed(1);
   return delta >= 0 ? `+${points}` : points;
 }
 
-function statTooltip(stat: CardStat, mean: number | null): string {
+export function statTooltip(stat: CardStat, mean: number | null): string {
   const lines = [
     stat.gihWinRate == null
       ? `GIH WR: not enough games (${stat.gihGameCount.toLocaleString()})`

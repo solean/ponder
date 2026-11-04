@@ -7621,31 +7621,290 @@ button.match-replay-zonechip.is-button {
   font-size: var(--text-xs);
 }
 
-.draft-card-list {
+/* ── Pick log ──────────────────────────────
+   Rows (default) and tiles views of every pick, each judged against the
+   pack it came from. The late-pick blue has no theme token, so it is set
+   here per theme brightness. */
+.draft-pick-log {
+  --draft-pick-thumb-width: 3.25rem;
+  --draft-late-bg: rgba(122, 170, 255, 0.15);
+  --draft-late-text: #a9c9ff;
+  --draft-late-solid: #3a6db0;
+}
+
+:root[data-theme="light"] .draft-pick-log {
+  --draft-late-bg: rgba(29, 76, 126, 0.1);
+  --draft-late-text: #1d4c7e;
+  --draft-late-solid: #1d4c7e;
+}
+
+.draft-pick-log .panel-head {
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.draft-pick-summary {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.2rem 0.55rem;
+  gap: 0.5rem 1.6rem;
+  margin-bottom: 0.9rem;
+  padding: 0.7rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-faint);
+}
+
+.draft-pick-summary-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: var(--text-sm);
+}
+
+.draft-pick-summary-stat strong {
+  color: var(--win-rate-color, var(--text-soft));
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.draft-pick-summary-stat--late strong {
+  color: var(--draft-late-text);
+}
+
+.draft-pick-legend {
+  display: flex;
+  flex: 1 1 18rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted-strong);
+  font-size: var(--text-xs);
+}
+
+.draft-pick-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.draft-pick-chip {
+  flex: none;
+  padding: 0.05rem 0.4rem;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.draft-pick-chip--best {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+:root[data-theme="light"] .draft-pick-chip--best {
+  color: var(--accent-strong);
+}
+
+.draft-pick-chip--late {
+  background: var(--draft-late-bg);
+  color: var(--draft-late-text);
+}
+
+.draft-pick-chip--muted {
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted-strong);
+}
+
+.draft-pack-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  align-items: start;
+}
+
+.draft-pack-column {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-faint);
+}
+
+.draft-pack-column-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.3rem 0.8rem;
+  padding: 0.7rem 0.8rem 0.6rem;
+}
+
+.draft-pack-column-head h4 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.draft-pack-column-summary {
+  margin: 0;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.draft-pack-column-summary strong {
+  color: var(--win-rate-color, var(--text-soft));
+}
+
+.draft-pick-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The whole row opens the pack through a button stretched underneath its
+   content; only the card links (Scryfall + hover preview) sit above it. */
+.draft-pick-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.4rem minmax(0, 1fr) auto 0.85rem;
+  grid-template-areas:
+    "num cards stat chevron"
+    "num meta meta chevron";
+  align-items: center;
+  column-gap: 0.6rem;
+  row-gap: 0.2rem;
+  min-height: 3.5rem;
+  padding: 0.45rem 0.7rem 0.45rem 0.55rem;
+  border-top: 1px solid var(--line);
+}
+
+.draft-pick-row > :not(.draft-pick-row-open) {
+  position: relative;
+  pointer-events: none;
+}
+
+.draft-pick-row .card-preview-anchor {
+  pointer-events: auto;
+}
+
+.draft-pick-row-open {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.draft-pick-row-open:hover {
+  background: var(--accent-soft);
+}
+
+.draft-pick-row-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.draft-pick-row-open:hover ~ .draft-pick-row-chevron,
+.draft-pick-row-open:focus-visible ~ .draft-pick-row-chevron {
+  color: var(--text-soft);
+}
+
+/* Narrow panels: the name gets the full first line; the numbers move down
+   beside the verdict. */
+@media (max-width: 640px) {
+  .draft-pick-row {
+    grid-template-areas:
+      "num cards cards chevron"
+      "num meta stat chevron";
+  }
+
+  .draft-pick-row-meta {
+    flex-wrap: wrap;
+    row-gap: 0.2rem;
+  }
+
+  .draft-pick-row-passed {
+    flex-basis: 100%;
+  }
+
+  .draft-pick-row-stat {
+    align-self: start;
+  }
+
+  .draft-pick-legend {
+    justify-content: flex-start;
+  }
+}
+
+.draft-pick-row-number {
+  grid-area: num;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-align: right;
+}
+
+.draft-pick-row-cards {
+  grid-area: cards;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
   min-width: 0;
 }
 
-/* Art-crop thumbnail beside each pick, matching the visual decklist tiles. The
-   slot is reserved before Scryfall answers so rows do not reflow on load. */
-.draft-card-list .card-preview-trigger {
+.draft-pick-row-card {
   display: flex;
   align-items: center;
   gap: 0.45rem;
   min-width: 0;
 }
 
-.draft-card-list .card-preview-trigger code {
-  min-width: 0;
+.draft-pick-row-card .card-preview-anchor {
+  display: flex;
 }
 
+.draft-pick-row-card .card-preview-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  color: var(--text-soft);
+}
+
+.draft-pick-row-card .card-preview-trigger:hover .draft-pick-row-name,
+.draft-pick-row-card .card-preview-trigger:focus-visible .draft-pick-row-name {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.draft-pick-row-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-base);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Art-crop thumbnail beside each pick, matching the visual decklist tiles. The
+   slot is reserved before Scryfall answers so rows do not reflow on load. */
 .draft-pick-thumb {
   position: relative;
   flex: 0 0 auto;
-  width: clamp(52px, 4.3vw, 66px);
+  width: var(--draft-pick-thumb-width);
   aspect-ratio: 626 / 457;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -7657,7 +7916,8 @@ button.match-replay-zonechip.is-button {
 /* Absolute inset, not height: 100% — a percentage height cannot resolve against
    the box's aspect-ratio-derived (indefinite) height, so the art would render at
    its intrinsic height and get clipped to a sliver by overflow: hidden. */
-.draft-pick-thumb img {
+.draft-pick-thumb img,
+.draft-pick-tile-art img {
   position: absolute;
   inset: 0;
   display: block;
@@ -7668,88 +7928,261 @@ button.match-replay-zonechip.is-button {
   object-position: center top;
 }
 
-.draft-pack-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.8rem;
-  align-items: start;
+.draft-pick-pips {
+  display: inline-flex;
+  flex: none;
+  gap: 0.12rem;
 }
 
-.draft-pack-panel {
-  min-width: 0;
+.draft-pick-pips .mana-symbol-icon {
+  width: 0.8rem;
+  height: 0.8rem;
 }
 
-.draft-pack-panel h4 {
-  margin-bottom: 0.72rem;
-}
-
-.draft-pack-table-wrap {
-  overflow: visible;
-}
-
-.data-table.compact.draft-pack-table {
-  min-width: 0;
-  table-layout: fixed;
-}
-
-/* Rows are thumbnail-height, so the pick number rides the middle and the padding
-   tightens — the reclaimed width keeps most card names on one line. */
-.draft-pack-table th,
-.draft-pack-table td {
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
-}
-
-.draft-pack-table th {
-  vertical-align: top;
-}
-
-.draft-pack-table td {
-  vertical-align: middle;
-  padding-top: 0.4rem;
-  padding-bottom: 0.4rem;
-}
-
-.draft-pack-table th:first-child,
-.draft-pack-table td:first-child {
-  width: 2.6rem;
+.draft-pick-row-stat {
+  grid-area: stat;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
   white-space: nowrap;
 }
 
-.draft-pack-table .card-preview-trigger {
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
+.draft-pick-row-gih {
+  color: var(--muted-strong);
+  font-size: var(--text-sm);
 }
 
-.draft-card-list .card-preview-anchor {
-  max-width: 100%;
+.draft-pick-row-delta {
+  min-width: 2.6rem;
+  color: var(--win-rate-color, var(--text-soft));
+  font-size: var(--text-base);
+  font-weight: 600;
+  text-align: right;
+}
+
+.draft-pick-row-meta {
+  grid-area: meta;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  padding-left: calc(var(--draft-pick-thumb-width) + 0.6rem);
+  font-size: var(--text-sm);
+}
+
+.draft-pick-row-passed {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-pick-row-passed .card-preview-trigger {
+  display: inline;
+  color: var(--text-soft);
+}
+
+.draft-pick-row-passed-gih {
+  font-family: var(--font-mono);
+}
+
+.draft-pick-row-chevron {
+  grid-area: chevron;
+  width: 0.85rem;
+  height: 0.85rem;
+  color: var(--muted);
 }
 
 .draft-card-empty {
   color: var(--muted);
 }
 
-.draft-pack-trigger {
-  display: inline-flex;
+.draft-pick-fold {
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
-  min-height: 1.75rem;
-  margin-top: 0.4rem;
-  padding: 0.18rem 0.45rem;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  color: var(--text-soft);
-  background: var(--surface-faint);
+  width: 100%;
+  min-height: 2.6rem;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted-strong);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   cursor: pointer;
   touch-action: manipulation;
 }
 
-.draft-pack-trigger:hover {
-  border-color: var(--line-strong);
-  background: var(--surface-strong);
+.draft-pick-fold:hover {
+  background: var(--accent-soft);
+  color: var(--text-soft);
+}
+
+.draft-pick-fold:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.draft-pick-fold-icon {
+  width: 0.75rem;
+  height: 0.75rem;
+  transition: transform 160ms ease;
+}
+
+.draft-pick-fold[aria-expanded="true"] .draft-pick-fold-icon {
+  transform: rotate(180deg);
+}
+
+/* Tiles: one row per pack, one column per pick, scrolling sideways when the
+   panel is narrower than the draft. */
+.draft-pick-tiles-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-faint);
+}
+
+.draft-pick-tiles {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.8rem 0.9rem 0.9rem;
+}
+
+.draft-pick-tiles-row {
+  display: grid;
+  grid-template-columns: 5.5rem repeat(var(--draft-pick-tile-columns, 14), minmax(5.5rem, 1fr));
+  gap: 0.55rem;
+  align-items: stretch;
+}
+
+.draft-pick-tiles-head {
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+.draft-pick-tiles-pack {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+  padding-right: 0.4rem;
+  border-right: 1px solid var(--line);
+}
+
+.draft-pick-tiles-pack h4 {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.draft-pick-tiles-pack p {
+  margin: 0;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.draft-pick-tiles-pack strong {
+  color: var(--win-rate-color, var(--text-soft));
+}
+
+.draft-pick-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.3rem 0.3rem 0.4rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text-soft);
+  font: inherit;
+  text-align: left;
+}
+
+button.draft-pick-tile {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button.draft-pick-tile:hover {
+  background: var(--accent-soft);
+}
+
+button.draft-pick-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.draft-pick-tile.is-best {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.draft-pick-tile-art {
+  position: relative;
+  display: block;
+  aspect-ratio: 626 / 457;
+  overflow: hidden;
+  border-radius: 3px;
+  background: linear-gradient(165deg, var(--surface-strong) 0%, var(--surface-faint) 100%);
+  box-shadow: 0 0 0 1px var(--card-inner-border) inset;
+}
+
+.draft-pick-tile-badge {
+  position: absolute;
+  z-index: 1;
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.draft-pick-tile-badge--rank {
+  top: 0.25rem;
+  right: 0.25rem;
+  background: rgba(12, 8, 5, 0.8);
+}
+
+.draft-pick-tile-badge--late {
+  bottom: 0.25rem;
+  left: 0.25rem;
+  background: var(--draft-late-solid);
+  letter-spacing: var(--track-sm);
+  text-transform: uppercase;
+}
+
+.draft-pick-tile-name {
+  display: -webkit-box;
+  min-height: 2.5em;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.draft-pick-tile-stat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.3rem;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.draft-pick-tile-stat strong {
+  color: var(--win-rate-color, var(--text-soft));
+  font-size: var(--text-sm);
 }
 
 .draft-pack-dialog {
@@ -7847,12 +8280,10 @@ button.match-replay-zonechip.is-button {
   cursor: default;
 }
 
-.draft-pack-trigger:active,
 .draft-pack-dialog-button:active:not(:disabled) {
   transform: scale(0.97);
 }
 
-.draft-pack-trigger:focus-visible,
 .draft-pack-dialog-button:focus-visible,
 .draft-pack-card-image:focus-visible {
   outline: 2px solid var(--accent);
@@ -11903,16 +12334,6 @@ select option {
   min-width: 0;
 }
 
-/* Stats sit under the card name, aligned past the art thumbnail, so long
-   names keep the full row width. */
-.draft-card-entry {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.15rem;
-  min-width: 0;
-}
-
 .card-stat-line {
   display: flex;
   flex-wrap: wrap;
@@ -11923,11 +12344,6 @@ select option {
   font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
   cursor: help;
-}
-
-.draft-card-entry .card-stat-line {
-  justify-content: flex-start;
-  padding-left: calc(clamp(52px, 4.3vw, 66px) + 0.45rem);
 }
 
 .draft-pack-card .card-stat-line {

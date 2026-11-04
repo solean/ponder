@@ -370,21 +370,30 @@ function DraftPickTile({
   const className = `draft-pick-tile${best ? " is-best" : ""}`;
   const style = { gridColumn: pick.displayPick + 1 } as CSSProperties;
 
-  return openable ? (
-    <button
-      type="button"
+  // Like the rows, the tile is a plain container with a full-size button
+  // underneath its content, not content inside a <button>: WebKit (the macOS
+  // desktop web view) lays out button children in an anonymous inner box and
+  // dropped the absolutely positioned art and badges.
+  return (
+    <div
       className={className}
       style={style}
-      aria-haspopup="dialog"
-      aria-label={description}
-      title={stat ? statTooltip(stat, cardStats.mean) : undefined}
-      onClick={onOpen}
+      role={openable ? undefined : "group"}
+      aria-label={openable ? undefined : description}
     >
-      {content}
-    </button>
-  ) : (
-    <div className={className} style={style} role="group" aria-label={description}>
-      {content}
+      {openable ? (
+        <button
+          type="button"
+          className="draft-pick-tile-open"
+          aria-haspopup="dialog"
+          aria-label={description}
+          title={stat ? statTooltip(stat, cardStats.mean) : undefined}
+          onClick={onOpen}
+        />
+      ) : null}
+      <span className="draft-pick-tile-body" aria-hidden="true">
+        {content}
+      </span>
     </div>
   );
 }

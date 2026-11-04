@@ -7643,6 +7643,18 @@ button.match-replay-zonechip.is-button {
   align-items: flex-end;
 }
 
+.draft-pick-log .panel-head .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.draft-pick-view-icon {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
 .draft-pick-summary {
   display: flex;
   flex-wrap: wrap;
@@ -8002,43 +8014,6 @@ button.match-replay-zonechip.is-button {
 
 .draft-card-empty {
   color: var(--muted);
-}
-
-.draft-pick-fold {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  width: 100%;
-  min-height: 2.6rem;
-  border: 0;
-  border-top: 1px solid var(--line);
-  background: transparent;
-  color: var(--muted-strong);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.draft-pick-fold:hover {
-  background: var(--accent-soft);
-  color: var(--text-soft);
-}
-
-.draft-pick-fold:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-.draft-pick-fold-icon {
-  width: 0.75rem;
-  height: 0.75rem;
-  transition: transform 160ms ease;
-}
-
-.draft-pick-fold[aria-expanded="true"] .draft-pick-fold-icon {
-  transform: rotate(180deg);
 }
 
 /* Tiles: one row per pack, one column per pick, scrolling sideways when the

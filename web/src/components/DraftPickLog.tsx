@@ -23,8 +23,6 @@ import type { DraftPick, DraftPickCard } from "../lib/types";
 type PickLogView = "rows" | "tiles";
 
 const VIEW_STORAGE_KEY = "ponder.draftPickLog.view";
-/** The rows view folds picks past this many per pack; late picks rarely decide a draft. */
-const UNFOLDED_PICKS = 10;
 const COLOR_ORDER = ["W", "U", "B", "R", "G"];
 const COLOR_NAMES: Record<string, string> = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green" };
 
@@ -78,10 +76,29 @@ function ColorPips({ colors }: { colors?: string[] }) {
   );
 }
 
-function ChevronIcon({ className, direction = "right" }: { className: string; direction?: "right" | "down" }) {
+function ChevronIcon({ className }: { className: string }) {
   return (
     <svg className={className} aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d={direction === "right" ? "M6 3.5 10.5 8 6 12.5" : "M3.5 6 8 10.5 12.5 6"} />
+      <path d="M6 3.5 10.5 8 6 12.5" />
+    </svg>
+  );
+}
+
+function RowsIcon() {
+  return (
+    <svg className="draft-pick-view-icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M2.5 4h11M2.5 8h11M2.5 12h11" />
+    </svg>
+  );
+}
+
+function TilesIcon() {
+  return (
+    <svg className="draft-pick-view-icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" />
+      <rect x="9" y="2.5" width="4.5" height="4.5" rx="1" />
+      <rect x="2.5" y="9" width="4.5" height="4.5" rx="1" />
+      <rect x="9" y="9" width="4.5" height="4.5" rx="1" />
     </svg>
   );
 }
@@ -262,8 +279,6 @@ function DraftPackColumn({
   summary,
   previews,
   cardStats,
-  expanded,
-  onToggleExpanded,
   onOpen,
 }: {
   pack: DraftPickLogPack;
@@ -271,18 +286,9 @@ function DraftPackColumn({
   summary: DraftPickVerdictSummary;
   previews: Map<number, CardPreview>;
   cardStats: DraftCardStats;
-  expanded: boolean;
-  onToggleExpanded: () => void;
   onOpen: (pick: DraftPickLogPick) => void;
 }) {
   const headingID = useId();
-  const folded = pack.picks.slice(UNFOLDED_PICKS);
-  const visible = expanded ? pack.picks : pack.picks.slice(0, UNFOLDED_PICKS);
-  const foldedRange = folded.length === 0
-    ? ""
-    : folded.length === 1
-      ? `pick ${folded[0].displayPick}`
-      : `picks ${folded[0].displayPick}–${folded[folded.length - 1].displayPick}`;
 
   return (
     <article className="draft-pack-column" aria-labelledby={headingID}>
@@ -291,7 +297,7 @@ function DraftPackColumn({
         <PackSummaryLine summary={summary} mean={cardStats.mean} />
       </header>
       <ol className="draft-pick-rows">
-        {visible.map((pick) => (
+        {pack.picks.map((pick) => (
           <DraftPickRow
             key={pick.pickNumber}
             pick={pick}
@@ -303,12 +309,6 @@ function DraftPackColumn({
           />
         ))}
       </ol>
-      {folded.length > 0 ? (
-        <button type="button" className="draft-pick-fold" aria-expanded={expanded} onClick={onToggleExpanded}>
-          {expanded ? "Hide" : "Show"} {foldedRange}
-          <ChevronIcon className="draft-pick-fold-icon" direction="down" />
-        </button>
-      ) : null}
     </article>
   );
 }
@@ -481,7 +481,6 @@ export function DraftPickLog({ picks, cardStats }: { picks: DraftPick[]; cardSta
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const openPick = openIndex == null ? undefined : viewablePicks[openIndex];
   const [view, setView] = useState<PickLogView>(readStoredView);
-  const [showLatePicks, setShowLatePicks] = useState(false);
 
   const verdicts = useMemo(() => {
     const ratingOf = (cardId: number) => cardStats.byId.get(cardId);
@@ -568,6 +567,7 @@ export function DraftPickLog({ picks, cardStats }: { picks: DraftPick[]; cardSta
                 aria-pressed={view === option}
                 onClick={() => chooseView(option)}
               >
+                {option === "rows" ? <RowsIcon /> : <TilesIcon />}
                 {option === "rows" ? "Rows" : "Tiles"}
               </button>
             ))}
@@ -590,8 +590,6 @@ export function DraftPickLog({ picks, cardStats }: { picks: DraftPick[]; cardSta
                   summary={packSummaries.get(pack)!}
                   previews={previewByCardID}
                   cardStats={cardStats}
-                  expanded={showLatePicks}
-                  onToggleExpanded={() => setShowLatePicks((current) => !current)}
                   onOpen={openPack}
                 />
               ))}

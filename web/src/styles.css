@@ -7626,7 +7626,7 @@ button.match-replay-zonechip.is-button {
    pack it came from. The late-pick blue has no theme token, so it is set
    here per theme brightness. */
 .draft-pick-log {
-  --draft-pick-thumb-width: 3.25rem;
+  --draft-pick-thumb-width: 3.75rem;
   --draft-late-bg: rgba(122, 170, 255, 0.15);
   --draft-late-text: #a9c9ff;
   --draft-late-solid: #3a6db0;
@@ -7776,10 +7776,10 @@ button.match-replay-zonechip.is-button {
 .draft-pick-row {
   position: relative;
   display: grid;
-  grid-template-columns: 1.4rem minmax(0, 1fr) auto 0.85rem;
+  grid-template-columns: 1.4rem var(--draft-pick-thumb-width) minmax(0, 1fr) auto 0.85rem;
   grid-template-areas:
-    "num cards stat chevron"
-    "num meta meta chevron";
+    "num art cards stat chevron"
+    "num art meta meta chevron";
   align-items: center;
   column-gap: 0.6rem;
   row-gap: 0.2rem;
@@ -7827,8 +7827,8 @@ button.match-replay-zonechip.is-button {
 @media (max-width: 640px) {
   .draft-pick-row {
     grid-template-areas:
-      "num cards cards chevron"
-      "num meta stat chevron";
+      "num art cards cards chevron"
+      "num art meta stat chevron";
   }
 
   .draft-pick-row-meta {
@@ -7878,8 +7878,6 @@ button.match-replay-zonechip.is-button {
 
 .draft-pick-row-card .card-preview-trigger {
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
   min-width: 0;
   color: var(--text-soft);
 }
@@ -7967,7 +7965,6 @@ button.match-replay-zonechip.is-button {
   align-items: center;
   gap: 0.35rem;
   min-width: 0;
-  padding-left: calc(var(--draft-pick-thumb-width) + 0.6rem);
   font-size: var(--text-sm);
 }
 
@@ -7986,6 +7983,13 @@ button.match-replay-zonechip.is-button {
 
 .draft-pick-row-passed-gih {
   font-family: var(--font-mono);
+}
+
+/* The art spans both lines so the number, art, name block and chevron share
+   one vertical center. */
+.draft-pick-row-art {
+  grid-area: art;
+  align-self: center;
 }
 
 .draft-pick-row-chevron {

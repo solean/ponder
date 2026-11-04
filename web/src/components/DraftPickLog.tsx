@@ -159,6 +159,10 @@ function DraftPickRow({
   const stat = verdict.cardId != null ? cardStats.byId.get(verdict.cardId) : undefined;
   const passed = verdict.bestPassed;
   const hasMeta = isRanked(verdict) || verdict.timing != null || passed != null;
+  // The art spans both lines of the row, so it shows the card the verdict describes.
+  const artCard = pick.pickedCards.find((card) => card.cardId === verdict.cardId) ?? pick.pickedCards[0];
+  const artPreview = artCard ? previews.get(artCard.cardId) : undefined;
+  const artURL = artPreview?.artCropUrl ?? artPreview?.imageUrl;
 
   return (
     <li className={`draft-pick-row${openable ? " is-openable" : ""}`}>
@@ -173,13 +177,15 @@ function DraftPickRow({
         />
       ) : null}
       <span className="draft-pick-row-number">{pick.displayPick}</span>
+      <span className="draft-pick-thumb draft-pick-row-art" aria-hidden="true">
+        {artURL ? <img src={artURL} alt="" loading="lazy" decoding="async" /> : null}
+      </span>
       <div className="draft-pick-row-cards">
         {pick.pickedCards.length === 0 ? (
           <span className="draft-card-empty">Selection unavailable</span>
         ) : (
           pick.pickedCards.map((card, index) => {
             const preview = previews.get(card.cardId);
-            const artURL = preview?.artCropUrl ?? preview?.imageUrl;
             return (
               <span className="draft-pick-row-card" key={`${card.cardId}-${index}`}>
                 <CardPreviewName
@@ -187,14 +193,7 @@ function DraftPickRow({
                   cardName={card.cardName}
                   inline
                   resolveName
-                  label={
-                    <>
-                      <span className="draft-pick-thumb">
-                        {artURL ? <img src={artURL} alt="" loading="lazy" decoding="async" /> : null}
-                      </span>
-                      <span className="draft-pick-row-name">{cardDisplayName(card, preview)}</span>
-                    </>
-                  }
+                  label={<span className="draft-pick-row-name">{cardDisplayName(card, preview)}</span>}
                 />
                 <ColorPips colors={preview?.colors} />
               </span>

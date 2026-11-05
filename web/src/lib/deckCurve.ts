@@ -42,9 +42,12 @@ export type DeckCurve = {
   topEndCount: number;
   /** Nonland copies still missing a mana value (metadata not loaded). */
   unknownCount: number;
+  /** Nonland copies of each color in WUBRG order; a multicolor card counts toward each of its colors. */
+  colorCounts: { color: string; count: number }[];
 };
 
-const COLOR_KEYS = new Set(["W", "U", "B", "R", "G"]);
+const COLOR_ORDER = ["W", "U", "B", "R", "G"];
+const COLOR_KEYS = new Set(COLOR_ORDER);
 // Checked in order, so an "Artifact Creature" reads as a creature.
 const PRIMARY_TYPES = ["Creature", "Planeswalker", "Battle", "Instant", "Sorcery", "Enchantment", "Artifact"];
 
@@ -82,9 +85,13 @@ export function deckCurve(cards: CurveCard[]): DeckCurve {
   let manaValueSum = 0;
   let creatureCount = 0;
   let unknownCount = 0;
+  const colorTotals = new Map<string, number>();
 
   for (const card of cards) {
     if (card.copies <= 0 || isLandType(card.typeLine)) continue;
+    for (const color of new Set(card.colors ?? [])) {
+      if (COLOR_KEYS.has(color)) colorTotals.set(color, (colorTotals.get(color) ?? 0) + card.copies);
+    }
     if (card.manaValue == null || !Number.isFinite(card.manaValue)) {
       unknownCount += card.copies;
       continue;
@@ -118,5 +125,9 @@ export function deckCurve(cards: CurveCard[]): DeckCurve {
     peakBucket,
     topEndCount: buckets.filter((bucket) => bucket.bucket >= 5).reduce((sum, bucket) => sum + bucket.count, 0),
     unknownCount,
+    colorCounts: COLOR_ORDER.filter((color) => colorTotals.has(color)).map((color) => ({
+      color,
+      count: colorTotals.get(color)!,
+    })),
   };
 }

@@ -139,6 +139,19 @@ export function DeckCurve({ title, cards }: { title: string; cards: CurveCard[] 
             <dt>Average mana value</dt>
             <dd>{curve.averageManaValue == null ? "—" : curve.averageManaValue.toFixed(1)}</dd>
           </div>
+          {curve.colorCounts.length > 0 ? (
+            <div className="deck-curve-stat deck-curve-stat--colors">
+              <dt>Colors</dt>
+              <dd className="deck-curve-colors">
+                {curve.colorCounts.map(({ color, count }) => (
+                  <span key={color} className="deck-curve-color" role="img" aria-label={`${COLOR_NAMES[color]}: ${count}`}>
+                    <ManaSymbol token={color} />
+                    <span aria-hidden="true">{count}</span>
+                  </span>
+                ))}
+              </dd>
+            </div>
+          ) : null}
           <div className="deck-curve-stat deck-curve-stat--split">
             <dt>Creatures / non-creature</dt>
             <dd>

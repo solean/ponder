@@ -3,26 +3,11 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { ContextualLink } from "./Breadcrumbs";
 import { DeckCurve } from "./DeckCurve";
-import { ManaSymbol } from "./ManaSymbol";
 import { StatusMessage } from "./StatusMessage";
 import { api } from "../lib/api";
 import type { CurveCard } from "../lib/deckCurve";
-import { countRareAndMythicPicks } from "../lib/draftReport";
-import { fetchCardPreview, type CardPreview, type CardRarity } from "../lib/scryfall";
+import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
 import type { DeckSummary, DraftPick } from "../lib/types";
-
-type PoolCard = {
-  cardId: number;
-  name: string;
-  poolCopies: number;
-  mainCopies: number;
-  manaValue: number | null;
-  typeLine?: string;
-  colors?: string[];
-  rarity?: CardRarity;
-};
-
-const COLOR_ORDER = ["W", "U", "B", "R", "G"];
 
 /** Decks submitted for this event, most recently updated first. */
 export function draftDeckCandidates(decks: DeckSummary[], eventName: string): DeckSummary[] {
@@ -115,7 +100,8 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
   }, [poolCardIDs, previewQueries]);
 
   const deckCards = useMemo(() => deckDetail?.cards ?? [], [deckDetail]);
-  const poolCards = useMemo<PoolCard[]>(() => {
+  // The submitted main deck's cards that came from this pool, for the curve.
+  const curveCards = useMemo<CurveCard[]>(() => {
     const mainByCard = new Map<number, number>();
     for (const card of deckCards) {
       if (card.section === "main") {
@@ -129,82 +115,14 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
       return {
         cardId,
         name: entry.name?.trim() || preview?.name?.trim() || `Card ${cardId}`,
-        poolCopies: entry.copies,
-        mainCopies,
+        copies: mainCopies,
         manaValue: typeof preview?.manaValue === "number" ? preview.manaValue : null,
         typeLine: preview?.typeLine,
         colors: preview?.colors,
-        rarity: preview?.rarity,
       };
     });
   }, [deckCards, pool, poolCardIDs, previewByCardID]);
 
-  const summary = useMemo(() => {
-    let poolCopies = 0;
-    for (const card of poolCards) {
-      poolCopies += card.poolCopies;
-    }
-    const mainNonPool = new Map<number, number>();
-    const poolIDs = new Set(poolCardIDs);
-    for (const card of deckCards) {
-      if (card.section === "main" && !poolIDs.has(card.cardId)) {
-        mainNonPool.set(card.cardId, (mainNonPool.get(card.cardId) ?? 0) + card.quantity);
-      }
-    }
-    return { poolCopies, mainNonPool };
-  }, [deckCards, poolCardIDs, poolCards]);
-  const premiumPicks = useMemo(() => countRareAndMythicPicks(poolCards), [poolCards]);
-
-  const mainColorCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const card of poolCards) {
-      if (card.mainCopies <= 0 || card.typeLine?.toLowerCase().includes("land")) {
-        continue;
-      }
-      for (const color of card.colors ?? []) {
-        counts.set(color, (counts.get(color) ?? 0) + card.mainCopies);
-      }
-    }
-    return COLOR_ORDER.filter((color) => (counts.get(color) ?? 0) > 0).map((color) => ({
-      color,
-      count: counts.get(color) ?? 0,
-    }));
-  }, [poolCards]);
-
-  const typeCounts = useMemo(() => {
-    let creatures = 0;
-    let spells = 0;
-    let other = 0;
-    for (const card of poolCards) {
-      if (card.mainCopies <= 0 || !card.typeLine) {
-        continue;
-      }
-      const lower = card.typeLine.toLowerCase();
-      if (lower.includes("land")) {
-        continue;
-      }
-      if (lower.includes("creature")) {
-        creatures += card.mainCopies;
-      } else if (lower.includes("instant") || lower.includes("sorcery")) {
-        spells += card.mainCopies;
-      } else {
-        other += card.mainCopies;
-      }
-    }
-    return { creatures, spells, other };
-  }, [poolCards]);
-
-  const curveCards = useMemo<CurveCard[]>(
-    () => poolCards.map((card) => ({
-      cardId: card.cardId,
-      name: card.name,
-      copies: card.mainCopies,
-      manaValue: card.manaValue,
-      typeLine: card.typeLine,
-      colors: card.colors,
-    })),
-    [poolCards],
-  );
   const isMetadataLoading = previewQueries.some((query) => query.isPending);
 
   if (picks.length === 0) {
@@ -216,11 +134,6 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
       <div className="panel-head">
         <div>
           <h3>Draft Pool &amp; Deck</h3>
-          <p>
-            {deckSummary
-              ? "How your picks became the submitted event deck"
-              : "No submitted deck found for this event yet"}
-          </p>
         </div>
         {deckSummary ? (
           <ContextualLink
@@ -242,62 +155,6 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
         </StatusMessage>
       ) : (
         <>
-          <dl className="deck-analytics-tiles" aria-label="Pool usage summary">
-            <div className="deck-analytics-tile">
-              <dt>Picks</dt>
-              <dd>
-                <strong>{summary.poolCopies}</strong>
-                <span>{poolCardIDs.length} distinct</span>
-              </dd>
-            </div>
-            <div className="deck-analytics-tile">
-              <dt>Rare &amp; mythic picks</dt>
-              <dd>
-                {isMetadataLoading ? (
-                  <strong>—</strong>
-                ) : (
-                  <>
-                    <strong>{premiumPicks.rare}</strong>
-                    <span>rare</span>
-                    <strong>{premiumPicks.mythic}</strong>
-                    <span>mythic</span>
-                  </>
-                )}
-              </dd>
-            </div>
-            <div className="deck-analytics-tile">
-              <dt>Main colors</dt>
-              <dd className="draft-pool-colors">
-                {mainColorCounts.length === 0 ? (
-                  <strong>—</strong>
-                ) : (
-                  mainColorCounts.map(({ color, count }) => (
-                    <span className="draft-pool-color" key={color}>
-                      <ManaSymbol token={color} />
-                      <span>{count}</span>
-                    </span>
-                  ))
-                )}
-              </dd>
-            </div>
-            <div className="deck-analytics-tile">
-              <dt>Main shape</dt>
-              <dd>
-                <strong>
-                  {typeCounts.creatures}c / {typeCounts.spells}s
-                </strong>
-                <span>{typeCounts.other} other</span>
-              </dd>
-            </div>
-            <div className="deck-analytics-tile">
-              <dt>Added lands/cards</dt>
-              <dd>
-                <strong>{[...summary.mainNonPool.values()].reduce((sum, quantity) => sum + quantity, 0)}</strong>
-                <span>not from pool</span>
-              </dd>
-            </div>
-          </dl>
-
           <DeckCurve title="Main deck curve" cards={curveCards} />
           {isMetadataLoading ? <StatusMessage>Loading card metadata…</StatusMessage> : null}
           <p className="analytics-method-note">

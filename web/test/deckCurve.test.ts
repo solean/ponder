@@ -49,6 +49,21 @@ describe("deck curve", () => {
     expect(deckCurve([]).averageManaValue).toBeNull();
   });
 
+  test("counts nonland copies per color, multicolor cards toward each color", () => {
+    const curve = deckCurve([
+      card({ cardId: 1, colors: ["U"], copies: 2 }),
+      card({ cardId: 2, colors: ["W", "U"] }),
+      card({ cardId: 3, colors: ["B"], manaValue: null }),
+      card({ cardId: 4, colors: ["G"], typeLine: "Land", manaValue: 0 }),
+      card({ cardId: 5, colors: [] }),
+    ]);
+    expect(curve.colorCounts).toEqual([
+      { color: "W", count: 1 },
+      { color: "U", count: 3 },
+      { color: "B", count: 1 },
+    ]);
+  });
+
   test("lists creatures first, then by name", () => {
     const curve = deckCurve([
       card({ cardId: 1, name: "Opt" }),

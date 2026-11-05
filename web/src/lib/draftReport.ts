@@ -300,21 +300,6 @@ export function draftReplayCoverage(picks: DraftPick[]): {
   };
 }
 
-export function countRareAndMythicPicks(
-  cards: ReadonlyArray<{ poolCopies: number; rarity?: CardRarity }>,
-): { rare: number; mythic: number } {
-  let rare = 0;
-  let mythic = 0;
-  for (const card of cards) {
-    if (card.rarity === "rare") {
-      rare += card.poolCopies;
-    } else if (card.rarity === "mythic") {
-      mythic += card.poolCopies;
-    }
-  }
-  return { rare, mythic };
-}
-
 const PACK_RARITY_RANK: Record<CardRarity, number> = { mythic: 0, rare: 1, uncommon: 2, common: 3 };
 
 /** Orders pack cards mythic → common with unknown rarity last; ties keep pack order. */

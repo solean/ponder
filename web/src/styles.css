@@ -12063,7 +12063,6 @@ select option {
   --deck-curve-gap: 3px;
   display: grid;
   gap: 1rem;
-  margin-top: 1rem;
   padding: 0.95rem 1rem 1rem;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -12266,7 +12265,8 @@ select option {
 }
 
 .deck-curve-stat--lead,
-.deck-curve-stat--split {
+.deck-curve-stat--split,
+.deck-curve-stat--colors {
   flex-direction: column;
   align-items: stretch;
   gap: 0.35rem;
@@ -12280,6 +12280,24 @@ select option {
   display: grid;
   gap: 0.45rem;
   font-size: var(--text-lg);
+}
+
+.deck-curve-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.7rem;
+}
+
+.deck-curve-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.deck-curve-color .mana-symbol-icon {
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 .deck-curve-stat-divider {
@@ -12447,23 +12465,6 @@ select option {
   color: var(--link-hover);
   border-color: var(--link-hover-border);
   text-decoration: none;
-}
-
-.draft-pool-colors {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.draft-pool-color {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-soft);
 }
 
 .draft-color-chart {

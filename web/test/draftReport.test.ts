@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  countRareAndMythicPicks,
   draftAlternativeCards,
   draftPickLogPacks,
   draftReplayCoverage,
@@ -86,19 +85,6 @@ describe("draft session overview", () => {
     expect(draftSessionType(makeSession())).toBe("Premier Draft");
     expect(draftSessionType(makeSession({ eventName: "", isBotDraft: true }))).toBe("Bot Draft");
     expect(draftSessionType(makeSession({ eventName: "", isBotDraft: false }))).toBe("Player Draft");
-  });
-});
-
-describe("draft pool rarity summary", () => {
-  test("counts picked copies at rare and mythic", () => {
-    expect(
-      countRareAndMythicPicks([
-        { poolCopies: 2, rarity: "rare" },
-        { poolCopies: 1, rarity: "mythic" },
-        { poolCopies: 8, rarity: "uncommon" },
-        { poolCopies: 1 },
-      ]),
-    ).toEqual({ rare: 2, mythic: 1 });
   });
 });
 

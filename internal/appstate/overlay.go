@@ -16,6 +16,7 @@ type OverlaySettings struct {
 	DraftBadgeGapX    float64 `json:"draftBadgeGapX"`
 	DraftBadgeGapY    float64 `json:"draftBadgeGapY"`
 	DraftBadgeColumns int     `json:"draftBadgeColumns"`
+	ShowDrawOdds      bool    `json:"showDrawOdds"`
 	ShowMana          bool    `json:"showMana"`
 	ShowDeck          bool    `json:"showDeck"`
 	ShowOpponent      bool    `json:"showOpponent"`
@@ -38,6 +39,7 @@ func DefaultOverlaySettings() OverlaySettings {
 		DraftBadgeGapY:    0.9,
 		DraftBadgeColumns: 8,
 		ShowMana:          true,
+		ShowDrawOdds:      true,
 		ShowDeck:          true,
 		ShowOpponent:      true,
 		ShowDraft:         true,

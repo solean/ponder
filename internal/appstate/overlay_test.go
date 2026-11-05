@@ -184,18 +184,18 @@ func TestOverlayDraftBadgePresetMigration(t *testing.T) {
 	}
 }
 
-func TestOverlaySettingsManaDefaultsForExistingConfigs(t *testing.T) {
+func TestOverlaySettingsPanelDefaultsForExistingConfigs(t *testing.T) {
 	var settings OverlaySettings
 	if err := json.Unmarshal([]byte(`{"showDeck":false}`), &settings); err != nil {
 		t.Fatal(err)
 	}
-	if !settings.ShowMana || settings.ShowDeck {
+	if !settings.ShowMana || !settings.ShowDrawOdds || settings.ShowDeck {
 		t.Fatalf("migrated settings: %+v", settings)
 	}
-	if err := json.Unmarshal([]byte(`{"showMana":false}`), &settings); err != nil {
+	if err := json.Unmarshal([]byte(`{"showMana":false,"showDrawOdds":false}`), &settings); err != nil {
 		t.Fatal(err)
 	}
-	if settings.ShowMana {
-		t.Fatal("explicitly disabled mana panel was re-enabled")
+	if settings.ShowMana || settings.ShowDrawOdds {
+		t.Fatal("explicitly disabled overlay setting was re-enabled")
 	}
 }

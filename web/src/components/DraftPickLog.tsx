@@ -1,84 +1,471 @@
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useState, type CSSProperties } from "react";
 import { useQueries } from "@tanstack/react-query";
 
 import { CardPreviewName } from "./CardPreviewName";
-import { CardStatLine, CardStatsSource, type DraftCardStats } from "./CardStats";
+import { CardStatsSource, gihTone, statTooltip, type DraftCardStats } from "./CardStats";
 import { DraftPackDialog } from "./DraftPackDialog";
+import { ManaSymbol } from "./ManaSymbol";
 import { StatusMessage } from "./StatusMessage";
 import {
   draftPickLogPacks,
+  draftPickVerdict,
+  summarizeDraftPickVerdicts,
+  DRAFT_PICK_TIMING_THRESHOLD,
+  type DraftPickLogPack,
   type DraftPickLogPick,
+  type DraftPickVerdict,
+  type DraftPickVerdictSummary,
 } from "../lib/draftReport";
+import { pct } from "../lib/format";
 import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
 import type { DraftPick, DraftPickCard } from "../lib/types";
 
-function DraftCardList({
-  cards,
-  previews,
-  cardStats,
-}: {
-  cards: DraftPickCard[];
-  previews: Map<number, CardPreview>;
-  cardStats: DraftCardStats;
-}) {
-  if (cards.length === 0) {
-    return <span className="draft-card-empty">Selection unavailable</span>;
-  }
+type PickLogView = "rows" | "tiles";
 
+const VIEW_STORAGE_KEY = "ponder.draftPickLog.view";
+const COLOR_ORDER = ["W", "U", "B", "R", "G"];
+const COLOR_NAMES: Record<string, string> = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green" };
+
+function readStoredView(): PickLogView {
+  try {
+    return window.localStorage.getItem(VIEW_STORAGE_KEY) === "tiles" ? "tiles" : "rows";
+  } catch {
+    return "rows";
+  }
+}
+
+function storeView(view: PickLogView) {
+  try {
+    window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+  } catch {
+    // Storage can be blocked; the toggle still works for this visit.
+  }
+}
+
+/** Percentage points with a typographic minus, e.g. "+1.5" / "−0.3". */
+function signedDelta(delta: number): string {
+  const points = Math.round(delta * 1000) / 10;
+  return `${points < 0 ? "−" : "+"}${Math.abs(points).toFixed(1)}`;
+}
+
+function cardDisplayName(card: DraftPickCard, preview?: CardPreview): string {
+  return card.cardName?.trim() || preview?.name?.trim() || `Card ${card.cardId}`;
+}
+
+function cardsLabel(count: number): string {
+  return `${count} ${count === 1 ? "card" : "cards"}`;
+}
+
+function deltaTone(verdict: DraftPickVerdict, mean: number | null) {
+  return gihTone(verdict.gihWinRate, mean);
+}
+
+function isRanked(verdict: DraftPickVerdict): verdict is DraftPickVerdict & { rank: number } {
+  return verdict.rank != null && verdict.ratedCount > 1;
+}
+
+function ColorPips({ colors }: { colors?: string[] }) {
+  const ordered = COLOR_ORDER.filter((color) => colors?.includes(color));
+  if (ordered.length === 0) return null;
   return (
-    <div className="draft-card-list">
-      {cards.map((card, index) => {
-        const preview = previews.get(card.cardId);
-        const name = card.cardName?.trim() || preview?.name?.trim() || `Card ${card.cardId}`;
-        const artURL = preview?.artCropUrl ?? preview?.imageUrl;
-        return (
-          <span className="draft-card-entry" key={`${card.cardId}-${index}`}>
-            <CardPreviewName
-              cardId={card.cardId}
-              cardName={card.cardName}
-              label={
-                <>
-                  <span className="draft-pick-thumb">
-                    {artURL ? <img src={artURL} alt="" loading="lazy" decoding="async" /> : null}
-                  </span>
-                  <code>{name}</code>
-                </>
-              }
-              resolveName
-            />
-            <CardStatLine cardId={card.cardId} stats={cardStats} />
+    <span className="draft-pick-pips" role="img" aria-label={ordered.map((color) => COLOR_NAMES[color]).join(" and ")}>
+      {ordered.map((color) => (
+        <ManaSymbol key={color} token={color} />
+      ))}
+    </span>
+  );
+}
+
+function ChevronIcon({ className }: { className: string }) {
+  return (
+    <svg className={className} aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 3.5 10.5 8 6 12.5" />
+    </svg>
+  );
+}
+
+function RowsIcon() {
+  return (
+    <svg className="draft-pick-view-icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M2.5 4h11M2.5 8h11M2.5 12h11" />
+    </svg>
+  );
+}
+
+function TilesIcon() {
+  return (
+    <svg className="draft-pick-view-icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" />
+      <rect x="9" y="2.5" width="4.5" height="4.5" rx="1" />
+      <rect x="2.5" y="9" width="4.5" height="4.5" rx="1" />
+      <rect x="9" y="9" width="4.5" height="4.5" rx="1" />
+    </svg>
+  );
+}
+
+function VerdictChips({ verdict }: { verdict: DraftPickVerdict }) {
+  return (
+    <>
+      {isRanked(verdict) ? (
+        verdict.rank === 1 ? (
+          <span className="draft-pick-chip draft-pick-chip--best">Best in pack</span>
+        ) : (
+          <span className="draft-pick-chip draft-pick-chip--muted">
+            #{verdict.rank} of {verdict.ratedCount}
           </span>
-        );
-      })}
+        )
+      ) : null}
+      {verdict.timing != null && verdict.ata != null ? (
+        <span className={`draft-pick-chip draft-pick-chip--${verdict.timing === "late" ? "late" : "muted"}`}>
+          {verdict.timing === "late" ? "Late" : "Early"} <span aria-hidden="true">·</span> ATA {verdict.ata.toFixed(1)}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+function DraftPickSummaryStrip({ summary, mean }: { summary: DraftPickVerdictSummary; mean: number | null }) {
+  const averageTone = summary.averageDelta != null && mean != null ? gihTone(mean + summary.averageDelta, mean) : "neutral";
+  return (
+    <div className="draft-pick-summary">
+      {summary.averageDelta != null ? (
+        <p className="draft-pick-summary-stat">
+          <strong className={`win-rate win-rate--${averageTone}`}>{signedDelta(summary.averageDelta)}</strong> average pick vs format
+        </p>
+      ) : null}
+      {summary.rankedCount > 0 ? (
+        <p className="draft-pick-summary-stat">
+          <strong>
+            {summary.bestCount}/{summary.rankedCount}
+          </strong>{" "}
+          best in pack
+        </p>
+      ) : null}
+      <p className="draft-pick-summary-stat draft-pick-summary-stat--late">
+        <strong>{summary.lateCount}</strong> taken late
+      </p>
+      <ul className="draft-pick-legend" aria-label="Legend">
+        <li>
+          <span className="draft-pick-chip draft-pick-chip--best">Best in pack</span>highest GIH WR in the pack
+        </li>
+        <li>
+          <span className="draft-pick-chip draft-pick-chip--late">Late</span>taken {DRAFT_PICK_TIMING_THRESHOLD}+ picks after its ATA
+        </li>
+        {mean != null ? <li>± = GIH WR minus the format average ({pct(mean)})</li> : null}
+      </ul>
     </div>
   );
 }
-function DraftPackChoices({
+
+function DraftPickRow({
   pick,
   displayPack,
+  verdict,
+  previews,
+  cardStats,
   onOpen,
 }: {
   pick: DraftPickLogPick;
   displayPack: number;
+  verdict: DraftPickVerdict;
+  previews: Map<number, CardPreview>;
+  cardStats: DraftCardStats;
   onOpen: () => void;
 }) {
-  if (pick.packCards.length === 0) {
-    return <span className="draft-card-empty">Not recorded</span>;
-  }
+  const openable = pick.packCards.length > 0;
+  const stat = verdict.cardId != null ? cardStats.byId.get(verdict.cardId) : undefined;
+  const passed = verdict.bestPassed;
+  const hasMeta = isRanked(verdict) || verdict.timing != null || passed != null;
+  // The art spans both lines of the row, so it shows the card the verdict describes.
+  const artCard = pick.pickedCards.find((card) => card.cardId === verdict.cardId) ?? pick.pickedCards[0];
+  const artPreview = artCard ? previews.get(artCard.cardId) : undefined;
+  const artURL = artPreview?.artCropUrl ?? artPreview?.imageUrl;
 
   return (
-    <button
-      type="button"
-      className="draft-pack-trigger"
-      aria-haspopup="dialog"
-      aria-label={`View pack ${displayPack}, pick ${pick.displayPick}: ${pick.packCards.length} ${pick.packCards.length === 1 ? "card" : "cards"}`}
-      onClick={onOpen}
-    >
-      View pack <span aria-hidden="true">·</span> {pick.packCards.length} {pick.packCards.length === 1 ? "card" : "cards"}
-    </button>
+    <li className={`draft-pick-row${openable ? " is-openable" : ""}`}>
+      {openable ? (
+        <button
+          type="button"
+          className="draft-pick-row-open"
+          aria-haspopup="dialog"
+          aria-label={`View pack ${displayPack}, pick ${pick.displayPick}: ${cardsLabel(pick.packCards.length)}`}
+          title={stat ? statTooltip(stat, cardStats.mean) : undefined}
+          onClick={onOpen}
+        />
+      ) : null}
+      <span className="draft-pick-row-number">{pick.displayPick}</span>
+      <span className="draft-pick-thumb draft-pick-row-art" aria-hidden="true">
+        {artURL ? <img src={artURL} alt="" loading="lazy" decoding="async" /> : null}
+      </span>
+      <div className="draft-pick-row-cards">
+        {pick.pickedCards.length === 0 ? (
+          <span className="draft-card-empty">Selection unavailable</span>
+        ) : (
+          pick.pickedCards.map((card, index) => {
+            const preview = previews.get(card.cardId);
+            return (
+              <span className="draft-pick-row-card" key={`${card.cardId}-${index}`}>
+                <CardPreviewName
+                  cardId={card.cardId}
+                  cardName={card.cardName}
+                  inline
+                  resolveName
+                  label={<span className="draft-pick-row-name">{cardDisplayName(card, preview)}</span>}
+                />
+                <ColorPips colors={preview?.colors} />
+              </span>
+            );
+          })
+        )}
+      </div>
+      {verdict.gihWinRate != null ? (
+        <span className="draft-pick-row-stat">
+          <span className="draft-pick-row-gih">{pct(verdict.gihWinRate)}</span>
+          {verdict.delta != null ? (
+            <strong className={`draft-pick-row-delta win-rate win-rate--${deltaTone(verdict, cardStats.mean)}`}>
+              {signedDelta(verdict.delta)}
+            </strong>
+          ) : null}
+        </span>
+      ) : null}
+      {hasMeta ? (
+        <span className="draft-pick-row-meta">
+          <VerdictChips verdict={verdict} />
+          {passed ? (
+            <span className="draft-pick-row-passed">
+              passed{" "}
+              <CardPreviewName
+                cardId={passed.card.cardId}
+                cardName={passed.card.cardName}
+                inline
+                resolveName
+                label={<strong>{cardDisplayName(passed.card, previews.get(passed.card.cardId))}</strong>}
+              />{" "}
+              <span className="draft-pick-row-passed-gih">{pct(passed.gihWinRate)}</span>
+            </span>
+          ) : null}
+        </span>
+      ) : null}
+      {openable ? <ChevronIcon className="draft-pick-row-chevron" /> : null}
+    </li>
   );
 }
 
+function PackSummaryLine({ summary, mean }: { summary: DraftPickVerdictSummary; mean: number | null }) {
+  if (summary.averageDelta == null && summary.rankedCount === 0) return null;
+  const parts = [];
+  if (summary.averageDelta != null) {
+    const tone = mean != null ? gihTone(mean + summary.averageDelta, mean) : "neutral";
+    parts.push(
+      <span key="avg">
+        avg <strong className={`win-rate win-rate--${tone}`}>{signedDelta(summary.averageDelta)}</strong>
+      </span>,
+    );
+  }
+  if (summary.rankedCount > 0) {
+    parts.push(<span key="best">{summary.bestCount}/{summary.rankedCount} best</span>);
+  }
+  parts.push(<span key="late">{summary.lateCount} late</span>);
+  return (
+    <p className="draft-pack-column-summary">
+      {parts.flatMap((part, index) => (index === 0 ? [part] : [<span key={`sep-${index}`} aria-hidden="true"> · </span>, part]))}
+    </p>
+  );
+}
+
+function DraftPackColumn({
+  pack,
+  verdicts,
+  summary,
+  previews,
+  cardStats,
+  onOpen,
+}: {
+  pack: DraftPickLogPack;
+  verdicts: Map<DraftPickLogPick, DraftPickVerdict>;
+  summary: DraftPickVerdictSummary;
+  previews: Map<number, CardPreview>;
+  cardStats: DraftCardStats;
+  onOpen: (pick: DraftPickLogPick) => void;
+}) {
+  const headingID = useId();
+
+  return (
+    <article className="draft-pack-column" aria-labelledby={headingID}>
+      <header className="draft-pack-column-head">
+        <h4 id={headingID}>Pack {pack.displayPack}</h4>
+        <PackSummaryLine summary={summary} mean={cardStats.mean} />
+      </header>
+      <ol className="draft-pick-rows">
+        {pack.picks.map((pick) => (
+          <DraftPickRow
+            key={pick.pickNumber}
+            pick={pick}
+            displayPack={pack.displayPack}
+            verdict={verdicts.get(pick)!}
+            previews={previews}
+            cardStats={cardStats}
+            onOpen={() => onOpen(pick)}
+          />
+        ))}
+      </ol>
+    </article>
+  );
+}
+
+function DraftPickTile({
+  pick,
+  displayPack,
+  verdict,
+  previews,
+  cardStats,
+  onOpen,
+}: {
+  pick: DraftPickLogPick;
+  displayPack: number;
+  verdict: DraftPickVerdict;
+  previews: Map<number, CardPreview>;
+  cardStats: DraftCardStats;
+  onOpen: () => void;
+}) {
+  const card = pick.pickedCards.find((entry) => entry.cardId === verdict.cardId) ?? pick.pickedCards[0];
+  const preview = card ? previews.get(card.cardId) : undefined;
+  const artURL = preview?.artCropUrl ?? preview?.imageUrl;
+  const name = card ? cardDisplayName(card, preview) : "Selection unavailable";
+  const extraPicks = Math.max(0, pick.pickedCards.length - 1);
+  const ranked = isRanked(verdict);
+  const best = ranked && verdict.rank === 1;
+  const stat = verdict.cardId != null ? cardStats.byId.get(verdict.cardId) : undefined;
+  const openable = pick.packCards.length > 0;
+
+  const description = [
+    `Pack ${displayPack}, pick ${pick.displayPick}: ${name}${extraPicks > 0 ? ` and ${extraPicks} more` : ""}`,
+    ranked ? (best ? "best in pack" : `number ${verdict.rank} of ${verdict.ratedCount} in pack`) : null,
+    verdict.delta != null ? `${signedDelta(verdict.delta)} points versus format` : null,
+    verdict.timing === "late" ? "taken late" : null,
+    openable ? "View pack" : null,
+  ].filter(Boolean).join(", ");
+
+  const content = (
+    <>
+      <span className="draft-pick-tile-art">
+        {artURL ? <img src={artURL} alt="" loading="lazy" decoding="async" /> : null}
+        {ranked && !best ? <span className="draft-pick-tile-badge draft-pick-tile-badge--rank">#{verdict.rank}</span> : null}
+        {verdict.timing === "late" ? <span className="draft-pick-tile-badge draft-pick-tile-badge--late">Late</span> : null}
+      </span>
+      <span className="draft-pick-tile-name">
+        {name}
+        {extraPicks > 0 ? ` +${extraPicks}` : ""}
+      </span>
+      <span className="draft-pick-tile-stat">
+        {verdict.delta != null ? (
+          <strong className={`win-rate win-rate--${deltaTone(verdict, cardStats.mean)}`}>{signedDelta(verdict.delta)}</strong>
+        ) : (
+          <span />
+        )}
+        {verdict.gihWinRate != null ? <span>{pct(verdict.gihWinRate)}</span> : null}
+      </span>
+    </>
+  );
+  const className = `draft-pick-tile${best ? " is-best" : ""}`;
+  const style = { gridColumn: pick.displayPick + 1 } as CSSProperties;
+
+  // Like the rows, the tile is a plain container with a full-size button
+  // underneath its content, not content inside a <button>: WebKit (the macOS
+  // desktop web view) lays out button children in an anonymous inner box and
+  // dropped the absolutely positioned art and badges.
+  return (
+    <div
+      className={className}
+      style={style}
+      role={openable ? undefined : "group"}
+      aria-label={openable ? undefined : description}
+    >
+      {openable ? (
+        <button
+          type="button"
+          className="draft-pick-tile-open"
+          aria-haspopup="dialog"
+          aria-label={description}
+          title={stat ? statTooltip(stat, cardStats.mean) : undefined}
+          onClick={onOpen}
+        />
+      ) : null}
+      <span className="draft-pick-tile-body" aria-hidden="true">
+        {content}
+      </span>
+    </div>
+  );
+}
+
+function DraftPickTiles({
+  packs,
+  verdicts,
+  summaries,
+  previews,
+  cardStats,
+  onOpen,
+}: {
+  packs: DraftPickLogPack[];
+  verdicts: Map<DraftPickLogPick, DraftPickVerdict>;
+  summaries: Map<DraftPickLogPack, DraftPickVerdictSummary>;
+  previews: Map<number, CardPreview>;
+  cardStats: DraftCardStats;
+  onOpen: (pick: DraftPickLogPick) => void;
+}) {
+  const columns = Math.max(1, ...packs.flatMap((pack) => pack.picks.map((pick) => pick.displayPick)));
+  const style = { "--draft-pick-tile-columns": columns } as CSSProperties;
+
+  return (
+    <div className="draft-pick-tiles-scroll">
+      <div className="draft-pick-tiles" style={style}>
+        <div className="draft-pick-tiles-row draft-pick-tiles-head" aria-hidden="true">
+          {Array.from({ length: columns }, (_, index) => (
+            <span key={index} style={{ gridColumn: index + 2 }}>
+              Pick {index + 1}
+            </span>
+          ))}
+        </div>
+        {packs.map((pack) => {
+          const summary = summaries.get(pack);
+          return (
+            <section className="draft-pick-tiles-row" key={pack.packNumber} aria-label={`Pack ${pack.displayPack}`}>
+              <div className="draft-pick-tiles-pack">
+                <h4>Pack {pack.displayPack}</h4>
+                {summary?.averageDelta != null ? (
+                  <p>
+                    <strong
+                      className={`win-rate win-rate--${cardStats.mean != null ? gihTone(cardStats.mean + summary.averageDelta, cardStats.mean) : "neutral"}`}
+                    >
+                      {signedDelta(summary.averageDelta)}
+                    </strong>{" "}
+                    avg
+                  </p>
+                ) : null}
+                {summary && summary.rankedCount > 0 ? (
+                  <p>
+                    {summary.bestCount}/{summary.rankedCount} best
+                  </p>
+                ) : null}
+              </div>
+              {pack.picks.map((pick) => (
+                <DraftPickTile
+                  key={pick.pickNumber}
+                  pick={pick}
+                  displayPack={pack.displayPack}
+                  verdict={verdicts.get(pick)!}
+                  previews={previews}
+                  cardStats={cardStats}
+                  onOpen={() => onOpen(pick)}
+                />
+              ))}
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function DraftPickLog({ picks, cardStats }: { picks: DraftPick[]; cardStats: DraftCardStats }) {
   const headingID = useId();
@@ -93,22 +480,47 @@ export function DraftPickLog({ picks, cardStats }: { picks: DraftPick[]; cardSta
   const maxPackCards = Math.max(0, ...viewablePicks.map(({ pick }) => pick.packCards.length));
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const openPick = openIndex == null ? undefined : viewablePicks[openIndex];
+  const [view, setView] = useState<PickLogView>(readStoredView);
 
-  // One deduped batch for the whole log: Scryfall lookups are collection-batched
-  // and share React Query keys with the pool/journey panels on this page.
-  const previewCards = useMemo(() => {
-    const seen = new Map<number, DraftPickCard>();
+  const verdicts = useMemo(() => {
+    const ratingOf = (cardId: number) => cardStats.byId.get(cardId);
+    const out = new Map<DraftPickLogPick, DraftPickVerdict>();
     for (const pack of packs) {
       for (const pick of pack.picks) {
-        for (const card of pick.pickedCards) {
-          if (card.cardId > 0 && !seen.has(card.cardId)) {
-            seen.set(card.cardId, card);
-          }
-        }
+        out.set(pick, draftPickVerdict(pick, ratingOf, cardStats.mean));
+      }
+    }
+    return out;
+  }, [packs, cardStats.byId, cardStats.mean]);
+
+  const { packSummaries, overallSummary } = useMemo(() => {
+    const packSummaries = new Map<DraftPickLogPack, DraftPickVerdictSummary>();
+    for (const pack of packs) {
+      packSummaries.set(pack, summarizeDraftPickVerdicts(pack.picks.map((pick) => verdicts.get(pick)!)));
+    }
+    return { packSummaries, overallSummary: summarizeDraftPickVerdicts([...verdicts.values()]) };
+  }, [packs, verdicts]);
+  const hasRatings = cardStats.byId.size > 0;
+
+  // One deduped batch for the whole log: Scryfall lookups are collection-batched
+  // and share React Query keys with the pool/journey panels on this page. Passed
+  // cards join it only when the log has no name for them.
+  const previewCards = useMemo(() => {
+    const seen = new Map<number, DraftPickCard>();
+    const add = (card: DraftPickCard) => {
+      if (card.cardId > 0 && !seen.has(card.cardId)) {
+        seen.set(card.cardId, card);
+      }
+    };
+    for (const pack of packs) {
+      for (const pick of pack.picks) {
+        pick.pickedCards.forEach(add);
+        const passed = verdicts.get(pick)?.bestPassed?.card;
+        if (passed && !passed.cardName?.trim()) add(passed);
       }
     }
     return [...seen.values()].sort((left, right) => left.cardId - right.cardId);
-  }, [packs]);
+  }, [packs, verdicts]);
 
   const previewQueries = useQueries({
     queries: previewCards.map((card) => ({
@@ -132,50 +544,67 @@ export function DraftPickLog({ picks, cardStats }: { picks: DraftPick[]; cardSta
     return out;
   }, [previewCards, previewQueries]);
 
+  const openPack = (pick: DraftPickLogPick) => setOpenIndex(viewablePicks.findIndex((entry) => entry.pick === pick));
+  const chooseView = (next: PickLogView) => {
+    setView(next);
+    storeView(next);
+  };
+
   return (
     <section className="panel draft-pick-log" aria-labelledby={headingID}>
       <div className="panel-head">
         <div>
           <h3 id={headingID}>Pick Log</h3>
-          <p>Each recorded selection and the cards passed over</p>
+          <p>Each pick compared with the pack it came from</p>
         </div>
+        {packs.length > 0 ? (
+          <div className="tabs tabs--sm" role="group" aria-label="Pick log layout">
+            {(["rows", "tiles"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`tab ${view === option ? "is-active" : ""}`}
+                aria-pressed={view === option}
+                onClick={() => chooseView(option)}
+              >
+                {option === "rows" ? <RowsIcon /> : <TilesIcon />}
+                {option === "rows" ? "Rows" : "Tiles"}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {packs.length === 0 ? (
         <StatusMessage>No picks were recorded for this draft.</StatusMessage>
       ) : (
-        <div className="draft-pack-grid">
-          {packs.map((pack) => (
-            <article className="panel inner decklist-panel draft-pack-panel" key={pack.packNumber}>
-              <h4>Pack {pack.displayPack}</h4>
-              <div className="table-wrap draft-pack-table-wrap">
-                <table className="data-table compact draft-pack-table">
-                  <thead>
-                    <tr>
-                      <th>Pick</th>
-                      <th>Selection and choices</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pack.picks.map((pick) => (
-                      <tr key={`${pack.packNumber}-${pick.pickNumber}`}>
-                        <td>{pick.displayPick}</td>
-                        <td>
-                          <DraftCardList cards={pick.pickedCards} previews={previewByCardID} cardStats={cardStats} />
-                          <DraftPackChoices
-                            pick={pick}
-                            displayPack={pack.displayPack}
-                            onOpen={() => setOpenIndex(viewablePicks.findIndex((entry) => entry.pick === pick))}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </article>
-          ))}
-        </div>
+        <>
+          {hasRatings ? <DraftPickSummaryStrip summary={overallSummary} mean={cardStats.mean} /> : null}
+          {view === "rows" ? (
+            <div className="draft-pack-grid">
+              {packs.map((pack) => (
+                <DraftPackColumn
+                  key={pack.packNumber}
+                  pack={pack}
+                  verdicts={verdicts}
+                  summary={packSummaries.get(pack)!}
+                  previews={previewByCardID}
+                  cardStats={cardStats}
+                  onOpen={openPack}
+                />
+              ))}
+            </div>
+          ) : (
+            <DraftPickTiles
+              packs={packs}
+              verdicts={verdicts}
+              summaries={packSummaries}
+              previews={previewByCardID}
+              cardStats={cardStats}
+              onOpen={openPack}
+            />
+          )}
+        </>
       )}
       <CardStatsSource stats={cardStats} />
       {openPick && openIndex != null ? (

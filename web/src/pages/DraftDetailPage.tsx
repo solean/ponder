@@ -1,7 +1,6 @@
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
-import { DraftJourneyPanel, DraftPackReplayPanel } from "../components/DraftJourneyPanel";
 import { useBreadcrumbLabel } from "../components/Breadcrumbs";
 import { useDraftCardStats } from "../components/CardStats";
 import { DraftPickLog } from "../components/DraftPickLog";
@@ -57,8 +56,6 @@ export function DraftDetailPage() {
       <DraftSessionOverview session={session} picks={picks} />
       <DraftPoolPanel eventName={session.eventName} picks={picks} />
       <DraftPickLog picks={picks} cardStats={cardStats} />
-      <DraftJourneyPanel picks={picks} />
-      <DraftPackReplayPanel picks={picks} cardStats={cardStats} />
     </div>
   );
 }

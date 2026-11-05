@@ -32,6 +32,34 @@ export function eventEntryLabel(run: EventRunEconomy): string {
   return humanizeInventoryKey(type);
 }
 
+export type NetGemsSummary = {
+  /** "+300", "−650", "±0", or "—" when the net is unknown. */
+  value: string;
+  tone: "positive" | "negative" | "neutral" | "unknown";
+  /** What the net is made of, e.g. "1,500 gems entry · winnings not captured". */
+  detail: string;
+};
+
+/**
+ * Net gems for one event run. Without captured rewards the net is unknown,
+ * not the negative entry cost: showing −1,500 there would read as a loss.
+ */
+export function netGemsSummary(run: EventRunEconomy | null | undefined): NetGemsSummary {
+  if (!run) return { value: "—", tone: "unknown", detail: "No economy data" };
+  const entry = `${eventEntryLabel(run).replace(/^[−+]/, "")} entry`;
+  if (run.linkConfidence === "none") {
+    return { value: "—", tone: "unknown", detail: `${entry} · winnings not captured` };
+  }
+  const reward = eventRewardLabel(run);
+  const won = reward === "—" ? "no rewards" : `${reward.replace(/\+/g, "")} won`;
+  const net = run.netGems;
+  return {
+    value: net === 0 ? "±0" : formatEconomyDelta(net),
+    tone: net > 0 ? "positive" : net < 0 ? "negative" : "neutral",
+    detail: `${entry} · ${won}`,
+  };
+}
+
 export function eventRewardLabel(run: EventRunEconomy): string {
   const parts: string[] = [];
   if (run.rewardGold !== 0) parts.push(`${formatEconomyDelta(run.rewardGold)} gold`);

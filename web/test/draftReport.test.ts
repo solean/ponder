@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  countRareAndMythicPicks,
   draftAlternativeCards,
   draftPickLogPacks,
   draftReplayCoverage,
@@ -10,6 +9,10 @@ import {
   draftSessionStatus,
   draftSessionStatusLabel,
   draftSessionType,
+  draftPickVerdict,
+  summarizeDraftPickVerdicts,
+  type DraftPickLogPick,
+  type DraftPickRating,
 } from "../src/lib/draftReport";
 import type { DraftPick, DraftSession } from "../src/lib/types";
 
@@ -85,19 +88,6 @@ describe("draft session overview", () => {
   });
 });
 
-describe("draft pool rarity summary", () => {
-  test("counts picked copies at rare and mythic", () => {
-    expect(
-      countRareAndMythicPicks([
-        { poolCopies: 2, rarity: "rare" },
-        { poolCopies: 1, rarity: "mythic" },
-        { poolCopies: 8, rarity: "uncommon" },
-        { poolCopies: 1 },
-      ]),
-    ).toEqual({ rare: 2, mythic: 1 });
-  });
-});
-
 describe("draft pick log", () => {
   test("groups and sorts zero-based Arena picks for one-based display", () => {
     const packs = draftPickLogPacks([
@@ -145,5 +135,97 @@ describe("draft pick log", () => {
         makePick({ id: 3, pickNumber: 2 }),
       ]),
     ).toEqual({ covered: 1, total: 3 });
+  });
+});
+
+describe("draft pick verdicts", () => {
+  const ratings = new Map<number, DraftPickRating>([
+    [1, { gihWinRate: 0.575, ata: 2.4 }],
+    [2, { gihWinRate: 0.595, ata: 4.1 }],
+    [3, { gihWinRate: 0.557, ata: 4.0 }],
+    [4, { gihWinRate: null, ata: 9.0 }],
+  ]);
+  const ratingOf = (cardId: number) => ratings.get(cardId);
+
+  function logPick(overrides: Partial<DraftPickLogPick>): DraftPickLogPick {
+    return {
+      pickNumber: 0,
+      displayPick: 1,
+      pickedCards: [{ cardId: 1 }],
+      packCards: [{ cardId: 1 }, { cardId: 3 }, { cardId: 4 }],
+      ...overrides,
+    };
+  }
+
+  test("ranks the pick against the rated cards it passed", () => {
+    const best = draftPickVerdict(logPick({}), ratingOf, 0.56);
+    expect(best.rank).toBe(1);
+    expect(best.ratedCount).toBe(2);
+    expect(best.bestPassed).toBeNull();
+    expect(best.delta).toBeCloseTo(0.015, 6);
+
+    const passedBetter = draftPickVerdict(
+      logPick({ pickedCards: [{ cardId: 3 }], packCards: [{ cardId: 1 }, { cardId: 2 }, { cardId: 3 }, { cardId: 4 }] }),
+      ratingOf,
+      0.56,
+    );
+    expect(passedBetter.rank).toBe(3);
+    expect(passedBetter.ratedCount).toBe(3);
+    expect(passedBetter.bestPassed?.card.cardId).toBe(2);
+    expect(passedBetter.bestPassed?.gihWinRate).toBe(0.595);
+  });
+
+  test("counts a duplicate copy left in the pack as a passed card", () => {
+    const verdict = draftPickVerdict(
+      logPick({ pickedCards: [{ cardId: 3 }], packCards: [{ cardId: 3 }, { cardId: 3 }] }),
+      ratingOf,
+      null,
+    );
+    expect(verdict.rank).toBe(1);
+    expect(verdict.ratedCount).toBe(2);
+    expect(verdict.delta).toBeNull();
+  });
+
+  test("flags picks taken well after or before their ATA", () => {
+    expect(draftPickVerdict(logPick({ displayPick: 5 }), ratingOf, 0.56).timing).toBe("late");
+    expect(draftPickVerdict(logPick({ displayPick: 4 }), ratingOf, 0.56).timing).toBeNull();
+    expect(
+      draftPickVerdict(logPick({ displayPick: 1, pickedCards: [{ cardId: 4 }] }), ratingOf, 0.56).timing,
+    ).toBe("early");
+  });
+
+  test("leaves unrated or unrecorded picks unranked", () => {
+    const unrated = draftPickVerdict(logPick({ pickedCards: [{ cardId: 4 }] }), ratingOf, 0.56);
+    expect(unrated.rank).toBeNull();
+    expect(unrated.delta).toBeNull();
+
+    const noPack = draftPickVerdict(logPick({ packCards: [] }), ratingOf, 0.56);
+    expect(noPack.rank).toBeNull();
+    expect(noPack.gihWinRate).toBe(0.575);
+  });
+
+  test("judges a multi-card pick by its best rated card", () => {
+    const verdict = draftPickVerdict(
+      logPick({ pickedCards: [{ cardId: 4 }, { cardId: 3 }, { cardId: 1 }], packCards: [{ cardId: 1 }, { cardId: 3 }, { cardId: 4 }, { cardId: 2 }] }),
+      ratingOf,
+      0.56,
+    );
+    expect(verdict.cardId).toBe(1);
+    expect(verdict.rank).toBe(2);
+    expect(verdict.bestPassed?.card.cardId).toBe(2);
+  });
+
+  test("summarizes deltas, best picks and late picks", () => {
+    const verdicts = [
+      draftPickVerdict(logPick({}), ratingOf, 0.56),
+      draftPickVerdict(logPick({ displayPick: 7, pickedCards: [{ cardId: 3 }], packCards: [{ cardId: 1 }, { cardId: 3 }] }), ratingOf, 0.56),
+      draftPickVerdict(logPick({ pickedCards: [{ cardId: 4 }] }), ratingOf, 0.56),
+    ];
+    const summary = summarizeDraftPickVerdicts(verdicts);
+    expect(summary.averageDelta).toBeCloseTo((0.015 - 0.003) / 2, 6);
+    expect(summary.bestCount).toBe(1);
+    expect(summary.rankedCount).toBe(2);
+    expect(summary.lateCount).toBe(1);
+    expect(summarizeDraftPickVerdicts([]).averageDelta).toBeNull();
   });
 });

@@ -111,6 +111,127 @@ export function draftAlternativeCards(pick: DraftPickLogPick): DraftPickCard[] {
   });
 }
 
+/** 17Lands ratings a pick verdict needs; both are null when 17Lands has too few games. */
+export type DraftPickRating = {
+  gihWinRate: number | null;
+  ata: number | null;
+};
+
+/** Picks this far either side of a card's ATA count as taken late or early. */
+export const DRAFT_PICK_TIMING_THRESHOLD = 2.5;
+
+export type DraftPickVerdict = {
+  /** The rated picked card the verdict describes (the best one when a pick takes several). */
+  cardId: number | null;
+  gihWinRate: number | null;
+  /** GIH WR minus the format average, as a fraction. */
+  delta: number | null;
+  ata: number | null;
+  /** 1-based standing of the pick by GIH WR among the rated cards in its pack. */
+  rank: number | null;
+  /** Rated cards in the pack, the pick included; rank is out of this. */
+  ratedCount: number;
+  /** The highest-rated card passed, when it rates above the pick. */
+  bestPassed: { card: DraftPickCard; gihWinRate: number } | null;
+  timing: "late" | "early" | null;
+};
+
+/**
+ * How a pick compares with the pack it came from: its GIH WR against the
+ * format average and against every other rated card in the pack, and whether
+ * it was taken well after (late) or before (early) its 17Lands ATA.
+ */
+export function draftPickVerdict(
+  pick: DraftPickLogPick,
+  ratingOf: (cardId: number) => DraftPickRating | undefined,
+  formatMean: number | null,
+): DraftPickVerdict {
+  let picked: { card: DraftPickCard; rating: DraftPickRating | undefined } | null = null;
+  for (const card of pick.pickedCards) {
+    const rating = ratingOf(card.cardId);
+    const gih = rating?.gihWinRate ?? null;
+    const best = picked?.rating?.gihWinRate ?? null;
+    if (picked == null || (gih != null && (best == null || gih > best))) {
+      picked = { card, rating };
+    }
+  }
+
+  const gihWinRate = picked?.rating?.gihWinRate ?? null;
+  const ata = picked?.rating?.ata ?? null;
+  const verdict: DraftPickVerdict = {
+    cardId: picked?.card.cardId ?? null,
+    gihWinRate,
+    delta: gihWinRate != null && formatMean != null ? gihWinRate - formatMean : null,
+    ata,
+    rank: null,
+    ratedCount: 0,
+    bestPassed: null,
+    timing: null,
+  };
+
+  if (ata != null) {
+    const lateBy = pick.displayPick - ata;
+    if (lateBy >= DRAFT_PICK_TIMING_THRESHOLD) verdict.timing = "late";
+    else if (lateBy <= -DRAFT_PICK_TIMING_THRESHOLD) verdict.timing = "early";
+  }
+
+  if (gihWinRate == null || pick.packCards.length === 0) {
+    return verdict;
+  }
+
+  let rank = 1;
+  let ratedCount = 1;
+  for (const card of draftAlternativeCards(pick)) {
+    const gih = ratingOf(card.cardId)?.gihWinRate ?? null;
+    if (gih == null) continue;
+    ratedCount += 1;
+    if (gih > gihWinRate) {
+      rank += 1;
+      if (verdict.bestPassed == null || gih > verdict.bestPassed.gihWinRate) {
+        verdict.bestPassed = { card, gihWinRate: gih };
+      }
+    }
+  }
+  verdict.rank = rank;
+  verdict.ratedCount = ratedCount;
+  return verdict;
+}
+
+export type DraftPickVerdictSummary = {
+  /** Mean GIH WR delta over the rated picks, as a fraction. */
+  averageDelta: number | null;
+  /** Picks that rated highest in a pack with at least one other rated card. */
+  bestCount: number;
+  /** Picks that could be ranked against at least one other rated card. */
+  rankedCount: number;
+  lateCount: number;
+};
+
+export function summarizeDraftPickVerdicts(verdicts: DraftPickVerdict[]): DraftPickVerdictSummary {
+  let deltaTotal = 0;
+  let deltaCount = 0;
+  let bestCount = 0;
+  let rankedCount = 0;
+  let lateCount = 0;
+  for (const verdict of verdicts) {
+    if (verdict.delta != null) {
+      deltaTotal += verdict.delta;
+      deltaCount += 1;
+    }
+    if (verdict.rank != null && verdict.ratedCount > 1) {
+      rankedCount += 1;
+      if (verdict.rank === 1) bestCount += 1;
+    }
+    if (verdict.timing === "late") lateCount += 1;
+  }
+  return {
+    averageDelta: deltaCount > 0 ? deltaTotal / deltaCount : null,
+    bestCount,
+    rankedCount,
+    lateCount,
+  };
+}
+
 
 export function draftSessionStatus(session: DraftSession): DraftSessionStatus {
   if (validDateValue(session.completedAt) != null) {
@@ -177,21 +298,6 @@ export function draftReplayCoverage(picks: DraftPick[]): {
     covered: picks.filter((pick) => (pick.packCards?.length ?? 0) > 0).length,
     total: picks.length,
   };
-}
-
-export function countRareAndMythicPicks(
-  cards: ReadonlyArray<{ poolCopies: number; rarity?: CardRarity }>,
-): { rare: number; mythic: number } {
-  let rare = 0;
-  let mythic = 0;
-  for (const card of cards) {
-    if (card.rarity === "rare") {
-      rare += card.poolCopies;
-    } else if (card.rarity === "mythic") {
-      mythic += card.poolCopies;
-    }
-  }
-  return { rare, mythic };
 }
 
 const PACK_RARITY_RANK: Record<CardRarity, number> = { mythic: 0, rare: 1, uncommon: 2, common: 3 };

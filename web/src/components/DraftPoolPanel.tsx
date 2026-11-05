@@ -2,14 +2,18 @@ import { useMemo } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { ContextualLink } from "./Breadcrumbs";
+import { DeckCurve } from "./DeckCurve";
 import { ManaSymbol } from "./ManaSymbol";
 import { StatusMessage } from "./StatusMessage";
 import { api } from "../lib/api";
+import type { CurveCard } from "../lib/deckCurve";
 import { countRareAndMythicPicks } from "../lib/draftReport";
 import { fetchCardPreview, type CardPreview, type CardRarity } from "../lib/scryfall";
 import type { DeckSummary, DraftPick } from "../lib/types";
 
 type PoolCard = {
+  cardId: number;
+  name: string;
   poolCopies: number;
   mainCopies: number;
   manaValue: number | null;
@@ -40,44 +44,6 @@ function poolCounts(picks: DraftPick[]): Map<number, { copies: number; name?: st
     }
   }
   return out;
-}
-
-function curveBuckets(cards: PoolCard[], counts: (card: PoolCard) => number): number[] {
-  // Buckets 0..6 where 6 aggregates MV 6+; lands and unknown MV excluded.
-  const buckets = Array.from({ length: 7 }, () => 0);
-  for (const card of cards) {
-    const quantity = counts(card);
-    if (quantity <= 0 || card.manaValue == null) {
-      continue;
-    }
-    if (card.typeLine?.toLowerCase().includes("land")) {
-      continue;
-    }
-    const bucket = Math.min(6, Math.max(0, Math.round(card.manaValue)));
-    buckets[bucket] += quantity;
-  }
-  return buckets;
-}
-
-function CurveBars({ title, buckets }: { title: string; buckets: number[] }) {
-  const max = Math.max(1, ...buckets);
-  return (
-    <div className="draft-curve">
-      <p className="draft-curve-title">{title}</p>
-      <div className="draft-curve-bars" role="img" aria-label={`${title} mana curve`}>
-        {buckets.map((count, manaValue) => (
-          <div className="draft-curve-col" key={manaValue}>
-            <span className="draft-curve-count">{count > 0 ? count : ""}</span>
-            <span
-              className="draft-curve-bar"
-              style={{ height: `${Math.round((count / max) * 52) + 2}px` }}
-            />
-            <span className="draft-curve-label">{manaValue === 6 ? "6+" : manaValue}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks: DraftPick[] }) {
@@ -161,6 +127,8 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
       const preview = previewByCardID.get(cardId);
       const mainCopies = mainByCard.get(cardId) ?? 0;
       return {
+        cardId,
+        name: entry.name?.trim() || preview?.name?.trim() || `Card ${cardId}`,
         poolCopies: entry.copies,
         mainCopies,
         manaValue: typeof preview?.manaValue === "number" ? preview.manaValue : null,
@@ -226,6 +194,17 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
     return { creatures, spells, other };
   }, [poolCards]);
 
+  const curveCards = useMemo<CurveCard[]>(
+    () => poolCards.map((card) => ({
+      cardId: card.cardId,
+      name: card.name,
+      copies: card.mainCopies,
+      manaValue: card.manaValue,
+      typeLine: card.typeLine,
+      colors: card.colors,
+    })),
+    [poolCards],
+  );
   const isMetadataLoading = previewQueries.some((query) => query.isPending);
 
   if (picks.length === 0) {
@@ -319,9 +298,7 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
             </div>
           </dl>
 
-          <div className="draft-curve-row">
-            <CurveBars title="Main deck curve" buckets={curveBuckets(poolCards, (card) => card.mainCopies)} />
-          </div>
+          <DeckCurve title="Main deck curve" cards={curveCards} />
           {isMetadataLoading ? <StatusMessage>Loading card metadata…</StatusMessage> : null}
           <p className="analytics-method-note">
             Compared against the deck's current list; later edits update this summary too.

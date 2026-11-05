@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { eventEntryLabel, eventRewardLabel } from "../src/lib/economy";
+import { eventEntryLabel, eventRewardLabel, netGemsSummary } from "../src/lib/economy";
 import type { EventRunEconomy } from "../src/lib/types";
 
 function makeRun(overrides: Partial<EventRunEconomy> = {}): EventRunEconomy {
@@ -62,5 +62,33 @@ describe("event economy labels", () => {
     });
     expect(eventEntryLabel(run)).toBe("Draft Token");
     expect(eventRewardLabel(run)).toBe("not captured");
+  });
+});
+
+describe("net gems summary", () => {
+  test("signs and explains a captured net", () => {
+    expect(netGemsSummary(makeRun())).toEqual({
+      value: "+300",
+      tone: "positive",
+      detail: "1,500 gems entry · 1,800 gems · 5 packs won",
+    });
+    expect(netGemsSummary(makeRun({ rewardGems: 850, netGems: -650, rewardBoosters: [] }))).toMatchObject({
+      value: "−650",
+      tone: "negative",
+    });
+    expect(netGemsSummary(makeRun({ rewardGems: 1500, netGems: 0, rewardBoosters: [] })).value).toBe("±0");
+  });
+
+  test("leaves the net unknown when winnings were not captured", () => {
+    expect(
+      netGemsSummary(makeRun({ linkConfidence: "none", rewardGems: 0, rewardBoosters: [], netGems: -1500 })),
+    ).toEqual({ value: "—", tone: "unknown", detail: "1,500 gems entry · winnings not captured" });
+  });
+
+  test("handles runs without economy data or rewards", () => {
+    expect(netGemsSummary(null)).toEqual({ value: "—", tone: "unknown", detail: "No economy data" });
+    expect(
+      netGemsSummary(makeRun({ rewardGems: 0, rewardBoosters: [], netGems: -1500 })).detail,
+    ).toBe("1,500 gems entry · no rewards");
   });
 });

@@ -21,6 +21,16 @@ export function formatDateTime(ts: string): string {
   return d.toLocaleString();
 }
 
+const mediumDateTimeFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+
+/** "Nov 4, 2026, 8:11 PM" in the viewer's locale. */
+export function formatMediumDateTime(ts: string): string {
+  if (!ts) return "-";
+  const d = parseTimestamp(ts);
+  if (!d) return ts;
+  return mediumDateTimeFormatter.format(d);
+}
+
 export function formatCompactDateTime(ts: string): string {
   if (!ts) return "-";
   const d = parseTimestamp(ts);

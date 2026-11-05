@@ -320,7 +320,6 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
           </dl>
 
           <div className="draft-curve-row">
-            <CurveBars title="Pool curve" buckets={curveBuckets(poolCards, (card) => card.poolCopies)} />
             <CurveBars title="Main deck curve" buckets={curveBuckets(poolCards, (card) => card.mainCopies)} />
           </div>
           {isMetadataLoading ? <StatusMessage>Loading card metadata…</StatusMessage> : null}

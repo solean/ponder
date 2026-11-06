@@ -53,9 +53,3 @@ export function sortSetCodesByRelease(setCodes: string[], lookup: SetLookup): st
   });
 }
 
-/** Set picker option text: "Name (CODE)", bare "CODE", or "Unknown set" for "". */
-export function setOptionLabel(code: string, lookup: SetLookup): string {
-  if (!code) return "Unknown set";
-  const name = lookup(code)?.name;
-  return name ? `${name} (${code.toUpperCase()})` : code.toUpperCase();
-}

@@ -11764,6 +11764,13 @@ select option {
   max-height: 36rem;
 }
 
+.deck-analytics-card-more {
+  display: flex;
+  justify-content: center;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--line);
+}
+
 .deck-analytics-card-table th button {
   border: 0;
   padding: 0;

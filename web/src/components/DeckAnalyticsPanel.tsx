@@ -30,6 +30,11 @@ import type {
 
 /** Below this many known-result games a rate is flagged as a small sample. */
 const MIN_SAMPLE_GAMES = 5;
+/**
+ * Card rows rendered before "Show all". Draft scopes span hundreds of cards and
+ * mounting every row blocks the tab switch; the sorted head is what gets read.
+ */
+const CARD_ROW_LIMIT = 50;
 /** A rate must clear the baseline by this margin before it is colored. */
 const BASELINE_MARGIN = 0.05;
 
@@ -663,6 +668,7 @@ export function PerformanceAnalyticsPanel({
   const [sortAscending, setSortAscending] = useState(false);
   const [drillDown, setDrillDown] = useState<DrillDown | null>(null);
   const [cardQuery, setCardQuery] = useState("");
+  const [showAllCards, setShowAllCards] = useState(false);
   const baseline = data ? winRate(data.gameRecord) : null;
 
   const sortedCards = useMemo(() => {
@@ -688,6 +694,9 @@ export function PerformanceAnalyticsPanel({
     }
     return sortedCards.filter((card) => (card.cardName ?? "").toLocaleLowerCase().includes(needle));
   }, [sortedCards, cardQuery]);
+
+  const renderedCards = showAllCards ? visibleCards : visibleCards.slice(0, CARD_ROW_LIMIT);
+  const hiddenCardCount = visibleCards.length - renderedCards.length;
 
   const toggleSort = (key: CardSortKey) => {
     if (key === sortKey) {
@@ -954,7 +963,7 @@ export function PerformanceAnalyticsPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleCards.map((card) => (
+                  {renderedCards.map((card) => (
                     <tr key={card.cardId}>
                       <td className="deck-analytics-card-name">
                         <CardPreviewName cardId={card.cardId} cardName={card.cardName} />
@@ -1047,6 +1056,13 @@ export function PerformanceAnalyticsPanel({
                   ))}
                 </tbody>
               </table>
+              {hiddenCardCount > 0 ? (
+                <div className="deck-analytics-card-more">
+                  <button type="button" className="text-link" onClick={() => setShowAllCards(true)}>
+                    Show all {visibleCards.length} cards
+                  </button>
+                </div>
+              ) : null}
             </div>
           )}
 

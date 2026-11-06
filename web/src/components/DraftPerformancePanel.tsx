@@ -41,12 +41,10 @@ export function DraftPerformancePanel({
   drafts,
   setLookup,
   filter,
-  onFilterChange,
 }: {
   drafts: DraftSession[];
   setLookup: SetLookup;
   filter: DraftPerformanceFilter;
-  onFilterChange: (filter: DraftPerformanceFilter) => void;
 }) {
   const headingId = useId();
   const { mode, scheme } = useTheme();
@@ -197,30 +195,6 @@ export function DraftPerformancePanel({
         <div>
           <h3 id={headingId}>Event Win Rate</h3>
           <p>Match win rate pooled over your last 10, last 50, and all finished draft events.</p>
-        </div>
-        <div className="rank-controls" role="group" aria-label="Win rate filters">
-          <label className="rank-season-select">
-            <span>Set</span>
-            <select value={setCode ?? ""} onChange={(event) => onFilterChange({ ...filter, setCode: event.target.value || null })}>
-              <option value="">All sets</option>
-              {options.sets.map((code) => (
-                <option key={code} value={code}>
-                  {setLookup(code)?.name ?? code}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="rank-season-select">
-            <span>Format</span>
-            <select value={format ?? ""} onChange={(event) => onFilterChange({ ...filter, format: event.target.value || null })}>
-              <option value="">All formats</option>
-              {options.formats.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
       </div>
 

@@ -1,73 +1,29 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { PerformanceAnalyticsPanel } from "./DeckAnalyticsPanel";
-import { StatusMessage } from "./StatusMessage";
 import { api } from "../lib/api";
-import { sortSetCodesByRelease, useSetCodes } from "../lib/useEventSets";
 
-export function DraftAnalyticsPanel() {
-  const [set, setSet] = useState<string | undefined>(undefined);
-  // Keep the unfiltered catalog available when a filtered request fails or is empty.
-  const allQuery = useQuery({
-    queryKey: ["draft-analytics", null],
-    queryFn: () => api.draftAnalytics(),
-  });
+/** Draft performance analytics for one set, or every set when `set` is null. */
+export function DraftAnalyticsPanel({ set }: { set: string | null }) {
   const query = useQuery({
-    queryKey: ["draft-analytics", set ?? null],
-    queryFn: () => api.draftAnalytics(set),
+    queryKey: ["draft-analytics", set],
+    queryFn: () => api.draftAnalytics(set ?? undefined),
   });
-  const setCodes = query.data?.sets ?? allQuery.data?.sets ?? [];
-  const { lookup } = useSetCodes(setCodes);
-  const sets = sortSetCodesByRelease(setCodes, lookup);
-
-  const setPicker = (
-    <>
-      <label className="rank-season-select">
-        <span>Draft set</span>
-        <select
-          value={set === undefined ? "all" : `set:${set}`}
-          onChange={(event) => {
-            const value = event.target.value;
-            setSet(value === "all" ? undefined : value.slice(4));
-          }}
-        >
-          <option value="all">All sets</option>
-          {sets.map((code) => (
-            <option key={code} value={`set:${code}`}>
-              {lookup(code)?.name ?? code.toUpperCase()}
-            </option>
-          ))}
-        </select>
-      </label>
-      {query.error || allQuery.error ? (
-        <button
-          type="button"
-          className="text-link"
-          onClick={() => {
-            void query.refetch();
-            if (set !== undefined) void allQuery.refetch();
-          }}
-        >
-          Retry analytics
-        </button>
-      ) : null}
-    </>
-  );
 
   return (
-    <div className="stack-lg">
-      {allQuery.error && set !== undefined ? (
-        <StatusMessage tone="error">Could not load the complete draft set list.</StatusMessage>
-      ) : null}
-      <PerformanceAnalyticsPanel
-        key={set === undefined ? "all" : `set:${set}`}
-        scope={{ kind: "drafts", set }}
-        data={query.data?.analytics}
-        isLoading={query.isLoading}
-        error={query.error}
-        headerControls={setPicker}
-      />
-    </div>
+    <PerformanceAnalyticsPanel
+      key={set ?? "all"}
+      scope={{ kind: "drafts", set: set ?? undefined }}
+      data={query.data?.analytics}
+      isLoading={query.isLoading}
+      error={query.error}
+      headerControls={
+        query.error ? (
+          <button type="button" className="text-link" onClick={() => void query.refetch()}>
+            Retry analytics
+          </button>
+        ) : null
+      }
+    />
   );
 }

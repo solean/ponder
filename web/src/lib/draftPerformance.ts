@@ -16,6 +16,18 @@ export type DraftPerformanceFilter = {
   format: string | null;
 };
 
+export const NO_DRAFT_FILTER: DraftPerformanceFilter = { setCode: null, format: null };
+
+/** Whether a session's event matches the set and format filters. */
+export function matchesDraftFilter(draft: DraftSession, filter: DraftPerformanceFilter): boolean {
+  if (filter.setCode == null && filter.format == null) return true;
+  const parsed = parseEventName(draft.eventName);
+  return (
+    (filter.setCode == null || parsed.setCode === filter.setCode) &&
+    (filter.format == null || parsed.category === filter.format)
+  );
+}
+
 export type DraftPerformancePoint = {
   sessionId: number;
   eventName: string;

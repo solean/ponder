@@ -11,7 +11,12 @@ import { SetSymbol } from "../components/SetSymbol";
 import { SectionTabs, sectionPanelID, sectionTabID } from "../components/SectionTabs";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
-import { draftSessionDateValue } from "../lib/draftPerformance";
+import {
+  NO_DRAFT_FILTER,
+  draftSessionDateValue,
+  matchesDraftFilter,
+  type DraftPerformanceFilter,
+} from "../lib/draftPerformance";
 import { draftSessionType } from "../lib/draftReport";
 import { parseEventName } from "../lib/events";
 import { pct, winRateTone } from "../lib/format";
@@ -141,6 +146,7 @@ export function DraftsPage() {
 }
 
 function DraftsOverview() {
+  const [filter, setFilter] = useState<DraftPerformanceFilter>(NO_DRAFT_FILTER);
   const draftsQuery = useQuery({
     queryKey: ["drafts"],
     queryFn: api.drafts,
@@ -167,14 +173,21 @@ function DraftsOverview() {
     return b.id - a.id;
   });
 
+  const filteredDrafts = drafts.filter((draft) => matchesDraftFilter(draft, filter));
+  const isFiltered = filter.setCode != null || filter.format != null;
+
   return (
     <div className="stack-lg">
-      <DraftPerformancePanel drafts={drafts} setLookup={setLookup} />
+      <DraftPerformancePanel drafts={drafts} setLookup={setLookup} filter={filter} onFilterChange={setFilter} />
 
       <section className="panel">
         <div className="panel-head">
           <h3>Draft Sessions</h3>
-          <p>{drafts.length} sessions</p>
+          <p>
+            {isFiltered
+              ? `${filteredDrafts.length} of ${drafts.length} sessions`
+              : `${drafts.length} sessions`}
+          </p>
         </div>
         <div className="table-wrap draft-sessions-scroll">
           <table className="data-table draft-sessions-table">
@@ -191,11 +204,12 @@ function DraftsOverview() {
               </tr>
             </thead>
             <tbody>
-              {drafts.map((draft) => (
+              {filteredDrafts.map((draft) => (
                 <DraftSessionRow key={draft.id} draft={draft} setLookup={setLookup} />
               ))}
             </tbody>
           </table>
+          {filteredDrafts.length === 0 ? <p className="state">No draft sessions match these filters.</p> : null}
         </div>
       </section>
     </div>

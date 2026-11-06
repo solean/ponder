@@ -84,7 +84,7 @@ func TestDraftAnalyticsScopesPoolFactsWithoutDeckOrSessionRequirements(t *testin
 		{"missing", stringPointer("XYZ"), 0, 0, 0, 0, 0, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			scope, err := store.LoadDraftAnalyticsScope(ctx, tc.set)
+			scope, err := store.LoadDraftAnalyticsScope(ctx, tc.set, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -162,6 +162,44 @@ func TestDraftAnalyticsScopesPoolFactsWithoutDeckOrSessionRequirements(t *testin
 			}
 		})
 	}
+
+	// Format narrows the matches but never the set list. The fixture's TMT
+	// set holds a two-game Quick Draft match and a one-game Premier Draft one.
+	for _, tc := range []struct {
+		name, format string
+		set          *string
+		games        int64
+	}{
+		{"quick all sets", "Quick Draft", nil, 3},
+		{"quick TMT", "Quick Draft", stringPointer("TMT"), 2},
+		{"premier TMT", "Premier Draft", stringPointer("TMT"), 1},
+		{"other draft", "Other Draft", nil, 1},
+		{"traditional", "Traditional Draft", nil, 0},
+	} {
+		t.Run("format "+tc.name, func(t *testing.T) {
+			scope, err := store.LoadDraftAnalyticsScope(ctx, tc.set, tc.format)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(scope.Sets, []string{"", "FIN", "TMT"}) {
+				t.Fatalf("sets = %v", scope.Sets)
+			}
+			out, err := store.GetDraftAnalytics(ctx, scope)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out.GameRecord.Games != tc.games {
+				t.Fatalf("games = %d, want %d", out.GameRecord.Games, tc.games)
+			}
+			refs, err := store.ListDraftAnalyticsGames(ctx, scope, DeckAnalyticsGamesQuery{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if int64(len(refs)) != tc.games {
+				t.Fatalf("drilldown games = %d, want %d", len(refs), tc.games)
+			}
+		})
+	}
 }
 
 func stringPointer(value string) *string { return &value }
@@ -175,7 +213,7 @@ func TestDraftAnalyticsEmptyDatabase(t *testing.T) {
 	}
 	store := NewStore(database)
 	for _, set := range []*string{nil, stringPointer(""), stringPointer("TMT")} {
-		scope, err := store.LoadDraftAnalyticsScope(ctx, set)
+		scope, err := store.LoadDraftAnalyticsScope(ctx, set, "")
 		if err != nil {
 			t.Fatal(err)
 		}

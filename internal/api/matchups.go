@@ -559,13 +559,14 @@ func (s *Server) resolveOwnDeckColors(ctx context.Context, matchRows []db.Matchu
 }
 
 // handleLimitedMatchups serves opponent color-pair records pooled per set
-// across every limited (draft/sealed) match.
+// across every limited (draft/sealed) match, optionally narrowed to one format
+// (a model.EventCategory name such as "Premier Draft").
 func (s *Server) handleLimitedMatchups(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	out, err := s.buildLimitedMatchups(r.Context())
+	out, err := s.buildLimitedMatchups(r.Context(), r.URL.Query().Get("format"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -589,25 +590,41 @@ func (s *Server) handleLimitedMatchupRefs(w http.ResponseWriter, r *http.Request
 	}
 	// Rebuilding through the same builder is what guarantees these rows group
 	// identically to the summary the client is drilling into.
-	out, err := s.buildLimitedMatchups(r.Context())
+	query := r.URL.Query()
+	out, err := s.buildLimitedMatchups(r.Context(), query.Get("format"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	query := r.URL.Query()
 	writeJSON(w, http.StatusOK, limitedMatchupRefs(out, query.Get("set"),
 		query.Get("group"), query.Has("group"), query.Get("colors")))
 }
 
-func (s *Server) buildLimitedMatchups(ctx context.Context) (model.LimitedMatchupsResponse, error) {
+// buildLimitedMatchups pools every limited match; a non-empty format keeps
+// only matches whose event is in that format.
+func (s *Server) buildLimitedMatchups(ctx context.Context, format string) (model.LimitedMatchupsResponse, error) {
 	inputs, err := s.loadMatchupInputs(ctx, 0)
 	if err != nil {
 		return model.LimitedMatchupsResponse{}, err
 	}
+	inputs.matchRows = matchRowsInFormat(inputs.matchRows, format)
 	ownColorsByMatch := s.resolveOwnDeckColors(ctx, inputs.matchRows)
 	return buildLimitedMatchupsResponse(inputs.matchRows, inputs.observedByMatch,
 		inputs.facts, inputs.names, inputs.gameSummaries, inputs.overrides,
 		ownColorsByMatch), nil
+}
+
+func matchRowsInFormat(rows []db.MatchupMatchRow, format string) []db.MatchupMatchRow {
+	if format == "" {
+		return rows
+	}
+	out := make([]db.MatchupMatchRow, 0, len(rows))
+	for _, row := range rows {
+		if model.EventCategory(row.EventName) == format {
+			out = append(out, row)
+		}
+	}
+	return out
 }
 
 // limitedMatchupRefs selects one cell's refs. Every key can legitimately be

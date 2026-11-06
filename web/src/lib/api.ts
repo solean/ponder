@@ -121,24 +121,32 @@ export const api = {
     getJSON<MatchupMatchRef[]>(
       `/api/decks/${deckId}/matchups/refs?colors=${encodeURIComponent(colorsKey)}&archetype=${encodeURIComponent(archetype)}`,
     ),
-  limitedMatchups: () => getJSON<LimitedMatchupsResponse>("/api/limited/matchups"),
-  limitedMatchupRefs: (setCode: string, colorsKey: string, group: string | null) => {
+  /** `format` is an event category such as "Premier Draft"; null means every format. */
+  limitedMatchups: (format: string | null = null) => {
+    const search = new URLSearchParams();
+    if (format) search.set("format", format);
+    return getJSON<LimitedMatchupsResponse>(`/api/limited/matchups?${search.toString()}`);
+  },
+  limitedMatchupRefs: (setCode: string, colorsKey: string, group: string | null, format: string | null = null) => {
     const search = new URLSearchParams({ set: setCode, colors: colorsKey });
     // Absent group = the set-level rows; an empty group is the unknown-own-colors bucket.
     if (group != null) search.set("group", group);
+    if (format) search.set("format", format);
     return getJSON<MatchupMatchRef[]>(`/api/limited/matchups/refs?${search.toString()}`);
   },
   setOpponentArchetype: (matchId: number, archetype: string) =>
     postJSON<{ status: string; archetype: string }>(`/api/matches/${matchId}/opponent-archetype`, { archetype }),
   drafts: () => getJSON<DraftSession[]>("/api/drafts"),
-  draftAnalytics: (set?: string) => {
+  draftAnalytics: (set?: string, format?: string) => {
     const search = new URLSearchParams();
     if (set !== undefined) search.set("set", set);
+    if (format) search.set("format", format);
     return getJSON<DraftAnalyticsResponse>(`/api/drafts/analytics?${search.toString()}`);
   },
-  draftAnalyticsGames: (set: string | undefined, params: DraftAnalyticsGamesParams) => {
+  draftAnalyticsGames: (set: string | undefined, format: string | undefined, params: DraftAnalyticsGamesParams) => {
     const search = analyticsGamesSearch(params);
     if (set !== undefined) search.set("set", set);
+    if (format) search.set("format", format);
     return getJSON<DeckAnalyticsGameRef[]>(`/api/drafts/analytics/games?${search.toString()}`);
   },
   draftPicks: (draftId: number) => getJSON<DraftPick[]>(`/api/drafts/${draftId}/picks`),

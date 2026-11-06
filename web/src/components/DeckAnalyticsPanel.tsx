@@ -40,7 +40,7 @@ type DrillDown = {
 
 type AnalyticsScope =
   | { kind: "deck"; deckId: number; versionId: number }
-  | { kind: "drafts"; set?: string };
+  | { kind: "drafts"; set?: string; format?: string };
 
 type CardSortKey =
   | "name"
@@ -535,7 +535,7 @@ function DrillDownSection({
             ...drillDown.params,
             version: scope.versionId || undefined,
           })
-        : api.draftAnalyticsGames(scope.set, drillDown.params),
+        : api.draftAnalyticsGames(scope.set, scope.format, drillDown.params),
   });
   const rows = query.data ?? [];
   const { lookup: setLookup } = useEventSets(rows.map((row) => row.eventName));

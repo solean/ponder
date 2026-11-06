@@ -1,10 +1,11 @@
 import ReactECharts from "echarts-for-react";
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo } from "react";
 
 import { CHART_THEME_TOKENS } from "../lib/chartTheme";
 import {
   buildDraftPerformance,
   draftPerformanceOptions,
+  type DraftPerformanceFilter,
   type DraftPerformancePoint,
 } from "../lib/draftPerformance";
 import { eventDisplayName, parseEventName } from "../lib/events";
@@ -39,15 +40,18 @@ type SeriesSpec = {
 export function DraftPerformancePanel({
   drafts,
   setLookup,
+  filter,
+  onFilterChange,
 }: {
   drafts: DraftSession[];
   setLookup: SetLookup;
+  filter: DraftPerformanceFilter;
+  onFilterChange: (filter: DraftPerformanceFilter) => void;
 }) {
   const headingId = useId();
   const { mode, scheme } = useTheme();
   const chartTheme = CHART_THEME_TOKENS[`${scheme}-${mode}`];
-  const [setCode, setSetCode] = useState<string | null>(null);
-  const [format, setFormat] = useState<string | null>(null);
+  const { setCode, format } = filter;
 
   const options = useMemo(() => draftPerformanceOptions(drafts), [drafts]);
   const performance = useMemo(
@@ -197,7 +201,7 @@ export function DraftPerformancePanel({
         <div className="rank-controls" role="group" aria-label="Win rate filters">
           <label className="rank-season-select">
             <span>Set</span>
-            <select value={setCode ?? ""} onChange={(event) => setSetCode(event.target.value || null)}>
+            <select value={setCode ?? ""} onChange={(event) => onFilterChange({ ...filter, setCode: event.target.value || null })}>
               <option value="">All sets</option>
               {options.sets.map((code) => (
                 <option key={code} value={code}>
@@ -208,7 +212,7 @@ export function DraftPerformancePanel({
           </label>
           <label className="rank-season-select">
             <span>Format</span>
-            <select value={format ?? ""} onChange={(event) => setFormat(event.target.value || null)}>
+            <select value={format ?? ""} onChange={(event) => onFilterChange({ ...filter, format: event.target.value || null })}>
               <option value="">All formats</option>
               {options.formats.map((value) => (
                 <option key={value} value={value}>

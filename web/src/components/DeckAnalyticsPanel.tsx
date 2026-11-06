@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { ContextualLink } from "./Breadcrumbs";
@@ -647,6 +647,7 @@ export function PerformanceAnalyticsPanel({
   error,
   versions = [],
   onVersionChange,
+  headerControls,
 }: {
   scope: AnalyticsScope;
   data?: DeckAnalytics;
@@ -654,6 +655,8 @@ export function PerformanceAnalyticsPanel({
   error: Error | null;
   versions?: DeckVersion[];
   onVersionChange?: (versionId: number) => void;
+  /** Filters shown at the right of the panel heading, such as a set picker. */
+  headerControls?: ReactNode;
 }) {
   const versionId = scope.kind === "deck" ? scope.versionId : 0;
   const [sortKey, setSortKey] = useState<CardSortKey>("seen");
@@ -703,23 +706,18 @@ export function PerformanceAnalyticsPanel({
     });
   };
 
-  if (isLoading) {
+  if (isLoading || error) {
     return (
       <section className="panel deck-analytics-panel">
-        <div className="panel-head">
+        <div className="panel-head deck-analytics-head">
           <h3>Performance Analytics</h3>
+          {headerControls ? <div className="deck-analytics-controls">{headerControls}</div> : null}
         </div>
-        <StatusMessage>Deriving performance analytics…</StatusMessage>
-      </section>
-    );
-  }
-  if (error) {
-    return (
-      <section className="panel deck-analytics-panel">
-        <div className="panel-head">
-          <h3>Performance Analytics</h3>
-        </div>
-        <StatusMessage tone="error">{error.message}</StatusMessage>
+        {error ? (
+          <StatusMessage tone="error">{error.message}</StatusMessage>
+        ) : (
+          <StatusMessage>Deriving performance analytics…</StatusMessage>
+        )}
       </section>
     );
   }
@@ -748,6 +746,7 @@ export function PerformanceAnalyticsPanel({
           </p>
         </div>
         <div className="deck-analytics-controls">
+          {headerControls}
           {scope.kind === "deck" && (versions.length > 1 || coveragePresentation.versionNote) ? (
             <div className="deck-analytics-version-control">
               {versions.length > 1 ? (

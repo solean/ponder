@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { ContextualLink } from "./Breadcrumbs";
@@ -10,6 +10,7 @@ import { api } from "../lib/api";
 import {
   buildDeckAnalyticsCoveragePresentation,
   coverageSampleLabel,
+  type DeckAnalyticsCoveragePresentation,
 } from "../lib/deckAnalyticsCoverage";
 import { formatDateTime, pct } from "../lib/format";
 import { useEventSets } from "../lib/useEventSets";
@@ -176,6 +177,67 @@ function RecordTile({
       title={`Show the games behind ${label.toLowerCase()}`}
     >
       {inner}
+    </div>
+  );
+}
+
+/**
+ * Small info button for partial coverage: hovering or focusing it shows which
+ * metrics rest on fewer games, and clicking pins it open for touch screens.
+ */
+function CoverageInfo({ presentation }: { presentation: DeckAnalyticsCoveragePresentation }) {
+  const popoverId = useId();
+  const [hovered, setHovered] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const open = hovered || pinned;
+
+  return (
+    <div
+      className="deck-analytics-coverage-info"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setHovered(false);
+          setPinned(false);
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && open) {
+          setHovered(false);
+          setPinned(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        className="deck-analytics-coverage-info-button"
+        aria-label={`${presentation.statusLabel}: ${presentation.issueSummary}`}
+        aria-expanded={open}
+        aria-controls={popoverId}
+        onClick={() => setPinned((value) => !value)}
+        onFocus={() => setHovered(true)}
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.6" />
+          <path d="M8 7.2v4" />
+          <circle cx="8" cy="4.9" r="0.55" className="is-dot" />
+        </svg>
+      </button>
+      <div id={popoverId} className="deck-analytics-coverage-popover" role="region" aria-label="Metric coverage" hidden={!open}>
+        <strong>{presentation.statusLabel}</strong>
+        <ul>
+          {presentation.issues.map((issue) => (
+            <li key={issue.key}>
+              <div>
+                <strong>{issue.label}</strong>
+                <span>{issue.available} of {issue.total} games</span>
+              </div>
+              <p>{issue.impact}</p>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -737,32 +799,10 @@ export function PerformanceAnalyticsPanel({
               {coveragePresentation.statusLabel}
             </span>
           ) : null}
+          {coveragePresentation.state === "partial" ? <CoverageInfo presentation={coveragePresentation} /> : null}
         </div>
       </div>
 
-      {coveragePresentation.state === "partial" ? (
-        <details className="deck-analytics-coverage-notice">
-          <summary>
-            <span className="deck-analytics-coverage-icon" aria-hidden="true">!</span>
-            <span className="deck-analytics-coverage-copy">
-              <strong>{coveragePresentation.statusLabel}</strong>
-              <span>{coveragePresentation.issueSummary}</span>
-            </span>
-            <span className="deck-analytics-coverage-toggle" aria-hidden="true">Details</span>
-          </summary>
-          <ul>
-            {coveragePresentation.issues.map((issue) => (
-              <li key={issue.key}>
-                <div>
-                  <strong>{issue.label}</strong>
-                  <span>{issue.available} of {issue.total} games</span>
-                </div>
-                <p>{issue.impact}</p>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
 
       {coverage.gameCount === 0 ? (
         <StatusMessage>

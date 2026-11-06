@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { PerformanceAnalyticsPanel } from "./DeckAnalyticsPanel";
 import { StatusMessage } from "./StatusMessage";
 import { api } from "../lib/api";
-import { setOptionLabel, sortSetCodesByRelease, useSetCodes } from "../lib/useEventSets";
+import { sortSetCodesByRelease, useSetCodes } from "../lib/useEventSets";
 
 export function DraftAnalyticsPanel() {
   const [set, setSet] = useState<string | undefined>(undefined);
@@ -25,7 +25,7 @@ export function DraftAnalyticsPanel() {
     <div className="stack-lg">
       <section className="panel">
         <div className="panel-head deck-analytics-head">
-          <label className="deck-analytics-version-select">
+          <label className="rank-season-select">
             <span>Draft set</span>
             <select
               value={set === undefined ? "all" : `set:${set}`}
@@ -37,7 +37,7 @@ export function DraftAnalyticsPanel() {
               <option value="all">All sets</option>
               {sets.map((code) => (
                 <option key={code} value={`set:${code}`}>
-                  {setOptionLabel(code, lookup)}
+                  {lookup(code)?.name ?? code.toUpperCase()}
                 </option>
               ))}
             </select>

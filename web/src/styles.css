@@ -1416,6 +1416,25 @@ body.has-wide-deck-curve .app-shell {
   box-shadow: 0 0 10px var(--accent-glow);
 }
 
+/* Tab row with page-wide filters at its right end. The bar carries the
+   baseline so the active tab's underline still sits on it. */
+.section-tabs-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.section-tabs-bar > .section-tabs {
+  border-bottom: 0;
+}
+
+.section-tabs-actions {
+  padding-bottom: 0.45rem;
+}
+
 /* Panel-scoped switcher: segmented shell demoted to control weight so it
    never competes with the section tabs above it. */
 .tabs--sm {
@@ -9088,6 +9107,16 @@ select option {
 
   .section-tabs::-webkit-scrollbar {
     display: none;
+  }
+
+  .section-tabs-bar > .section-tabs {
+    max-width: 100%;
+  }
+
+  .section-tabs-actions {
+    order: -1;
+    width: 100%;
+    padding-bottom: 0;
   }
 
   .section-tab {

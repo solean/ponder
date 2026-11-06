@@ -384,24 +384,23 @@ export function DeckMatchupsPanel({ deckId }: { deckId: number }) {
 /**
  * Opponent color-pair records pooled across every draft/sealed run of a set.
  * In limited the color pair effectively is the archetype, and pooling a whole
- * set's matches is what makes the sample meaningful. Without a setCode it
- * shows a set picker (Drafts page) defaulting to the newest release, with an
- * All option listing every set newest first; with one it scopes to that set
- * (draft and draft-deck detail pages).
+ * set's matches is what makes the sample meaningful. With a setCode it scopes
+ * to that set (draft and draft-deck detail pages, or the Drafts page filter);
+ * without one it lists every set, newest release first.
  */
 export function LimitedMatchupsPanel({
   setCode,
   title = "Set Matchups",
   description = "Your record against opponent color pairs, pooled across every draft of a set — single draft decks are too short-lived for per-deck matchup data to mean much.",
+  emptyMessage,
 }: {
   setCode?: string | null;
   title?: string;
   description?: string;
+  /** Shown in place of the panel when the scope has no matchups; hidden otherwise. */
+  emptyMessage?: string;
 }) {
   const [selection, setSelection] = useState<{ setCode: string; colorsKey: string } | null>(null);
-  // Set picker option value: "all" or `set:${code}` ("" is the unknown-set group).
-  // null follows the newest set until the user picks one.
-  const [pickedSet, setPickedSet] = useState<string | null>(null);
   // Per-set filter by the player's own deck colors; missing key = all decks.
   const [ownColorsFilter, setOwnColorsFilter] = useState<Record<string, string>>({});
   const query = useQuery({
@@ -410,17 +409,11 @@ export function LimitedMatchupsPanel({
   });
   const allSets = query.data?.sets ?? [];
   const { lookup: setLookup } = useSetCodes(allSets.map((set) => set.setCode));
-  const showSetPicker = setCode == null;
-  const setChoices = showSetPicker ? sortSetCodesByRelease(allSets.map((set) => set.setCode), setLookup) : [];
-  const setPickerValue =
-    pickedSet === "all" || (pickedSet != null && setChoices.includes(pickedSet.slice(4)))
-      ? pickedSet
-      : `set:${setChoices[0]}`;
-  const sets = showSetPicker
-    ? allSets
-        .filter((set) => setPickerValue === "all" || `set:${set.setCode}` === setPickerValue)
-        .sort((a, b) => setChoices.indexOf(a.setCode) - setChoices.indexOf(b.setCode))
-    : allSets.filter((set) => set.setCode === setCode);
+  const releaseOrder = sortSetCodesByRelease(allSets.map((set) => set.setCode), setLookup);
+  const sets =
+    setCode == null
+      ? [...allSets].sort((a, b) => releaseOrder.indexOf(a.setCode) - releaseOrder.indexOf(b.setCode))
+      : allSets.filter((set) => set.setCode === setCode);
 
   const setOwnColorsSelection = (forSet: string, groupKey: string | null) => {
     setOwnColorsFilter((current) => {
@@ -450,31 +443,26 @@ export function LimitedMatchupsPanel({
     );
   }
   if (sets.length === 0) {
-    return null;
+    if (!emptyMessage) {
+      return null;
+    }
+    return (
+      <section className="panel">
+        <div className="panel-head">
+          <h3>{title}</h3>
+        </div>
+        <StatusMessage>{emptyMessage}</StatusMessage>
+      </section>
+    );
   }
 
   return (
     <section className="panel">
-      <div className={showSetPicker ? "panel-head rank-toolbar" : "panel-head"}>
+      <div className="panel-head">
         <div>
           <h3>{title}</h3>
           <p>{description}</p>
         </div>
-        {showSetPicker ? (
-          <div className="rank-controls" role="group" aria-label="Matchup filters">
-            <label className="rank-season-select">
-              <span>Set</span>
-              <select value={setPickerValue} onChange={(event) => setPickedSet(event.target.value)}>
-                <option value="all">All sets</option>
-                {setChoices.map((code) => (
-                  <option key={code || "unknown"} value={`set:${code}`}>
-                    {setLookup(code)?.name ?? (code ? code.toUpperCase() : "Unknown set")}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        ) : null}
       </div>
 
       <div className="stack-lg">

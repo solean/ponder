@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 
 export type SectionTabItem<T extends string> = {
   readonly id: T;
@@ -24,12 +24,15 @@ export function SectionTabs<T extends string>({
   baseId,
   label,
   onSelect,
+  actions,
 }: {
   sections: readonly SectionTabItem<T>[];
   activeSection: T;
   baseId: string;
   label: string;
   onSelect: (sectionId: T) => void;
+  /** Page-wide controls (filters) shown at the right end of the tab row. */
+  actions?: ReactNode;
 }) {
   function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, sectionId: T) {
     const currentIndex = sections.findIndex((candidate) => candidate.id === sectionId);
@@ -61,7 +64,7 @@ export function SectionTabs<T extends string>({
     document.getElementById(sectionTabID(baseId, next.id))?.focus();
   }
 
-  return (
+  const tabs = (
     <div className="section-tabs" role="tablist" aria-label={label}>
       {sections.map((section) => (
         <button
@@ -79,6 +82,14 @@ export function SectionTabs<T extends string>({
           {section.label}
         </button>
       ))}
+    </div>
+  );
+
+  if (!actions) return tabs;
+  return (
+    <div className="section-tabs-bar">
+      {tabs}
+      <div className="section-tabs-actions">{actions}</div>
     </div>
   );
 }

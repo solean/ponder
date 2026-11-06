@@ -1,6 +1,6 @@
-import { useId, useState } from "react";
-import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useId } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
 import { ContextualLink } from "../components/Breadcrumbs";
 import { DraftAnalyticsPanel } from "../components/DraftAnalyticsPanel";
@@ -12,7 +12,7 @@ import { SectionTabs, sectionPanelID, sectionTabID } from "../components/Section
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import {
-  NO_DRAFT_FILTER,
+  draftPerformanceOptions,
   draftSessionDateValue,
   matchesDraftFilter,
   type DraftPerformanceFilter,
@@ -21,7 +21,7 @@ import { draftSessionType } from "../lib/draftReport";
 import { parseEventName } from "../lib/events";
 import { pct, winRateTone } from "../lib/format";
 import type { DraftSession } from "../lib/types";
-import { useEventSets, type SetLookup } from "../lib/useEventSets";
+import { sortSetCodesByRelease, useEventSets, type SetLookup } from "../lib/useEventSets";
 import { useRowLink } from "../lib/useRowLink";
 
 function parseDateValue(timestamp?: string | null): number | null {
@@ -115,48 +115,15 @@ const DRAFT_SECTIONS = [
   { id: "matchups", label: "Matchups" },
 ] as const;
 
-export function DraftsPage() {
-  const [activeSection, setActiveSection] = useState<(typeof DRAFT_SECTIONS)[number]["id"]>("overview");
-  const sectionTabBaseId = useId();
+type DraftSectionId = (typeof DRAFT_SECTIONS)[number]["id"];
 
-  return (
-    <div className="stack-lg">
-      <SectionTabs
-        sections={DRAFT_SECTIONS}
-        activeSection={activeSection}
-        baseId={sectionTabBaseId}
-        label="Draft sections"
-        onSelect={setActiveSection}
-      />
-      <div
-        role="tabpanel"
-        id={sectionPanelID(sectionTabBaseId, activeSection)}
-        aria-labelledby={sectionTabID(sectionTabBaseId, activeSection)}
-      >
-        {activeSection === "overview" ? (
-          <DraftsOverview />
-        ) : activeSection === "performance" ? (
-          <DraftAnalyticsPanel />
-        ) : (
-          <LimitedMatchupsPanel />
-        )}
-      </div>
-    </div>
-  );
+function isDraftSection(value: string | null): value is DraftSectionId {
+  return DRAFT_SECTIONS.some((section) => section.id === value);
 }
 
-function DraftsOverview() {
-  const [filter, setFilter] = useState<DraftPerformanceFilter>(NO_DRAFT_FILTER);
-  const draftsQuery = useQuery({
-    queryKey: ["drafts"],
-    queryFn: api.drafts,
-  });
-  const { lookup: setLookup } = useEventSets((draftsQuery.data ?? []).map((draft) => draft.eventName));
-
-  if (draftsQuery.isLoading) return <StatusMessage>Loading drafts…</StatusMessage>;
-  if (draftsQuery.error) return <StatusMessage tone="error">{(draftsQuery.error as Error).message}</StatusMessage>;
-
-  const drafts = [...(draftsQuery.data ?? [])].sort((a, b) => {
+/** Newest first, so a stable sort keeps same-day sessions in id order. */
+function sortDraftsNewestFirst(drafts: DraftSession[]): DraftSession[] {
+  return [...drafts].sort((a, b) => {
     const aDate = draftSessionDateValue(a);
     const bDate = draftSessionDateValue(b);
 
@@ -172,13 +139,154 @@ function DraftsOverview() {
 
     return b.id - a.id;
   });
+}
+
+/**
+ * Page-wide set and format filters. Set options come from every draft session
+ * (newest release first); the selected values live in the URL so they survive
+ * tab switches, reloads, and returning from a draft or match page.
+ */
+function DraftFilterControls({
+  drafts,
+  lookup,
+  filter,
+  showFormat,
+  onChange,
+}: {
+  drafts: DraftSession[];
+  lookup: SetLookup;
+  filter: DraftPerformanceFilter;
+  showFormat: boolean;
+  onChange: (filter: DraftPerformanceFilter) => void;
+}) {
+  const sessionSets = drafts.flatMap((draft) => parseEventName(draft.eventName).setCode ?? []);
+  if (filter.setCode) sessionSets.push(filter.setCode);
+  const sets = sortSetCodesByRelease([...new Set(sessionSets)], lookup);
+  const formats = draftPerformanceOptions(drafts).formats;
+  if (filter.format && !formats.includes(filter.format)) formats.push(filter.format);
+
+  return (
+    <div className="rank-controls" role="group" aria-label="Draft filters">
+      <label className="rank-season-select">
+        <span>Set</span>
+        <select value={filter.setCode ?? ""} onChange={(event) => onChange({ ...filter, setCode: event.target.value || null })}>
+          <option value="">All sets</option>
+          {sets.map((code) => (
+            <option key={code} value={code}>
+              {lookup(code)?.name ?? code}
+            </option>
+          ))}
+        </select>
+      </label>
+      {showFormat ? (
+        <label className="rank-season-select">
+          <span>Format</span>
+          <select value={filter.format ?? ""} onChange={(event) => onChange({ ...filter, format: event.target.value || null })}>
+            <option value="">All formats</option>
+            {formats.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+    </div>
+  );
+}
+
+export function DraftsPage() {
+  const sectionTabBaseId = useId();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedSection = searchParams.get("tab");
+  const activeSection: DraftSectionId = isDraftSection(requestedSection) ? requestedSection : "overview";
+  const filter: DraftPerformanceFilter = {
+    setCode: searchParams.get("set")?.toUpperCase() || null,
+    format: searchParams.get("format") || null,
+  };
+  const draftsQuery = useQuery({
+    queryKey: ["drafts"],
+    queryFn: api.drafts,
+  });
+  const drafts = draftsQuery.data ?? [];
+  const { lookup: setLookup } = useEventSets(drafts.map((draft) => draft.eventName));
+
+  const updateParams = (changes: Record<string, string | null>) => {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        for (const [key, value] of Object.entries(changes)) {
+          if (value == null) next.delete(key);
+          else next.set(key, value);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
+  const setLabel = setLookup(filter.setCode)?.name ?? filter.setCode;
+
+  return (
+    <div className="stack-lg">
+      <SectionTabs
+        sections={DRAFT_SECTIONS}
+        activeSection={activeSection}
+        baseId={sectionTabBaseId}
+        label="Draft sections"
+        onSelect={(section) => updateParams({ tab: section === "overview" ? null : section })}
+        actions={
+          <DraftFilterControls
+            drafts={drafts}
+            lookup={setLookup}
+            filter={filter}
+            // Format only scopes the Overview until the analytics and matchup
+            // endpoints accept it.
+            showFormat={activeSection === "overview"}
+            onChange={(next) => updateParams({ set: next.setCode, format: next.format })}
+          />
+        }
+      />
+      <div
+        role="tabpanel"
+        id={sectionPanelID(sectionTabBaseId, activeSection)}
+        aria-labelledby={sectionTabID(sectionTabBaseId, activeSection)}
+      >
+        {activeSection === "overview" ? (
+          <DraftsOverview query={draftsQuery} setLookup={setLookup} filter={filter} />
+        ) : activeSection === "performance" ? (
+          <DraftAnalyticsPanel set={filter.setCode} />
+        ) : (
+          <LimitedMatchupsPanel
+            setCode={filter.setCode}
+            emptyMessage={`No matchups recorded for ${setLabel} yet.`}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DraftsOverview({
+  query: draftsQuery,
+  setLookup,
+  filter,
+}: {
+  query: UseQueryResult<DraftSession[]>;
+  setLookup: SetLookup;
+  filter: DraftPerformanceFilter;
+}) {
+  if (draftsQuery.isLoading) return <StatusMessage>Loading drafts…</StatusMessage>;
+  if (draftsQuery.error) return <StatusMessage tone="error">{(draftsQuery.error as Error).message}</StatusMessage>;
+
+  const drafts = sortDraftsNewestFirst(draftsQuery.data ?? []);
 
   const filteredDrafts = drafts.filter((draft) => matchesDraftFilter(draft, filter));
   const isFiltered = filter.setCode != null || filter.format != null;
 
   return (
     <div className="stack-lg">
-      <DraftPerformancePanel drafts={drafts} setLookup={setLookup} filter={filter} onFilterChange={setFilter} />
+      <DraftPerformancePanel drafts={drafts} setLookup={setLookup} filter={filter} />
 
       <section className="panel">
         <div className="panel-head">

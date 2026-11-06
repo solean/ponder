@@ -150,13 +150,11 @@ function DraftFilterControls({
   drafts,
   lookup,
   filter,
-  showFormat,
   onChange,
 }: {
   drafts: DraftSession[];
   lookup: SetLookup;
   filter: DraftPerformanceFilter;
-  showFormat: boolean;
   onChange: (filter: DraftPerformanceFilter) => void;
 }) {
   const sessionSets = drafts.flatMap((draft) => parseEventName(draft.eventName).setCode ?? []);
@@ -178,19 +176,17 @@ function DraftFilterControls({
           ))}
         </select>
       </label>
-      {showFormat ? (
-        <label className="rank-season-select">
-          <span>Format</span>
-          <select value={filter.format ?? ""} onChange={(event) => onChange({ ...filter, format: event.target.value || null })}>
-            <option value="">All formats</option>
-            {formats.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
+      <label className="rank-season-select">
+        <span>Format</span>
+        <select value={filter.format ?? ""} onChange={(event) => onChange({ ...filter, format: event.target.value || null })}>
+          <option value="">All formats</option>
+          {formats.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 }
@@ -225,7 +221,8 @@ export function DraftsPage() {
     );
   };
 
-  const setLabel = setLookup(filter.setCode)?.name ?? filter.setCode;
+  const setName = filter.setCode ? (setLookup(filter.setCode)?.name ?? filter.setCode) : null;
+  const matchupsEmptyMessage = `No ${filter.format ? `${filter.format} ` : ""}matchups recorded${setName ? ` for ${setName}` : ""} yet.`;
 
   return (
     <div className="stack-lg">
@@ -240,9 +237,6 @@ export function DraftsPage() {
             drafts={drafts}
             lookup={setLookup}
             filter={filter}
-            // Format only scopes the Overview until the analytics and matchup
-            // endpoints accept it.
-            showFormat={activeSection === "overview"}
             onChange={(next) => updateParams({ set: next.setCode, format: next.format })}
           />
         }
@@ -255,11 +249,12 @@ export function DraftsPage() {
         {activeSection === "overview" ? (
           <DraftsOverview query={draftsQuery} setLookup={setLookup} filter={filter} />
         ) : activeSection === "performance" ? (
-          <DraftAnalyticsPanel set={filter.setCode} />
+          <DraftAnalyticsPanel set={filter.setCode} format={filter.format} />
         ) : (
           <LimitedMatchupsPanel
             setCode={filter.setCode}
-            emptyMessage={`No matchups recorded for ${setLabel} yet.`}
+            format={filter.format}
+            emptyMessage={matchupsEmptyMessage}
           />
         )}
       </div>

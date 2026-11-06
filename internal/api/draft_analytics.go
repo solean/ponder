@@ -20,7 +20,7 @@ func (s *Server) handleDraftAnalytics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	scope, err := s.store.LoadDraftAnalyticsScope(ctx, draftAnalyticsSet(r))
+	scope, err := s.store.LoadDraftAnalyticsScope(ctx, draftAnalyticsSet(r), r.URL.Query().Get("format"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -42,7 +42,7 @@ func (s *Server) handleDraftAnalyticsGames(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	scope, err := s.store.LoadDraftAnalyticsScope(r.Context(), draftAnalyticsSet(r))
+	scope, err := s.store.LoadDraftAnalyticsScope(r.Context(), draftAnalyticsSet(r), r.URL.Query().Get("format"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

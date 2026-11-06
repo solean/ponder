@@ -317,6 +317,32 @@ func TestClearMatchRefsKeepsMatchCount(t *testing.T) {
 	}
 }
 
+func TestMatchRowsInFormat(t *testing.T) {
+	t.Parallel()
+
+	rows := []db.MatchupMatchRow{
+		{MatchID: 1, EventName: "PremierDraft_HOB_20260811"},
+		{MatchID: 2, EventName: "QuickDraft_HOB_20260820"},
+		{MatchID: 3, EventName: "FIN_Quick_Draft"},
+		{MatchID: 4, EventName: "Sealed_TMT_20260313"},
+	}
+	for format, want := range map[string][]int64{
+		"":              {1, 2, 3, 4},
+		"Quick Draft":   {2, 3},
+		"Premier Draft": {1},
+		"Sealed":        {4},
+		"Bot Draft":     {},
+	} {
+		got := []int64{}
+		for _, row := range matchRowsInFormat(rows, format) {
+			got = append(got, row.MatchID)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("matchRowsInFormat(%q) = %v, want %v", format, got, want)
+		}
+	}
+}
+
 func TestLimitedMatchupRefsSelection(t *testing.T) {
 	t.Parallel()
 

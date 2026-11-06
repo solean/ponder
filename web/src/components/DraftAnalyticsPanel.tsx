@@ -3,17 +3,20 @@ import { useQuery } from "@tanstack/react-query";
 import { PerformanceAnalyticsPanel } from "./DeckAnalyticsPanel";
 import { api } from "../lib/api";
 
-/** Draft performance analytics for one set, or every set when `set` is null. */
-export function DraftAnalyticsPanel({ set }: { set: string | null }) {
+/**
+ * Draft performance analytics for one set and format; a null set or format
+ * means every set or format.
+ */
+export function DraftAnalyticsPanel({ set, format }: { set: string | null; format: string | null }) {
   const query = useQuery({
-    queryKey: ["draft-analytics", set],
-    queryFn: () => api.draftAnalytics(set ?? undefined),
+    queryKey: ["draft-analytics", set, format],
+    queryFn: () => api.draftAnalytics(set ?? undefined, format ?? undefined),
   });
 
   return (
     <PerformanceAnalyticsPanel
-      key={set ?? "all"}
-      scope={{ kind: "drafts", set: set ?? undefined }}
+      key={`${set ?? "all"}:${format ?? "all"}`}
+      scope={{ kind: "drafts", set: set ?? undefined, format: format ?? undefined }}
       data={query.data?.analytics}
       isLoading={query.isLoading}
       error={query.error}

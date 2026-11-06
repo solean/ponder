@@ -18,8 +18,9 @@ type DraftAnalyticsScope struct {
 }
 
 // LoadDraftAnalyticsScope discovers all available draft sets independently of
-// the optional selection. A nil selection means all; an empty string is unknown.
-func (s *Store) LoadDraftAnalyticsScope(ctx context.Context, set *string) (DraftAnalyticsScope, error) {
+// the optional selection. A nil set means all; an empty string is unknown. An
+// empty format means every format; otherwise it is a model.EventCategory name.
+func (s *Store) LoadDraftAnalyticsScope(ctx context.Context, set *string, format string) (DraftAnalyticsScope, error) {
 	out := DraftAnalyticsScope{Sets: []string{}, clause: "0=1"}
 	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT COALESCE(event_name, '') FROM matches`)
 	if err != nil {
@@ -37,7 +38,7 @@ func (s *Store) LoadDraftAnalyticsScope(ctx context.Context, set *string) (Draft
 		}
 		code := model.LimitedSetCode(event)
 		sets[code] = true
-		if set == nil || *set == code {
+		if (set == nil || *set == code) && (format == "" || model.EventCategory(event) == format) {
 			out.args = append(out.args, event)
 		}
 	}

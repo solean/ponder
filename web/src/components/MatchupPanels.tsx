@@ -112,14 +112,14 @@ function ObservedCardChips({
 
 type MatchupRefsQuery =
   | { kind: "deck"; deckId: number; colorsKey: string; archetype: string }
-  | { kind: "limited"; setCode: string; colorsKey: string; group: string | null };
+  | { kind: "limited"; setCode: string; colorsKey: string; group: string | null; format: string | null };
 
 const MATCHUP_REFS_KEY = "matchup-refs";
 
 function matchupRefsQueryKey(refs: MatchupRefsQuery) {
   return refs.kind === "deck"
     ? [MATCHUP_REFS_KEY, "deck", refs.deckId, refs.colorsKey, refs.archetype]
-    : [MATCHUP_REFS_KEY, "limited", refs.setCode, refs.colorsKey, refs.group];
+    : [MATCHUP_REFS_KEY, "limited", refs.setCode, refs.colorsKey, refs.group, refs.format];
 }
 
 function MatchupRowDetail({
@@ -141,7 +141,7 @@ function MatchupRowDetail({
     queryFn: () =>
       refs.kind === "deck"
         ? api.deckMatchupRefs(refs.deckId, refs.colorsKey, refs.archetype)
-        : api.limitedMatchupRefs(refs.setCode, refs.colorsKey, refs.group),
+        : api.limitedMatchupRefs(refs.setCode, refs.colorsKey, refs.group, refs.format),
   });
   const matchRefs = refsQuery.data ?? [];
   const { lookup: setLookup } = useEventSets(matchRefs.map((ref) => ref.eventName));
@@ -386,15 +386,18 @@ export function DeckMatchupsPanel({ deckId }: { deckId: number }) {
  * In limited the color pair effectively is the archetype, and pooling a whole
  * set's matches is what makes the sample meaningful. With a setCode it scopes
  * to that set (draft and draft-deck detail pages, or the Drafts page filter);
- * without one it lists every set, newest release first.
+ * without one it lists every set, newest release first. A format (event
+ * category such as "Premier Draft") narrows every set to that format's matches.
  */
 export function LimitedMatchupsPanel({
   setCode,
+  format = null,
   title = "Set Matchups",
   description = "Your record against opponent color pairs, pooled across every draft of a set — single draft decks are too short-lived for per-deck matchup data to mean much.",
   emptyMessage,
 }: {
   setCode?: string | null;
+  format?: string | null;
   title?: string;
   description?: string;
   /** Shown in place of the panel when the scope has no matchups; hidden otherwise. */
@@ -404,8 +407,8 @@ export function LimitedMatchupsPanel({
   // Per-set filter by the player's own deck colors; missing key = all decks.
   const [ownColorsFilter, setOwnColorsFilter] = useState<Record<string, string>>({});
   const query = useQuery({
-    queryKey: ["limited-matchups"],
-    queryFn: api.limitedMatchups,
+    queryKey: ["limited-matchups", format],
+    queryFn: () => api.limitedMatchups(format),
   });
   const allSets = query.data?.sets ?? [];
   const { lookup: setLookup } = useSetCodes(allSets.map((set) => set.setCode));
@@ -583,6 +586,7 @@ export function LimitedMatchupsPanel({
                       setCode: set.setCode,
                       colorsKey: selectedRow.colorsKey,
                       group: activeGroupKey ?? null,
+                      format,
                     }}
                     row={selectedRow}
                   />

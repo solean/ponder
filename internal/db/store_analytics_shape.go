@@ -118,58 +118,45 @@ func classifySelfPlay(play selfCardPlay, landByCard map[int64]bool) (isLand, isS
 	return true, false
 }
 
-// copyCleanZones are the zones where a card sits as its own physical self and
-// leaves when it moves: the battlefield and the hand. Instance IDs churn every
-// time a card changes zones, and the transit/discard zones (graveyard, exile,
-// limbo, stack) accumulate a recast card's stale instances, so only these
-// zones give an honest copy count.
+// copyCleanZones are the zones where a card sits as its own physical self:
+// the battlefield and the hand. A game whose frames carry no id links can only
+// trust instances that coexisted there.
 var copyCleanZones = map[string]struct{}{
 	"battlefield": {},
 	"hand":        {},
 }
 
 // deriveOpponentCardCopies estimates how many copies of each opponent card
-// exist: the most non-token instances of that card the opponent had in the
-// clean zones (battlefield plus hand) at once in any single frame. This is a
-// true lower bound on copies and is not inflated by a single card churning
-// through instance ids as it dies and is recast. Any opponent card seen at all
-// floors to one so a spell only ever glimpsed in the graveyard still reports a
-// copy rather than falling back to the inflated distinct-instance count.
+// exist: per game, the number of distinct physical cards (instance ids chained
+// through ObjectIdChanged annotations), maximised over games. A game too
+// sparsely recorded to carry any links falls back to the most instances seen
+// at once in battlefield plus hand, floored at one.
 func deriveOpponentCardCopies(frames []model.MatchReplayFrameRow) map[int64]int64 {
-	maxByCard := make(map[int64]int64)
-	seen := make(map[int64]bool)
+	counter := newOpponentCopyCounter()
 	for _, frame := range frames {
-		perCard := make(map[int64]map[int64]struct{})
+		game := replayFrameGameNumber(frame)
+		counter.linkAnnotations(game, frame.AnnotationsJSON)
+		clean := make(map[int64]map[int64]struct{})
 		for _, object := range frame.Objects {
-			if object.PlayerSide != "opponent" || object.IsToken || object.IsCopy {
+			if !countableOpponentCard(object) {
 				continue
 			}
-			if object.CardID <= 0 || object.InstanceID <= 0 {
+			counter.observe(game, object.CardID, object.InstanceID)
+			if _, ok := copyCleanZones[replayNormalizedZoneType(object.ZoneType)]; !ok {
 				continue
 			}
-			seen[object.CardID] = true
-			if _, clean := copyCleanZones[strings.ToLower(strings.TrimSpace(object.ZoneType))]; !clean {
-				continue
+			ids := clean[object.CardID]
+			if ids == nil {
+				ids = make(map[int64]struct{})
+				clean[object.CardID] = ids
 			}
-			instances := perCard[object.CardID]
-			if instances == nil {
-				instances = make(map[int64]struct{})
-				perCard[object.CardID] = instances
-			}
-			instances[object.InstanceID] = struct{}{}
+			ids[object.InstanceID] = struct{}{}
 		}
-		for cardID, instances := range perCard {
-			if count := int64(len(instances)); count > maxByCard[cardID] {
-				maxByCard[cardID] = count
-			}
+		for cardID, ids := range clean {
+			counter.observeClean(game, cardID, int64(len(ids)))
 		}
 	}
-	for cardID := range seen {
-		if maxByCard[cardID] < 1 {
-			maxByCard[cardID] = 1
-		}
-	}
-	return maxByCard
+	return counter.counts()
 }
 
 // deriveGameTurnStats reduces one game's replay frames and self card plays to

@@ -41,6 +41,11 @@ func int64Ptr(v int64) *int64 {
 
 func insertReplayTestFrame(t *testing.T, store *Store, tx *sql.Tx, arenaMatchID string, gameNumber, gameStateID, turnNumber int64, lifeTotalsJSON string, objects []model.MatchReplayFrameObjectRow) {
 	t.Helper()
+	insertAnnotatedReplayTestFrame(t, store, tx, arenaMatchID, gameNumber, gameStateID, turnNumber, lifeTotalsJSON, `{"annotations":[]}`, objects)
+}
+
+func insertAnnotatedReplayTestFrame(t *testing.T, store *Store, tx *sql.Tx, arenaMatchID string, gameNumber, gameStateID, turnNumber int64, lifeTotalsJSON, annotationsJSON string, objects []model.MatchReplayFrameObjectRow) {
+	t.Helper()
 	ctx := context.Background()
 	if _, err := store.ReplaceMatchReplayFrame(
 		ctx, tx, arenaMatchID,
@@ -48,7 +53,7 @@ func insertReplayTestFrame(t *testing.T, store *Store, tx *sql.Tx, arenaMatchID 
 		"full", "playing", "main1", "", "", "2026-03-12T19:07:00Z", "gre",
 		[]byte(lifeTotalsJSON),
 		[]byte(`[{"actionType":"play"}]`),
-		[]byte(`{"annotations":[]}`),
+		[]byte(annotationsJSON),
 		objects,
 	); err != nil {
 		t.Fatalf("ReplaceMatchReplayFrame(game=%d state=%d): %v", gameNumber, gameStateID, err)

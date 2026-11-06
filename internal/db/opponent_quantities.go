@@ -1,7 +1,11 @@
 package db
 
-// Shared by match detail and batched colour/matchup queries so every consumer
-// uses replay estimates instead of counting a recast card's stale instance IDs.
+// Shared by match detail and batched colour/matchup queries. It yields, per
+// match and card, the replay-derived copy count (derived) and the
+// distinct-instance-per-game count (fallback), which overcounts a card whose
+// instance id churned as it moved between zones and is only used when no
+// replay evidence exists. Live replay frames are counted in Go
+// (liveOpponentCardCopies) and merged by mergeOpponentCardQuantity.
 // The sole format parameter is the requested-match placeholder list.
 const opponentCardQuantitiesCTE = `
 	WITH requested AS (
@@ -14,40 +18,34 @@ const opponentCardQuantitiesCTE = `
 	), fallback AS (
 		SELECT match_id, card_id, MAX(quantity) AS quantity
 		FROM per_game GROUP BY match_id, card_id
-	), live_per_frame AS (
-		SELECT rf.match_id, o.card_id,
-			COUNT(DISTINCT CASE
-				WHEN LOWER(TRIM(COALESCE(o.zone_type, ''))) IN ('battlefield', 'hand') THEN o.instance_id
-			END) AS copies
-		FROM match_replay_frames rf
-		JOIN requested r ON r.id = rf.match_id
-		JOIN matches m ON m.id = rf.match_id
-		JOIN match_replay_frame_objects o ON o.frame_id = rf.id
-		WHERE m.player_seat_id > 0 AND o.card_id > 0 AND o.instance_id > 0
-			AND o.is_token = 0 AND o.is_copy = 0
-			AND COALESCE(o.controller_seat_id, o.owner_seat_id) > 0
-			AND COALESCE(o.controller_seat_id, o.owner_seat_id) <> m.player_seat_id
-		GROUP BY rf.match_id, rf.id, o.card_id
-	), live AS (
-		SELECT match_id, card_id, MAX(1, MAX(copies)) AS quantity
-		FROM live_per_frame GROUP BY match_id, card_id
 	), derived AS (
 		SELECT c.match_id, c.card_id, c.max_copies AS quantity
 		FROM match_opponent_card_counts c JOIN requested r ON r.id = c.match_id
 	), cards AS (
 		SELECT match_id, card_id FROM fallback
-		UNION SELECT match_id, card_id FROM live
 		UNION SELECT match_id, card_id FROM derived
-	), opponent_quantities AS (
-		SELECT c.match_id, c.card_id,
-			CASE
-				WHEN l.quantity IS NULL THEN COALESCE(d.quantity, f.quantity)
-				WHEN d.quantity IS NULL THEN l.quantity
-				ELSE MAX(l.quantity, d.quantity)
-			END AS quantity
+	), opponent_quantity_sources AS (
+		SELECT c.match_id, c.card_id, d.quantity AS derived, f.quantity AS fallback
 		FROM cards c
 		LEFT JOIN fallback f ON f.match_id = c.match_id AND f.card_id = c.card_id
-		LEFT JOIN live l ON l.match_id = c.match_id AND l.card_id = c.card_id
 		LEFT JOIN derived d ON d.match_id = c.match_id AND d.card_id = c.card_id
 	)
 `
+
+// mergeOpponentCardQuantity picks one card's copy count. Live frame lineages
+// win, but never drop below analytics derived earlier from the same match;
+// otherwise derived counts beat the inflated distinct-instance fallback.
+func mergeOpponentCardQuantity(live, derived, fallback *int64) int64 {
+	switch {
+	case live != nil && derived != nil:
+		return max(*live, *derived)
+	case live != nil:
+		return *live
+	case derived != nil:
+		return *derived
+	case fallback != nil:
+		return *fallback
+	default:
+		return 0
+	}
+}

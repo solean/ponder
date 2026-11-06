@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/solean/ponder/internal/model"
@@ -98,6 +99,8 @@ func TestDeriveGameTurnStatsClassifiesLandsSpellsAndHands(t *testing.T) {
 	}
 }
 
+// Frames without any ObjectIdChanged links (a sparsely recorded game) cannot
+// tell churned ids from copies, so only coexisting clean-zone instances count.
 func TestDeriveOpponentCardCopiesUsesSimultaneousMaximum(t *testing.T) {
 	t.Parallel()
 
@@ -155,6 +158,51 @@ func TestDeriveOpponentCardCopiesUsesSimultaneousMaximum(t *testing.T) {
 	}
 	if _, ok := copies[tokenID]; ok {
 		t.Fatalf("opponent token must not be counted: %v", copies)
+	}
+}
+
+func TestDeriveOpponentCardCopiesChainsInstanceLineages(t *testing.T) {
+	t.Parallel()
+
+	const (
+		counter  = int64(600) // instant: cast twice in game 1, once in game 2
+		creature = int64(700) // dies and is reanimated: one card, three ids
+		land     = int64(800) // two on the battlefield
+	)
+	game := func(n int64) *int64 { return &n }
+	opp := func(instanceID, cardID int64, zone string) model.MatchReplayFrameObjectRow {
+		return model.MatchReplayFrameObjectRow{InstanceID: instanceID, CardID: cardID, PlayerSide: "opponent", ZoneType: zone}
+	}
+	frames := []model.MatchReplayFrameRow{
+		{GameNumber: game(1), AnnotationsJSON: objectIDChangedAnnotations([2]int64{90, 10}), Objects: []model.MatchReplayFrameObjectRow{
+			opp(10, counter, "stack"),
+			opp(30, creature, "battlefield"),
+			opp(50, land, "battlefield"),
+		}},
+		{GameNumber: game(1), AnnotationsJSON: objectIDChangedAnnotations([2]int64{10, 11}, [2]int64{30, 31}), Objects: []model.MatchReplayFrameObjectRow{
+			opp(10, counter, "limbo"),
+			opp(11, counter, "graveyard"),
+			opp(30, creature, "limbo"),
+			opp(31, creature, "graveyard"),
+			opp(50, land, "battlefield"),
+			opp(51, land, "battlefield"),
+		}},
+		{GameNumber: game(1), AnnotationsJSON: objectIDChangedAnnotations([2]int64{91, 12}, [2]int64{31, 32}), Objects: []model.MatchReplayFrameObjectRow{
+			opp(11, counter, "graveyard"),
+			opp(12, counter, "stack"),
+			opp(32, creature, "battlefield"),
+		}},
+		// Instance ids restart each game; game 2's lone cast must not merge
+		// with or add to game 1's lineages.
+		{GameNumber: game(2), AnnotationsJSON: objectIDChangedAnnotations([2]int64{90, 10}), Objects: []model.MatchReplayFrameObjectRow{
+			opp(10, counter, "stack"),
+		}},
+	}
+
+	copies := deriveOpponentCardCopies(frames)
+	want := map[int64]int64{counter: 2, creature: 1, land: 2}
+	if !reflect.DeepEqual(copies, want) {
+		t.Fatalf("copies = %v, want %v", copies, want)
 	}
 }
 

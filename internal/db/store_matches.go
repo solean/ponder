@@ -551,33 +551,70 @@ func (s *Store) ListMatchOpponentCardQuantities(ctx context.Context, matchIDs []
 			args = append(args, matchID)
 		}
 
-		query := fmt.Sprintf(opponentCardQuantitiesCTE+`
-			SELECT match_id, card_id, quantity FROM opponent_quantities
-		`, strings.Join(placeholders, ","))
+		type source struct{ derived, fallback, live *int64 }
+		sources := make(map[int64]map[int64]*source)
+		entry := func(matchID, cardID int64) *source {
+			cards := sources[matchID]
+			if cards == nil {
+				cards = make(map[int64]*source)
+				sources[matchID] = cards
+			}
+			if cards[cardID] == nil {
+				cards[cardID] = &source{}
+			}
+			return cards[cardID]
+		}
 
+		query := fmt.Sprintf(opponentCardQuantitiesCTE+`
+			SELECT match_id, card_id, derived, fallback FROM opponent_quantity_sources
+		`, strings.Join(placeholders, ","))
 		rows, err := s.db.QueryContext(ctx, query, args...)
 		if err != nil {
 			return nil, fmt.Errorf("list opponent observed card quantities: %w", err)
 		}
-
 		for rows.Next() {
-			var matchID int64
-			var cardID int64
-			var quantity int64
-			if err := rows.Scan(&matchID, &cardID, &quantity); err != nil {
+			var matchID, cardID int64
+			var derived, fallback sql.NullInt64
+			if err := rows.Scan(&matchID, &cardID, &derived, &fallback); err != nil {
 				rows.Close()
 				return nil, fmt.Errorf("scan opponent observed card quantity: %w", err)
 			}
-			if _, ok := out[matchID]; !ok {
-				out[matchID] = make(map[int64]int64)
+			e := entry(matchID, cardID)
+			if derived.Valid {
+				e.derived = &derived.Int64
 			}
-			out[matchID][cardID] = quantity
+			if fallback.Valid {
+				e.fallback = &fallback.Int64
+			}
 		}
 		if err := rows.Err(); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("iterate opponent observed card quantities: %w", err)
 		}
 		rows.Close()
+
+		live, err := s.liveOpponentCardCopies(ctx, batch)
+		if err != nil {
+			return nil, err
+		}
+		for matchID, cards := range live {
+			for cardID, copies := range cards {
+				entry(matchID, cardID).live = &copies
+			}
+		}
+
+		for matchID, cards := range sources {
+			for cardID, e := range cards {
+				quantity := mergeOpponentCardQuantity(e.live, e.derived, e.fallback)
+				if quantity <= 0 {
+					continue
+				}
+				if out[matchID] == nil {
+					out[matchID] = make(map[int64]int64)
+				}
+				out[matchID][cardID] = quantity
+			}
+		}
 	}
 
 	return out, nil
@@ -677,21 +714,23 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 		return out, fmt.Errorf("get match detail: %w", err)
 	}
 
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(opponentCardQuantitiesCTE, "?")+`
-		SELECT q.card_id, q.quantity, COALESCE(cc.name, '')
-		FROM opponent_quantities q
-		LEFT JOIN card_catalog cc ON cc.arena_id = q.card_id
-		ORDER BY q.quantity DESC, cc.name ASC, q.card_id ASC
-	`, matchID)
+	quantities, err := s.ListMatchOpponentCardQuantities(ctx, []int64{matchID})
 	if err != nil {
 		return out, fmt.Errorf("get observed opponent cards: %w", err)
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var card model.OpponentObservedCardRow
-		if err := rows.Scan(&card.CardID, &card.Quantity, &card.CardName); err != nil {
-			return out, fmt.Errorf("scan observed opponent card: %w", err)
+	cardIDs := make([]int64, 0, len(quantities[matchID]))
+	for cardID := range quantities[matchID] {
+		cardIDs = append(cardIDs, cardID)
+	}
+	names, err := s.LookupCardNames(ctx, cardIDs)
+	if err != nil {
+		return out, fmt.Errorf("get observed opponent card names: %w", err)
+	}
+	for _, cardID := range cardIDs {
+		card := model.OpponentObservedCardRow{
+			CardID:   cardID,
+			Quantity: quantities[matchID][cardID],
+			CardName: names[cardID],
 		}
 		// Only basic lands can legally appear more than four times; cap everything
 		// else so a frameless match's inflated distinct-instance fallback still
@@ -700,9 +739,6 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 			card.Quantity = 4
 		}
 		out.OpponentObservedCards = append(out.OpponentObservedCards, card)
-	}
-	if err := rows.Err(); err != nil {
-		return out, fmt.Errorf("iterate observed opponent cards: %w", err)
 	}
 	sort.SliceStable(out.OpponentObservedCards, func(i, j int) bool {
 		a, b := out.OpponentObservedCards[i], out.OpponentObservedCards[j]

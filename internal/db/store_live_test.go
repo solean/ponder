@@ -2,7 +2,9 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -273,15 +275,20 @@ func TestGetMatchDetailCountsLiveOpponentCopiesFromFrames(t *testing.T) {
 	if _, err := store.UpsertMatchStart(ctx, tx, arenaID, "Traditional_Ladder", selfSeat, "2026-03-12T19:06:52Z"); err != nil {
 		t.Fatalf("UpsertMatchStart: %v", err)
 	}
-	frames := [][]model.MatchReplayFrameObjectRow{
-		{
+	type liveFrame struct {
+		links   [][2]int64
+		objects []model.MatchReplayFrameObjectRow
+	}
+	frames := []liveFrame{
+		{objects: []model.MatchReplayFrameObjectRow{
 			liveCountsTestObject(10, recast, oppSeat, "battlefield"),
 			liveCountsTestObject(30, stale, oppSeat, "battlefield"),
 			liveCountsTestObject(40, instant, oppSeat, "stack"),
-		},
-		// The recast card dies and comes back: every move leaves a new
-		// instance id and a stale one in Limbo, but it is still one card.
-		{
+		}},
+		// The recast card dies and comes back: every move gets a new instance
+		// id (linked by ObjectIdChanged) and leaves the old one in Limbo, but
+		// it is still one card.
+		{links: [][2]int64{{10, 11}, {40, 41}}, objects: []model.MatchReplayFrameObjectRow{
 			liveCountsTestObject(10, recast, oppSeat, "limbo"),
 			liveCountsTestObject(11, recast, oppSeat, "graveyard"),
 			liveCountsTestObject(20, pair, oppSeat, "battlefield"),
@@ -290,15 +297,27 @@ func TestGetMatchDetailCountsLiveOpponentCopiesFromFrames(t *testing.T) {
 			liveCountsTestObject(31, stale, oppSeat, "battlefield"),
 			liveCountsTestObject(40, instant, oppSeat, "limbo"),
 			liveCountsTestObject(41, instant, oppSeat, "graveyard"),
-		},
-		{
+		}},
+		{links: [][2]int64{{11, 12}}, objects: []model.MatchReplayFrameObjectRow{
 			liveCountsTestObject(11, recast, oppSeat, "limbo"),
 			liveCountsTestObject(12, recast, oppSeat, "battlefield"),
-		},
+			liveCountsTestObject(41, instant, oppSeat, "graveyard"),
+		}},
+		// A second copy of the instant is cast from the hidden hand. It never
+		// coexists with the first outside the graveyard, yet it is a new card.
+		{links: [][2]int64{{90, 50}}, objects: []model.MatchReplayFrameObjectRow{
+			liveCountsTestObject(41, instant, oppSeat, "graveyard"),
+			liveCountsTestObject(50, instant, oppSeat, "stack"),
+		}},
+		{links: [][2]int64{{50, 51}}, objects: []model.MatchReplayFrameObjectRow{
+			liveCountsTestObject(41, instant, oppSeat, "graveyard"),
+			liveCountsTestObject(50, instant, oppSeat, "limbo"),
+			liveCountsTestObject(51, instant, oppSeat, "graveyard"),
+		}},
 	}
-	for i, objects := range frames {
-		insertReplayTestFrame(t, store, tx, arenaID, 1, int64(i+1), 1, `{"1":20,"2":20}`, objects)
-		for _, object := range objects {
+	for i, frame := range frames {
+		insertAnnotatedReplayTestFrame(t, store, tx, arenaID, 1, int64(i+1), 1, `{"1":20,"2":20}`, objectIDChangedAnnotations(frame.links...), frame.objects)
+		for _, object := range frame.objects {
 			if err := store.UpsertMatchOpponentCardInstance(ctx, tx, arenaID, 1, object.InstanceID, object.CardID, "2026-03-12T19:07:00Z", "gre_public_replay"); err != nil {
 				t.Fatalf("UpsertMatchOpponentCardInstance: %v", err)
 			}
@@ -323,7 +342,7 @@ func TestGetMatchDetailCountsLiveOpponentCopiesFromFrames(t *testing.T) {
 	for _, card := range detail.OpponentObservedCards {
 		got[card.CardID] = card.Quantity
 	}
-	want := map[int64]int64{recast: 1, pair: 2, stale: 2, instant: 1}
+	want := map[int64]int64{recast: 1, pair: 2, stale: 2, instant: 2}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("opponent observed quantities = %v, want %v", got, want)
 	}
@@ -367,4 +386,17 @@ func TestGetLiveKnownSelfCardCountsSkipsLimbo(t *testing.T) {
 	if !reflect.DeepEqual(counts, want) {
 		t.Fatalf("known self counts = %v, want %v", counts, want)
 	}
+}
+
+// objectIDChangedAnnotations renders the GRE annotations Arena emits when a
+// card moves zones and takes a new instance id, one per {orig, new} pair.
+func objectIDChangedAnnotations(links ...[2]int64) string {
+	parts := make([]string, 0, len(links))
+	for _, link := range links {
+		parts = append(parts, fmt.Sprintf(
+			`{"type":["AnnotationType_ObjectIdChanged"],"details":[{"key":"orig_id","valueInt32":[%d]},{"key":"new_id","valueInt32":[%d]}]}`,
+			link[0], link[1],
+		))
+	}
+	return `{"annotations":[` + strings.Join(parts, ",") + `]}`
 }

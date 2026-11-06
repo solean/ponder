@@ -59,8 +59,10 @@ const gameShapeBackfillMetadataKey = "game_shape_backfill_v1"
 
 // v2: v1 counted simultaneous instances across every zone, which still
 // overcounted a recast card whose stale instances linger in graveyard/exile/
-// limbo; v2 restricts the count to the clean battlefield/hand zones.
-const opponentCopiesBackfillMetadataKey = "opponent_copies_backfill_v2"
+// limbo; v2 restricts the count to the clean battlefield/hand zones, which
+// left every spell at one; v3 chains ObjectIdChanged links into one lineage
+// per physical card.
+const opponentCopiesBackfillMetadataKey = "opponent_copies_backfill_v3"
 
 // prepareGameShapeBackfill invalidates analytics coverage exactly once after
 // per-turn game shape stats were introduced, so the next maintenance pass (or

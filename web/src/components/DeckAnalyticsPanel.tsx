@@ -464,7 +464,6 @@ function DeckGameShapeSection({
             />
           </div>
         </div>
-        <p>Turn-by-turn tempo derived from replay frames and observed card plays.</p>
       </div>
       <dl className="deck-analytics-tiles" aria-label="Game shape summary">
         <div className="deck-analytics-tile">

@@ -29,9 +29,8 @@ const shortDateFormatter = new Intl.DateTimeFormat(undefined, {
 });
 const MAX_RECENT_CHANGES = 12;
 
-const WILDCARD_LABELS: Array<{ key: keyof WildcardBalance; label: string }> = [
-  { key: "common", label: "Common" },
-  { key: "uncommon", label: "Uncommon" },
+// Rare and mythic are the scarce wildcards; common and uncommon rarely gate a deck.
+const SCARCE_WILDCARDS: Array<{ key: "rare" | "mythic"; label: string }> = [
   { key: "rare", label: "Rare" },
   { key: "mythic", label: "Mythic" },
 ];
@@ -323,8 +322,6 @@ export function EconomyPage() {
   }
 
   const previous = data.history.length > 1 ? data.history[data.history.length - 2] : null;
-  const currentWildcardTotal = wildcardTotal(latest.wildcards);
-  const wildcardDelta = previous ? currentWildcardTotal - wildcardTotal(previous.wildcards) : 0;
   const tokenEntries = Object.entries(latest.customTokens)
     .filter(([, count]) => count > 0)
     .sort(([left], [right]) => left.localeCompare(right));
@@ -374,34 +371,24 @@ export function EconomyPage() {
         </article>
         <article className="metric-card economy-metric">
           <p>Wildcards</p>
-          <div className="metric-value">{integerFormatter.format(currentWildcardTotal)}</div>
-          <small className={previous ? deltaTone(wildcardDelta) : "metric-sub"}>
-            {previous ? `${formatDelta(wildcardDelta)} since prior snapshot` : "across all rarities"}
-          </small>
-        </article>
-      </section>
-
-      <section className="panel economy-wildcards" aria-labelledby="wildcard-heading">
-        <div className="panel-head">
-          <div>
-            <h3 id="wildcard-heading">Wildcard inventory</h3>
-            <p>Current craftable balances by rarity</p>
+          <div className="economy-wildcard-pair">
+            {SCARCE_WILDCARDS.map(({ key, label }) => {
+              const delta = previous ? latest.wildcards[key] - previous.wildcards[key] : 0;
+              return (
+                <div key={key} className={`economy-wildcard economy-wildcard--${key}`}>
+                  <span className="rarity-gem" aria-hidden="true" />
+                  <div>
+                    <div className="metric-value">{integerFormatter.format(latest.wildcards[key])}</div>
+                    <small className={previous ? deltaTone(delta) : "metric-sub"}>
+                      {label}
+                      {previous && delta !== 0 ? ` ${formatDelta(delta)}` : ""}
+                    </small>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <span className="economy-track-position">
-            Track position <strong>{integerFormatter.format(latest.wildcardTrackPosition)}</strong>
-          </span>
-        </div>
-        <div className="wildcard-grid">
-          {WILDCARD_LABELS.map(({ key, label }) => (
-            <article key={key} className={`wildcard-card wildcard-card--${key}`}>
-              <span className="rarity-gem" aria-hidden="true" />
-              <div>
-                <p>{label}</p>
-                <strong>{integerFormatter.format(latest.wildcards[key])}</strong>
-              </div>
-            </article>
-          ))}
-        </div>
+        </article>
       </section>
 
       <section className="panel economy-chart-panel" aria-labelledby="balance-history-heading">
@@ -470,8 +457,8 @@ export function EconomyPage() {
                 </table>
               </div>
             ) : null}
-            <div className="table-wrap">
-              <table className="data-table compact">
+            <div className="table-wrap economy-runs-scroll">
+              <table className="data-table compact economy-runs-table">
                 <thead>
                   <tr>
                     <th scope="col">Event</th>

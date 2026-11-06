@@ -3199,11 +3199,13 @@ small.settings-meta,
 }
 
 /* About a dozen rows; the rest scroll under a sticky header. */
-.draft-sessions-scroll {
+.draft-sessions-scroll,
+.economy-runs-scroll {
   max-height: 30rem;
 }
 
 .draft-sessions-table thead th,
+.economy-runs-table thead th,
 .deck-analytics-card-table thead th {
   position: sticky;
   top: 0;
@@ -10913,7 +10915,6 @@ select option {
 }
 
 .economy-metric .metric-value,
-.wildcard-card strong,
 .economy-inventory-list dd,
 .economy-history-table td {
   font-variant-numeric: tabular-nums;
@@ -10956,61 +10957,32 @@ select option {
   color: var(--loss);
 }
 
-.economy-wildcards .panel-head,
 .economy-chart-panel .panel-head {
   margin-bottom: 0.8rem;
 }
 
-.economy-track-position {
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  white-space: nowrap;
+/* Rare and mythic side by side in one metric card. */
+.economy-wildcard-pair {
+  display: flex;
+  gap: 1.1rem;
 }
 
-.economy-track-position strong {
-  color: var(--text);
-  font-size: var(--text-sm);
-}
-
-.wildcard-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.68rem;
-}
-
-.wildcard-card {
+.economy-wildcard {
   display: flex;
   align-items: center;
-  gap: 0.72rem;
+  gap: 0.62rem;
   min-width: 0;
-  padding: 0.78rem;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: var(--surface-faint);
 }
 
-.wildcard-card p {
-  margin: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-overflow: ellipsis;
-}
-
-.wildcard-card strong {
+.economy-wildcard small {
   display: block;
-  margin-top: 0.18rem;
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: var(--display-md);
+  margin-top: 0.34rem;
 }
 
 .rarity-gem {
   flex: 0 0 auto;
-  width: 17px;
-  height: 17px;
+  width: 13px;
+  height: 13px;
   transform: rotate(45deg);
   border: 1px solid color-mix(in srgb, var(--economy-rarity) 70%, var(--text));
   border-radius: 3px;
@@ -11018,19 +10990,11 @@ select option {
   box-shadow: 0 0 13px color-mix(in srgb, var(--economy-rarity) 28%, transparent);
 }
 
-.wildcard-card--common {
-  --economy-rarity: var(--rarity-common);
-}
-
-.wildcard-card--uncommon {
-  --economy-rarity: var(--rarity-uncommon);
-}
-
-.wildcard-card--rare {
+.economy-wildcard--rare {
   --economy-rarity: var(--rarity-rare);
 }
 
-.wildcard-card--mythic {
+.economy-wildcard--mythic {
   --economy-rarity: var(--rarity-mythic);
 }
 
@@ -11091,12 +11055,6 @@ select option {
   text-align: right;
 }
 
-@media (max-width: 900px) {
-  .wildcard-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 720px) {
   .economy-heading {
     align-items: start;
@@ -11114,14 +11072,6 @@ select option {
 @media (max-width: 520px) {
   .economy-heading {
     display: grid;
-  }
-
-  .wildcard-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .economy-wildcards .panel-head {
-    align-items: start;
   }
 }
 

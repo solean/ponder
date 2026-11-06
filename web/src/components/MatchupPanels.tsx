@@ -11,7 +11,7 @@ import { SetSymbol } from "./SetSymbol";
 import { StatusMessage } from "./StatusMessage";
 import { api } from "../lib/api";
 import { formatDateTime, pct } from "../lib/format";
-import { setOptionLabel, sortSetCodesByRelease, useEventSets, useSetCodes } from "../lib/useEventSets";
+import { sortSetCodesByRelease, useEventSets, useSetCodes } from "../lib/useEventSets";
 import type { MatchupRow, RecordAgg } from "../lib/types";
 
 const ARCHETYPE_LABELS: Record<string, string> = {
@@ -455,25 +455,27 @@ export function LimitedMatchupsPanel({
 
   return (
     <section className="panel">
-      <div className="panel-head">
+      <div className={showSetPicker ? "panel-head rank-toolbar" : "panel-head"}>
         <div>
           <h3>{title}</h3>
           <p>{description}</p>
         </div>
+        {showSetPicker ? (
+          <div className="rank-controls" role="group" aria-label="Matchup filters">
+            <label className="rank-season-select">
+              <span>Set</span>
+              <select value={setPickerValue} onChange={(event) => setPickedSet(event.target.value)}>
+                <option value="all">All sets</option>
+                {setChoices.map((code) => (
+                  <option key={code || "unknown"} value={`set:${code}`}>
+                    {setLookup(code)?.name ?? (code ? code.toUpperCase() : "Unknown set")}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
       </div>
-      {showSetPicker ? (
-        <label className="deck-analytics-version-select limited-matchup-set-picker">
-          <span>Set</span>
-          <select value={setPickerValue} onChange={(event) => setPickedSet(event.target.value)}>
-            <option value="all">All sets</option>
-            {setChoices.map((code) => (
-              <option key={code || "unknown"} value={`set:${code}`}>
-                {setOptionLabel(code, setLookup)}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
 
       <div className="stack-lg">
         {sets.map((set) => {

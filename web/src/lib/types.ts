@@ -643,6 +643,7 @@ export type DeckAnalyticsGamesParams = {
   keptSize?: number;
   mulligans?: number;
   turns?: number;
+  minTurns?: number;
   game?: "one" | "post";
   playDraw?: "play" | "draw";
   landDrops?: "missed" | "clean";

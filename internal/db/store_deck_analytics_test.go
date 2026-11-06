@@ -295,6 +295,26 @@ func TestListDeckAnalyticsGamesFacetsAndFilters(t *testing.T) {
 		t.Fatalf("one-turn games = %+v, want the raw-turn-1 second game", firstTurnGames)
 	}
 
+	twoPlusTurnGames, err := store.ListDeckAnalyticsGames(ctx, DeckAnalyticsGamesQuery{
+		DeckID: deckID, MinTurnCount: pointerInt64(2),
+	})
+	if err != nil {
+		t.Fatalf("ListDeckAnalyticsGames(minTurnCount=2): %v", err)
+	}
+	if len(twoPlusTurnGames) != 1 || twoPlusTurnGames[0].GameNumber != 1 {
+		t.Fatalf("2+ turn games = %+v, want only the raw-turn-3 first game", twoPlusTurnGames)
+	}
+
+	onePlusTurnGames, err := store.ListDeckAnalyticsGames(ctx, DeckAnalyticsGamesQuery{
+		DeckID: deckID, MinTurnCount: pointerInt64(1),
+	})
+	if err != nil {
+		t.Fatalf("ListDeckAnalyticsGames(minTurnCount=1): %v", err)
+	}
+	if len(onePlusTurnGames) != 2 {
+		t.Fatalf("1+ turn games = %+v, want both games", onePlusTurnGames)
+	}
+
 	if _, err := store.ListDeckAnalyticsGames(ctx, DeckAnalyticsGamesQuery{
 		DeckID: deckID, Facet: "played",
 	}); err == nil {

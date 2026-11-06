@@ -695,6 +695,7 @@ type DeckAnalyticsGamesQuery struct {
 	KeptHandSize  *int64
 	MulliganCount *int64
 	TurnCount     *int64
+	MinTurnCount  *int64 // games lasting at least this many full turns
 	GameFilter    string // "one", "post", or ""
 	PlayDraw      string // "play", "draw", or ""
 	LandDrops     string // "missed", "clean", or ""
@@ -763,6 +764,10 @@ func (s *Store) listScopedAnalyticsGames(ctx context.Context, q DeckAnalyticsGam
 	if q.TurnCount != nil {
 		conditions = append(conditions, arenaTurnAsFullTurnSQL("g.turn_count")+" = ?")
 		conditionArgs = append(conditionArgs, *q.TurnCount)
+	}
+	if q.MinTurnCount != nil {
+		conditions = append(conditions, arenaTurnAsFullTurnSQL("g.turn_count")+" >= ?")
+		conditionArgs = append(conditionArgs, *q.MinTurnCount)
 	}
 	missedDropExists := fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM game_turn_stats ts

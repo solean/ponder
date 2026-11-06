@@ -133,6 +133,7 @@ func analyticsGamesQuery(r *http.Request) db.DeckAnalyticsGamesQuery {
 		KeptHandSize:  queryOptionalInt64(r, "keptSize"),
 		MulliganCount: queryOptionalInt64(r, "mulligans"),
 		TurnCount:     queryOptionalInt64(r, "turns"),
+		MinTurnCount:  queryOptionalInt64(r, "minTurns"),
 		GameFilter:    strings.TrimSpace(r.URL.Query().Get("game")),
 		PlayDraw:      strings.TrimSpace(r.URL.Query().Get("playDraw")),
 		LandDrops:     strings.TrimSpace(r.URL.Query().Get("landDrops")),

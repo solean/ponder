@@ -71,6 +71,7 @@ function analyticsGamesSearch(params: DeckAnalyticsGamesParams): URLSearchParams
   if (params.keptSize != null) search.set("keptSize", String(params.keptSize));
   if (params.mulligans != null) search.set("mulligans", String(params.mulligans));
   if (params.turns != null) search.set("turns", String(params.turns));
+  if (params.minTurns != null) search.set("minTurns", String(params.minTurns));
   if (params.game) search.set("game", params.game);
   if (params.playDraw) search.set("playDraw", params.playDraw);
   if (params.landDrops) search.set("landDrops", params.landDrops);

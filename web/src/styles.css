@@ -911,6 +911,15 @@ h1 {
   background: transparent;
 }
 
+/* Stop the scrollbar short of the rounded bottom-right window corner. macOS
+   chooses the radius per version (~10pt before Tahoe, up to ~26pt on Tahoe,
+   ~20pt on Golden Gate), and at the scrollbar's distance from the edge a 20pt
+   corner clips the last ~10px. The thumb is pill-shaped, so a slightly
+   smaller arc is harmless. */
+:root.is-mac-desktop .app-scroll::-webkit-scrollbar-track {
+  margin-bottom: 14px;
+}
+
 .app-scroll::-webkit-scrollbar-thumb {
   min-height: 2.5rem;
   border: 3px solid transparent;

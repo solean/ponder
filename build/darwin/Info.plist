@@ -27,10 +27,6 @@
 			<key>NSAllowsLocalNetworking</key>
 			<true/>
 		</dict>
-		<!-- Opt out of the macOS 26 window chrome (larger concentric corners,
-		     Liquid Glass controls) while it is available as a compatibility mode. -->
-		<key>UIDesignRequiresCompatibility</key>
-		<true/>
 		<key>NSHighResolutionCapable</key>
 		<string>true</string>
 		<key>NSHumanReadableCopyright</key>

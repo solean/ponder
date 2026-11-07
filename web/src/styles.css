@@ -998,8 +998,45 @@ body.has-wide-deck-curve .app-shell {
   --wails-draggable: drag;
 }
 
+/* The desktop window has a plain hidden titlebar (no toolbar) for the tighter
+   macOS window corners. AppKit centres the traffic lights in its standard
+   titlebar, so the web titlebar is exactly that tall and its contents are
+   compacted to fit. */
 :root.is-mac-desktop .titlebar {
-  --titlebar-inset-start: 96px;
+  --titlebar-inset-start: 78px;
+  --mac-titlebar-height: 28px;
+  height: var(--mac-titlebar-height);
+  min-height: 0;
+  padding-right: 0.75rem;
+  gap: 0.75rem;
+}
+
+:root.is-mac-desktop .titlebar .brand {
+  gap: 0.45rem;
+}
+
+:root.is-mac-desktop .titlebar .brand h1 {
+  font-size: var(--text-base);
+}
+
+:root.is-mac-desktop .titlebar .title-sigil {
+  width: 0.7rem;
+  height: 0.7rem;
+}
+
+:root.is-mac-desktop .titlebar .title-sigil::before {
+  inset: 2px;
+}
+
+:root.is-mac-desktop .titlebar .tabs {
+  gap: 1px;
+  padding: 1px;
+}
+
+:root.is-mac-desktop .titlebar .tab {
+  min-height: 20px;
+  padding: 0 0.7rem;
+  font-size: var(--text-sm);
 }
 
 .titlebar .tabs {

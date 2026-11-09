@@ -58,9 +58,12 @@ func main() {
 		BackgroundColour: application.NewRGBA(8, 12, 21, 255),
 		URL:              "/",
 		Mac: application.MacWindow{
-			// Unified toolbar height centers the traffic lights in the web
-			// titlebar; the titlebar's --wails-draggable region moves the window.
-			TitleBar: application.MacTitleBarHiddenInsetUnified,
+			// No toolbar: on macOS 26 a toolbar-backed window gets the larger
+			// concentric corner radius, while a titlebar-only window keeps the
+			// tighter one. The web titlebar matches the native titlebar height
+			// so the traffic lights sit centred in it; its --wails-draggable
+			// region moves the window.
+			TitleBar: application.MacTitleBarHidden,
 		},
 	})
 

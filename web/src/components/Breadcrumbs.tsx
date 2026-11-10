@@ -28,7 +28,9 @@ type BreadcrumbContextValue = {
   setResolvedLabel: Dispatch<SetStateAction<ResolvedBreadcrumbLabel | null>>;
 };
 
-const BreadcrumbContext = createContext<BreadcrumbContextValue | null>(null);
+const NAV_SECTION_PATHS = new Set(["/matches", "/decks", "/drafts", "/economy", "/settings"]);
+
+const BreadcrumbContext =createContext<BreadcrumbContextValue | null>(null);
 
 export function BreadcrumbProvider({ children }: { children: ReactNode }) {
   const [resolvedLabel, setResolvedLabel] = useState<ResolvedBreadcrumbLabel | null>(null);
@@ -104,7 +106,11 @@ export function Breadcrumbs() {
     document.title = currentPage ? `${currentPage} · ${APP_NAME}` : APP_NAME;
   }, [currentPage]);
 
+  // A top-level section's trail ("Overview / Drafts") only repeats the nav.
   if (breadcrumbs.length <= 1) return null;
+  if (breadcrumbs.length === 2 && NAV_SECTION_PATHS.has(pathname.replace(/\/+$/, ""))) {
+    return null;
+  }
 
   return (
     <nav className="breadcrumbs" aria-label="Breadcrumb">

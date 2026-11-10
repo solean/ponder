@@ -61,7 +61,7 @@
   --line-strong: rgba(255, 168, 90, 0.34);
 
   --text: #f2e6db;
-  --muted: #866a58;
+  --muted: #988071;
   --muted-strong: #c5a086;
 
   --win: #00e676;
@@ -323,7 +323,7 @@
   --line: rgba(78, 202, 241, 0.16);
   --line-strong: rgba(102, 202, 243, 0.34);
   --text: #e3edf4;
-  --muted: #5d7180;
+  --muted: #798996;
   --muted-strong: #93b2c4;
   --accent: #37b7e0;
   --accent-strong: #1a8fc0;
@@ -397,7 +397,7 @@
   --line: rgba(138, 161, 181, 0.16);
   --line-strong: rgba(154, 172, 191, 0.34);
   --text: #e6eaef;
-  --muted: #6a7480;
+  --muted: #7f8792;
   --muted-strong: #a9b4c1;
   --accent: #8ab2dd;
   --accent-strong: #6690c0;
@@ -618,7 +618,7 @@
   --line: rgba(143, 181, 115, 0.16);
   --line-strong: rgba(163, 197, 137, 0.34);
   --text: #f1e9d2;
-  --muted: #7d817a;
+  --muted: #979a95;
   --muted-strong: #b6bda8;
   --accent: #8fb573;
   --accent-strong: #6f9455;
@@ -1680,13 +1680,11 @@ body.has-wide-deck-curve .app-shell {
   );
   border: 1px solid var(--line);
   border-radius: 3px;
-  box-shadow: var(--shadow-md);
   overflow: visible;
-  animation: deploy 450ms cubic-bezier(0.16, 0.9, 0.3, 1) both;
+  animation: deploy 180ms ease-out both;
 }
 
-.metric-card::before,
-.panel::before {
+.metric-card::before {
   content: "";
   position: absolute;
   inset: -1px;
@@ -1702,8 +1700,7 @@ body.has-wide-deck-curve .app-shell {
     linear-gradient(var(--corner-mark) 0 0) no-repeat 100% 100% / 1.5px 16px;
 }
 
-.metric-card::after,
-.panel::after {
+.metric-card::after {
   content: "";
   position: absolute;
   top: 0;
@@ -1724,15 +1721,15 @@ body.has-wide-deck-curve .app-shell {
 }
 
 .metric-card:nth-child(2) {
-  animation-delay: 60ms;
+  animation-delay: 20ms;
 }
 
 .metric-card:nth-child(3) {
-  animation-delay: 120ms;
+  animation-delay: 40ms;
 }
 
 .metric-card:nth-child(4) {
-  animation-delay: 180ms;
+  animation-delay: 60ms;
 }
 
 .metric-card p {
@@ -1818,6 +1815,7 @@ body.has-wide-deck-curve .app-shell {
 .panel.inner {
   padding: 0.8rem 0.88rem;
   border-radius: 3px;
+  border-color: color-mix(in srgb, var(--line) 55%, transparent);
   background: linear-gradient(
     155deg,
     var(--panel-inner-a) 0%,
@@ -6965,22 +6963,6 @@ button.match-replay-zonechip.is-button {
   position: relative;
 }
 
-.deck-card::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  pointer-events: none;
-  background:
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 0 0 / 10px 1px,
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 0 0 / 1px 10px,
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 100% 0 / 10px 1px,
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 100% 0 / 1px 10px,
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 0 100% / 10px 1px,
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 0 100% / 1px 10px,
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 100% 100% / 10px 1px,
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 100% 100% / 1px 10px;
-}
-
 .deck-card h4 {
   margin: 0;
   font-family: var(--font-mono);
@@ -7090,23 +7072,6 @@ button.match-replay-zonechip.is-button {
   position: relative;
   display: grid;
   gap: 0.82rem;
-}
-
-.deck-curve-panel::before,
-.deck-visual-panel::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  pointer-events: none;
-  background:
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 0 0 / 10px 1px,
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 0 0 / 1px 10px,
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 100% 0 / 10px 1px,
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 100% 0 / 1px 10px,
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 0 100% / 10px 1px,
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 0 100% / 1px 10px,
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 100% 100% / 10px 1px,
-    linear-gradient(var(--corner-mark) 0 0) no-repeat 100% 100% / 1px 10px;
 }
 
 .deck-curve-panel-head {
@@ -8855,7 +8820,7 @@ select option {
 @keyframes deploy {
   from {
     opacity: 0;
-    transform: translateY(14px) scale(0.98);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;

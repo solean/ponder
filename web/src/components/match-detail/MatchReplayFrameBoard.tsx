@@ -563,6 +563,31 @@ export function MatchReplayFrameBoard({
           >
             <button
               type="button"
+              className="match-replay-button is-icon"
+              onClick={goToPrevTurn}
+              disabled={!canJumpPrevTurn}
+              aria-label="Previous turn"
+              title="Previous turn (Shift+←)"
+            >
+              <svg viewBox="0 0 14 14" aria-hidden="true">
+                <rect x="1.5" y="2" width="1.8" height="10" />
+                <path d="M12.5 2 5 7l7.5 5Z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="match-replay-button is-icon"
+              onClick={goToPrevStep}
+              disabled={!canStepBackward}
+              aria-label="Previous step"
+              title="Previous step (←)"
+            >
+              <svg viewBox="0 0 14 14" aria-hidden="true">
+                <path d="M10.5 2 3 7l7.5 5Z" />
+              </svg>
+            </button>
+            <button
+              type="button"
               className="match-replay-button is-primary"
               onClick={togglePlay}
               aria-pressed={isPlaying}
@@ -575,49 +600,28 @@ export function MatchReplayFrameBoard({
             </button>
             <button
               type="button"
-              className="match-replay-button"
-              onClick={goToPrevTurn}
-              disabled={!canJumpPrevTurn}
-              aria-label="Previous turn"
-            >
-              <span>Prev turn</span>
-              <kbd className="match-replay-button-shortcut" aria-hidden="true">
-                ⇧←
-              </kbd>
-            </button>
-            <button
-              type="button"
-              className="match-replay-button"
-              onClick={goToPrevStep}
-              disabled={!canStepBackward}
-              aria-label="Previous step"
-            >
-              <span>Prev step</span>
-              <kbd className="match-replay-button-shortcut" aria-hidden="true">
-                ←
-              </kbd>
-            </button>
-            <button
-              type="button"
-              className="match-replay-button"
+              className="match-replay-button is-icon"
               onClick={goToNextStep}
               disabled={!canStepForward}
+              aria-label="Next step"
+              title="Next step (→)"
             >
-              <span>Next step</span>
-              <kbd className="match-replay-button-shortcut" aria-hidden="true">
-                →
-              </kbd>
+              <svg viewBox="0 0 14 14" aria-hidden="true">
+                <path d="M3.5 2 11 7l-7.5 5Z" />
+              </svg>
             </button>
             <button
               type="button"
-              className="match-replay-button"
+              className="match-replay-button is-icon"
               onClick={goToNextTurn}
               disabled={!canJumpNextTurn}
+              aria-label="Next turn"
+              title="Next turn (Shift+→)"
             >
-              <span>Next turn</span>
-              <kbd className="match-replay-button-shortcut" aria-hidden="true">
-                ⇧→
-              </kbd>
+              <svg viewBox="0 0 14 14" aria-hidden="true">
+                <path d="M1.5 2 9 7l-7.5 5Z" />
+                <rect x="10.7" y="2" width="1.8" height="10" />
+              </svg>
             </button>
           </div>
 

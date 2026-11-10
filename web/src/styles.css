@@ -5582,6 +5582,13 @@ button.match-replay-zonechip.is-button {
   --match-replay-board-card-width: clamp(58px, 8.5cqw, 92px);
 }
 
+/* Lands carry little information per card, so they render about a quarter
+   smaller than the permanents that share the backline. */
+.match-replay-lane:not(.is-hand) .match-replay-card-row.is-lands .match-replay-object,
+.match-replay-lane:not(.is-hand) .match-replay-card-row.is-lands .match-replay-land-stack {
+  --match-replay-board-card-width: clamp(46px, 6.4cqw, 70px);
+}
+
 .match-replay-lane:not(.is-hand) .match-replay-lane-head > div {
   display: flex;
   align-items: baseline;
@@ -6935,6 +6942,19 @@ button.match-replay-zonechip.is-button {
     transform 160ms ease;
 }
 
+/* Step and turn buttons are icon-only; the play button keeps its label. */
+.match-replay-button-row .match-replay-button.is-icon {
+  flex: 0 0 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.58rem 0;
+}
+
+.match-replay-button.is-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
 .match-replay-button-shortcut {
   min-width: 1.7rem;
   padding: 0.16rem 0.3rem;
@@ -7061,7 +7081,7 @@ button.match-replay-zonechip.is-button {
   }
 
   .match-replay-command-deck > .match-replay-controls-bar > .match-replay-button-row {
-    flex: 1 0 auto;
+    flex: 0 0 auto;
   }
 
   .match-replay-command-deck > .match-replay-track-panel {

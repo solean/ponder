@@ -62,12 +62,12 @@ export function DraftPerformancePanel({
   const chartOption = useMemo(() => {
     if (points.length < MIN_CHART_EVENTS) return null;
 
-    // Short windows are noisy, so the longest line gets the accent and the
-    // shortest recedes; dashes keep them apart without relying on color.
+    // One line carries the story: recent form (last 10) in the accent. The
+    // all-time rate stays as a thin reference so the level is still readable;
+    // the per-event bars underneath show what each point is made of.
     const allSpecs: SeriesSpec[] = [
-      { name: "Last 10 Events", value: (p) => p.rolling[10], color: chartTheme.axisText, dashed: true, width: 1.6 },
-      { name: "Last 50 Events", value: (p) => p.rolling[50], color: chartTheme.contrast, dashed: false, width: 2 },
-      { name: "All Events", value: (p) => p.all, color: chartTheme.accent, dashed: false, width: 2.4 },
+      { name: "All Events", value: (p) => p.all, color: chartTheme.axisText, dashed: true, width: 1.2 },
+      { name: "Last 10 Events", value: (p) => p.rolling[10], color: chartTheme.accent, dashed: false, width: 2.4 },
     ];
     const specs = allSpecs.filter((spec) => points.some((point) => spec.value(point) != null));
 
@@ -78,7 +78,11 @@ export function DraftPerformancePanel({
         enabled: true,
         description: "Pooled match win rate over trailing windows of draft events.",
       },
-      grid: { left: 56, right: 64, top: 44, bottom: 40 },
+      grid: [
+        { left: 56, right: 64, top: 44, height: 196 },
+        { left: 56, right: 64, top: 258, height: 44 },
+      ],
+      axisPointer: { link: [{ xAxisIndex: "all" }] },
       legend: {
         // One row at any width; wrapping would push the legend into the plot.
         type: "scroll",
@@ -86,7 +90,7 @@ export function DraftPerformancePanel({
         icon: "roundRect",
         itemWidth: 14,
         itemHeight: 4,
-        data: specs.map((spec) => spec.name),
+        data: specs.map((spec) => spec.name).reverse(),
         textStyle: { color: chartTheme.axisText, fontFamily: MONO_FONT, fontSize: 11 },
       },
       tooltip: {
@@ -101,7 +105,7 @@ export function DraftPerformancePanel({
           if (!point) return "";
           const parsed = parseEventName(point.eventName);
           const rows = entries
-            .filter((entry: any) => entry.value != null)
+            .filter((entry: any) => entry.seriesType === "line" && entry.value != null)
             .map((entry: any) => `<span>${entry.marker}${entry.seriesName}: ${pct(entry.value)}</span>`);
           return [
             `<div style="display:grid;gap:4px;">`,
@@ -112,7 +116,18 @@ export function DraftPerformancePanel({
           ].join("");
         },
       },
-      xAxis: {
+      xAxis: [
+        {
+        type: "category",
+        boundaryGap: false,
+        data: points.map((point) => String(point.eventNumber)),
+        axisLine: { lineStyle: { color: chartTheme.axisLine } },
+        axisTick: { show: false },
+        axisLabel: { show: false },
+        splitLine: { show: false },
+      },
+        {
+        gridIndex: 1,
         type: "category",
         boundaryGap: false,
         data: points.map((point) => String(point.eventNumber)),
@@ -129,7 +144,9 @@ export function DraftPerformancePanel({
         },
         splitLine: { show: false },
       },
-      yAxis: {
+      ],
+      yAxis: [
+        {
         type: "value",
         // Snap to 10% gridlines with a little headroom so lines never touch the frame.
         min: (extent: { min: number }) => Math.max(0, Math.floor((extent.min - 0.02) * 10) / 10),
@@ -144,7 +161,24 @@ export function DraftPerformancePanel({
         },
         splitLine: { lineStyle: { color: chartTheme.axisLine, type: "dashed" } },
       },
-      series: specs.map((spec, index) => ({
+        {
+          gridIndex: 1,
+          type: "value",
+          min: 0,
+          max: 7,
+          interval: 7,
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: {
+            color: chartTheme.axisText,
+            fontFamily: MONO_FONT,
+            formatter: (value: number) => (value === 0 ? "" : `${value}W`),
+          },
+          splitLine: { show: false },
+        },
+      ],
+      series: [
+        ...specs.map((spec, index) => ({
         name: spec.name,
         type: "line",
         data: points.map((point) => spec.value(point)),
@@ -177,6 +211,22 @@ export function DraftPerformancePanel({
             }
           : {}),
       })),
+        {
+          name: "Event wins",
+          type: "bar",
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          barCategoryGap: "22%",
+          silent: true,
+          data: points.map((point) => ({
+            value: Math.max(point.wins, 0.25),
+            itemStyle: {
+              color: point.trophy ? chartTheme.accent : chartTheme.axisText,
+              opacity: point.trophy ? 1 : 0.45,
+            },
+          })),
+        },
+      ],
     };
   }, [chartTheme, points, setLookup]);
 
@@ -194,31 +244,33 @@ export function DraftPerformancePanel({
       <div className="panel-head rank-toolbar">
         <div>
           <h3 id={headingId}>Event Win Rate</h3>
-          <p>Match win rate pooled over your last 10, last 50, and all finished draft events.</p>
+          <p>Match win rate pooled over your last 10 draft events, with each event's wins underneath.</p>
         </div>
       </div>
 
       {points.length > 0 ? (
         <div className="rank-summary">
           <div className="rank-chip rank-chip--selected">
-            <span>Match record</span>
-            <strong>{recordLabel(performance.wins, performance.losses)}</strong>
+            <span>Last 10 events</span>
+            <strong>{lastTen == null ? "—" : pct(lastTen)}</strong>
           </div>
           <div className="rank-chip">
-            <span>Win rate</span>
+            <span>All events</span>
             <strong>{winRate == null ? "—" : pct(winRate)}</strong>
+          </div>
+          <div className="rank-chip">
+            <span>Match record</span>
+            <strong>{recordLabel(performance.wins, performance.losses)}</strong>
           </div>
           <div className="rank-chip">
             <span>Events</span>
             <strong>{points.length}</strong>
           </div>
           <div className="rank-chip">
-            <span>Trophy rate</span>
-            <strong>{pct(performance.trophies / points.length)}</strong>
-          </div>
-          <div className="rank-chip">
-            <span>Last 10 events</span>
-            <strong>{lastTen == null ? "—" : pct(lastTen)}</strong>
+            <span>Trophies</span>
+            <strong>
+              {performance.trophies} · {pct(performance.trophies / points.length)}
+            </strong>
           </div>
         </div>
       ) : null}

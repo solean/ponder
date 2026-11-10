@@ -9945,6 +9945,24 @@ select option {
   border-color: var(--loss);
 }
 
+.draft-result-pips {
+  display: inline-flex;
+  gap: 3px;
+  vertical-align: middle;
+}
+
+.draft-session-record,
+.draft-session-net {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.draft-session-net {
+  color: var(--muted-strong);
+  font-size: var(--text-sm);
+}
+
 .match-group-record {
   margin-left: 0.85rem;
   color: var(--tab-active-border);

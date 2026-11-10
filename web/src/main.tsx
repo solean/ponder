@@ -27,7 +27,7 @@ document.documentElement.classList.toggle("overlay-document", window.location.pa
 // The startup loader renders before Layout, which otherwise owns the theme.
 // The overlay keeps its own fixed dark styling.
 if (window.location.pathname !== "/overlay") applyStoredTheme();
-// The Wails window uses a hidden native titlebar; the web titlebar reserves
+// The Wails window uses an inset unified titlebar; the web titlebar reserves
 // room for the native traffic lights only there (not in a plain browser).
 document.documentElement.classList.toggle(
   "is-mac-desktop",

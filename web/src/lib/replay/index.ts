@@ -1342,7 +1342,7 @@ function replayChangeIsLimboParking(change: MatchReplayChange): boolean {
   return boardZoneKind(change.fromZoneType ?? "") !== "battlefield";
 }
 
-function replayChangeIsCast(change: MatchReplayChange): boolean {
+export function replayChangeIsCast(change: MatchReplayChange): boolean {
   if (change.action !== "enter_public" && change.action !== "move_public") {
     return false;
   }

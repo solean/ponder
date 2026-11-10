@@ -97,7 +97,7 @@ export function MatchReplayPanel({
           </div>
         ) : null}
         {canDescribeCoverage && !positionError ? (
-          <div className="match-replay-recording" data-recording-state={coverage.state}>
+          <div className="match-replay-recording" data-recording-state={coverage.state} title={coverage.detail}>
             <p><strong>{activeTimelineGameNumber !== null ? `Game ${activeTimelineGameNumber} · ` : ""}{coverage.label}</strong></p>
             <p>{coverage.detail}</p>
           </div>

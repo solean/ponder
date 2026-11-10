@@ -1,5 +1,6 @@
 import { scrubberTurnLabel, selectScrubberLabels } from "../../lib/replay/scrubberLabels";
-import { ReplayEventDetails } from "./ReplayEventDetails";
+import { ReplayEventDetails, replayExpandableDetails } from "./ReplayEventDetails";
+import { replayTapFolds } from "../../lib/replay/tapFolds";
 import { replayFrameMatches, type ReplayCategory } from "../../lib/replay/navigation";
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
@@ -557,6 +558,21 @@ export function MatchReplayMoveList({
       ),
     [frames, relationships],
   );
+  // Tap frames that pay for an adjacent cast ride on the cast's row.
+  const tapFolds = useMemo(() => replayTapFolds(frames), [frames]);
+  const tappedByHost = useMemo(() => {
+    const out = new Map<number, number>();
+    for (const fold of tapFolds.values()) out.set(fold.hostIndex, (out.get(fold.hostIndex) ?? 0) + fold.count);
+    return out;
+  }, [tapFolds]);
+  const currentRowIndex = tapFolds.get(currentIndex)?.hostIndex ?? currentIndex;
+  const [openDetails, setOpenDetails] = useState<ReadonlySet<number>>(new Set());
+  const toggleDetails = (index: number) =>
+    setOpenDetails((current) => {
+      const next = new Set(current);
+      if (!next.delete(index)) next.add(index);
+      return next;
+    });
   const scrollId = useId();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const activeRef = useRef<HTMLButtonElement | null>(null);
@@ -627,31 +643,43 @@ export function MatchReplayMoveList({
               { length: boundary.lastIndex - boundary.firstIndex + 1 },
               (_, offset) => boundary.firstIndex + offset,
             ).map((index) => {
-              const isCurrent = index === currentIndex;
+              const isCurrent = index === currentRowIndex;
               const beat = beats[index];
-              if (!beat || !matchingIndices.has(index)) {
+              if (!beat || !matchingIndices.has(index) || tapFolds.has(index)) {
                 return null;
               }
+              const tapped = tappedByHost.get(index);
+              const details = replayExpandableDetails(frames[index]!, relationships);
+              const detailsOpen = openDetails.has(index);
               return (
                 <div key={index} className="match-replay-event-row">
-                <button
-                  ref={isCurrent ? activeRef : undefined}
-                  type="button"
-                  className={`match-replay-movelist-beat ${isCurrent ? "is-current" : ""}`}
-                  aria-current={isCurrent ? "step" : undefined}
-                  onClick={() => onSeek(index)}
-                >
-                  <span className="match-replay-movelist-beat-text">
-                    <small>Step {index + 1} · </small>{beat.text}
-                  </span>
-                  {beat.note ? (
-                    <span className="match-replay-movelist-beat-note">
-                      {" "}
-                      · {beat.note}
+                  <button
+                    ref={isCurrent ? activeRef : undefined}
+                    type="button"
+                    className={`match-replay-movelist-beat ${isCurrent ? "is-current" : ""}`}
+                    aria-current={isCurrent ? "step" : undefined}
+                    onClick={() => onSeek(index)}
+                  >
+                    <span className="match-replay-movelist-step">{index + 1}</span>
+                    <span className="match-replay-movelist-beat-text">
+                      {beat.text}
+                      {tapped ? <span className="match-replay-movelist-tapped"> (tapping {tapped})</span> : null}
+                      {beat.note ? <span className="match-replay-movelist-beat-note"> · {beat.note}</span> : null}
                     </span>
+                  </button>
+                  {details.length > 0 ? (
+                    <button
+                      type="button"
+                      className="match-replay-details-toggle"
+                      aria-expanded={detailsOpen}
+                      aria-label={`${detailsOpen ? "Hide" : "Show"} ${details.length} event details for step ${index + 1}`}
+                      title="Event details"
+                      onClick={() => toggleDetails(index)}
+                    >
+                      {details.length}
+                    </button>
                   ) : null}
-                </button>
-                <ReplayEventDetails frame={frames[index]!} relationships={relationships} />
+                  {detailsOpen ? <ReplayEventDetails details={details} /> : null}
                 </div>
               );
             })}

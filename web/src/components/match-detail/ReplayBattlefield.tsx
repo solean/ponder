@@ -163,9 +163,6 @@ export function MatchReplayFrameBattlefield({
   const blockingCount = battlefieldObjects.filter(
     replayObjectIsBlocking,
   ).length;
-  const sideBadges = (
-    ["graveyard", "exile", "revealed"] as BoardZoneKind[]
-  ).filter((kind) => (zoneCounts.get(kind) ?? 0) > 0);
 
   return (
     <section
@@ -182,9 +179,6 @@ export function MatchReplayFrameBattlefield({
             {tappedCount > 0 ? ` • ${tappedCount} tapped` : ""}
             {attackingCount > 0 ? ` • ${attackingCount} attacking` : ""}
             {blockingCount > 0 ? ` • ${blockingCount} blocking` : ""}
-            {sideBadges.length > 0
-              ? ` • ${sideBadges.map((kind) => `${zoneCounts.get(kind)} ${boardZoneLabel(kind).toLowerCase()}`).join(" • ")}`
-              : ""}
           </p>
         </div>
       </div>
@@ -438,11 +432,7 @@ export function MatchReplayHand({
     <section className="match-replay-lane is-hand" aria-label="Your hand">
       <div className="match-replay-lane-head">
         <div>
-          <p className="match-replay-lane-title">Your Hand</p>
-          <p className="match-replay-lane-subtitle">
-            {handObjects.length} card{handObjects.length === 1 ? "" : "s"}{" "}
-            currently in hand
-          </p>
+          <p className="match-replay-lane-title">Your Hand · {handObjects.length}</p>
         </div>
       </div>
       {handObjects.length === 0 ? (

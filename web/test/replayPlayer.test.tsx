@@ -161,9 +161,10 @@ test("expanding full event details preserves playback and selected original fram
   act(() => root.render(<MatchReplayFrameBoard gameNumber={1} frames={[{ id: 1, turnNumber: 1, changes }, { id: 2, turnNumber: 1 }]} gameSummary={null} previewByCardID={new Map()} />));
   act(() => transport().click());
   expect(position()).toBe(1);
-  const details = container.querySelector<HTMLDetailsElement>(".match-replay-event-details")!;
-  act(() => details.querySelector("summary")!.click());
-  expect(details.open).toBe(true);
+  const toggle = container.querySelector<HTMLButtonElement>(".match-replay-details-toggle")!;
+  act(() => toggle.click());
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  const details = container.querySelector<HTMLOListElement>(".match-replay-event-details")!;
   expect(details.textContent).toContain("Alpha");
   expect(details.textContent).toContain("Beta");
   expect(position()).toBe(1);

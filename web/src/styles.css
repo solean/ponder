@@ -7875,7 +7875,7 @@ button.match-replay-zonechip.is-button {
 
 .draft-pick-chip {
   flex: none;
-  padding: 0.05rem 0.4rem;
+  padding: 0;
   border-radius: 3px;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -7885,7 +7885,6 @@ button.match-replay-zonechip.is-button {
 }
 
 .draft-pick-chip--best {
-  background: var(--accent-soft);
   color: var(--accent);
 }
 
@@ -7894,13 +7893,47 @@ button.match-replay-zonechip.is-button {
 }
 
 .draft-pick-chip--late {
+  padding: 0 0.3rem;
   background: var(--draft-late-bg);
   color: var(--draft-late-text);
 }
 
 .draft-pick-chip--muted {
-  box-shadow: inset 0 0 0 1px var(--line);
   color: var(--muted-strong);
+}
+
+/* Plain-text verdicts are separated by a dot instead of pill outlines. */
+.draft-pick-row-meta > * + *::before {
+  content: "·";
+  margin-right: 0.35rem;
+  color: var(--muted);
+}
+
+/* One cell per pick above each pack: green took the best card, red gave up
+   win rate (stronger is more), hollow could not be ranked. */
+.draft-pack-heat {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding: 0 0.8rem 0.55rem;
+}
+
+.draft-pack-heat-cell {
+  height: 6px;
+  border-radius: 1px;
+}
+
+.draft-pack-heat-cell.is-best {
+  background: color-mix(in srgb, var(--win) 45%, transparent);
+}
+
+.draft-pack-heat-cell.is-gap {
+  background: color-mix(in srgb, var(--loss) calc(var(--heat, 0.5) * 100%), transparent);
+}
+
+.draft-pack-heat-cell.is-unrated {
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .draft-pack-grid {

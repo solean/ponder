@@ -124,7 +124,56 @@ function VerdictChips({ verdict }: { verdict: DraftPickVerdict }) {
   );
 }
 
-function DraftPickSummaryStrip({ summary, mean }: { summary: DraftPickVerdictSummary; mean: number | null }) {
+/**
+ * GIH win rate left on the table: the gap to the best rated card in the pack,
+ * zero when the pick was the best, null when the pick could not be ranked.
+ */
+function givenUp(verdict: DraftPickVerdict | undefined): number | null {
+  if (!verdict || !isRanked(verdict) || verdict.gihWinRate == null) return null;
+  return verdict.bestPassed ? Math.max(verdict.bestPassed.gihWinRate - verdict.gihWinRate, 0) : 0;
+}
+
+function averageGivenUp(verdicts: Iterable<DraftPickVerdict>): number | null {
+  let total = 0;
+  let count = 0;
+  for (const verdict of verdicts) {
+    const gap = givenUp(verdict);
+    if (gap == null) continue;
+    total += gap;
+    count += 1;
+  }
+  return count > 0 ? total / count : null;
+}
+
+// Five points of win rate given up saturates a heat cell.
+const HEAT_STRIP_FULL = 0.05;
+
+/** One cell per pick, so the shape of a pack reads before any row does. */
+function PackHeatStrip({ pack, verdicts }: { pack: DraftPickLogPack; verdicts: Map<DraftPickLogPick, DraftPickVerdict> }) {
+  return (
+    <div className="draft-pack-heat" aria-hidden="true">
+      {pack.picks.map((pick) => {
+        const gap = givenUp(verdicts.get(pick));
+        const state = gap == null ? "unrated" : gap === 0 ? "best" : "gap";
+        const style =
+          state === "gap"
+            ? ({ "--heat": (0.3 + Math.min(gap! / HEAT_STRIP_FULL, 1) * 0.7).toFixed(2) } as CSSProperties)
+            : undefined;
+        return <span key={pick.pickNumber} className={`draft-pack-heat-cell is-${state}`} style={style} />;
+      })}
+    </div>
+  );
+}
+
+function DraftPickSummaryStrip({
+  summary,
+  mean,
+  givenUpAverage,
+}: {
+  summary: DraftPickVerdictSummary;
+  mean: number | null;
+  givenUpAverage: number | null;
+}) {
   const averageTone = summary.averageDelta != null && mean != null ? gihTone(mean + summary.averageDelta, mean) : "neutral";
   return (
     <div className="draft-pick-summary">
@@ -139,6 +188,11 @@ function DraftPickSummaryStrip({ summary, mean }: { summary: DraftPickVerdictSum
             {summary.bestCount}/{summary.rankedCount}
           </strong>{" "}
           best in pack
+        </p>
+      ) : null}
+      {givenUpAverage != null ? (
+        <p className="draft-pick-summary-stat" title="Average GIH win rate gap to the best card in each pack">
+          <strong>{(givenUpAverage * 100).toFixed(1)}</strong> pts given up per pick
         </p>
       ) : null}
       <p className="draft-pick-summary-stat draft-pick-summary-stat--late">
@@ -232,7 +286,10 @@ function DraftPickRow({
         <span className="draft-pick-row-meta">
           <VerdictChips verdict={verdict} />
           {passed ? (
-            <span className="draft-pick-row-passed">
+            <span
+              className="draft-pick-row-passed"
+              title={`Passed ${cardDisplayName(passed.card, previews.get(passed.card.cardId))} (${pct(passed.gihWinRate)})`}
+            >
               passed{" "}
               <CardPreviewName
                 cardId={passed.card.cardId}
@@ -296,6 +353,7 @@ function DraftPackColumn({
         <h4 id={headingID}>Pack {pack.displayPack}</h4>
         <PackSummaryLine summary={summary} mean={cardStats.mean} />
       </header>
+      <PackHeatStrip pack={pack} verdicts={verdicts} />
       <ol className="draft-pick-rows">
         {pack.picks.map((pick) => (
           <DraftPickRow
@@ -579,7 +637,13 @@ export function DraftPickLog({ picks, cardStats }: { picks: DraftPick[]; cardSta
         <StatusMessage>No picks were recorded for this draft.</StatusMessage>
       ) : (
         <>
-          {hasRatings ? <DraftPickSummaryStrip summary={overallSummary} mean={cardStats.mean} /> : null}
+          {hasRatings ? (
+            <DraftPickSummaryStrip
+              summary={overallSummary}
+              mean={cardStats.mean}
+              givenUpAverage={averageGivenUp(verdicts.values())}
+            />
+          ) : null}
           {view === "rows" ? (
             <div className="draft-pack-grid">
               {packs.map((pack) => (

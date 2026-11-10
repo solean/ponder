@@ -207,9 +207,11 @@ bool ponderOverlayAttach(
     CGWindowLevel shieldingLevel = CGShieldingWindowLevel();
     CGWindowLevel overlayLevel =
         shieldingLevel < maximumLevel ? shieldingLevel + 1 : maximumLevel;
+    // Transient (not Stationary) so Mission Control hides the HUD along with
+    // the game window instead of leaving it floating over the Spaces grid.
     [window setCollectionBehavior:
         requiredBehavior |
-        NSWindowCollectionBehaviorStationary |
+        NSWindowCollectionBehaviorTransient |
         NSWindowCollectionBehaviorIgnoresCycle];
     [window setLevel:overlayLevel];
     [window setHidesOnDeactivate:NO];

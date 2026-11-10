@@ -3115,8 +3115,9 @@ small.settings-meta,
 }
 
 .match-deck-colors-table {
+  flex-wrap: nowrap;
   margin-top: 0;
-  min-width: 10rem;
+  white-space: nowrap;
 }
 
 .match-deck-colors-list {
@@ -9434,7 +9435,11 @@ select option {
   display: flex;
   flex-direction: column;
   gap: 0.34rem;
-  min-width: 9rem;
+  min-width: 0;
+}
+
+.match-filter-field select.settings-input {
+  width: 9.5rem;
 }
 
 .match-filter-field > span {
@@ -9494,12 +9499,23 @@ select option {
 }
 
 .match-filter-field input[type="date"].settings-input {
+  width: 8.6rem;
   cursor: pointer;
 }
 
+/* WebKit paints today's date into an empty date input; dim it so it does not
+   read as an active filter. */
+.match-filter-field input[type="date"].settings-input.is-empty {
+  color: var(--muted);
+}
+
+.match-filter-field input[type="date"].settings-input.is-empty::-webkit-datetime-edit {
+  opacity: 0.55;
+}
+
 .match-filter-search {
-  min-width: 13rem;
-  flex: 1 1 13rem;
+  min-width: 10rem;
+  flex: 1 1 10rem;
 }
 
 .match-filter-colors {
@@ -9550,6 +9566,11 @@ select option {
   display: flex;
   gap: 0.7rem;
   margin-left: auto;
+}
+
+.matches-head {
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .match-filter-actions .control-button {
@@ -9773,6 +9794,58 @@ select option {
   letter-spacing: var(--track-lg);
 }
 
+.match-group-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  min-width: 0;
+  margin-left: 0.85rem;
+  color: var(--muted-strong);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.match-group-meta > * + *::before {
+  content: "·";
+  margin-right: 0.75rem;
+  color: var(--muted);
+}
+
+.match-group-meta > .match-deck-color-symbols::before {
+  content: none;
+}
+
+.match-group-tally {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 0.85rem;
+}
+
+.match-group-pips {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.match-group-pip {
+  width: 9px;
+  height: 9px;
+  box-sizing: border-box;
+  border-radius: 2px;
+  border: 1.5px solid var(--muted);
+}
+
+.match-group-pip.is-win {
+  border-color: var(--win);
+  background: var(--win);
+}
+
+.match-group-pip.is-loss {
+  border-color: var(--loss);
+}
+
 .match-group-record {
   margin-left: 0.85rem;
   color: var(--tab-active-border);
@@ -9876,6 +9949,18 @@ select option {
 
 .data-table.is-virtual tbody td > * {
   min-width: 0;
+}
+
+/* One line per match row: long deck and event names truncate instead of
+   doubling the row height. */
+.data-table.is-virtual tbody tr.data-table-row-link td {
+  white-space: nowrap;
+}
+
+.data-table.is-virtual tbody tr.data-table-row-link td > a,
+.data-table.is-virtual tbody tr.data-table-row-link td > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .data-table.is-virtual tbody tr.match-group-row {

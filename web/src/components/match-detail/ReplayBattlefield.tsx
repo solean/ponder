@@ -15,7 +15,6 @@ import {
   shouldRenderOnBattlefield,
   sortBattlefieldSectionObjects,
   sortReplayObjects,
-  summarizeReplayFrameZones,
   summarizeReplayZones,
   timelinePlayerLabel,
   type BattlefieldSectionKind,
@@ -150,10 +149,6 @@ export function MatchReplayFrameBattlefield({
       }))
       .filter((section) => section.objects.length > 0);
   }, [battlefieldObjects, previewByCardID, side]);
-  const zoneCounts = useMemo(
-    () => summarizeReplayFrameZones(sideObjects),
-    [sideObjects],
-  );
   const tappedCount = battlefieldObjects.filter(
     (object) => object.isTapped,
   ).length;

@@ -648,7 +648,6 @@ export function MatchReplayFrameBoard({
 
       <MatchReplayHud
         currentFrame={currentFrame}
-        previousFrame={previousFrame}
         stepNumber={safeSelectedFrameIndex + 1}
         stepCount={frames.length}
         beat={currentBeat}

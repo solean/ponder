@@ -6,10 +6,8 @@ import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   buildReplayBeat,
   replayFrameMomentLabel,
-  replayLifeDelta,
   replayLifeSeriesDomain,
   replayTurnLabel,
-  timelinePlayerLabel,
   type ReplayBeat,
   type ReplayBoardCensus,
   type ReplayKeyMoment,
@@ -463,13 +461,11 @@ export function MatchReplaySpeedControl({
 
 export function MatchReplayHud({
   currentFrame,
-  previousFrame,
   stepNumber,
   stepCount,
   beat,
 }: {
   currentFrame: MatchReplayFrame;
-  previousFrame: MatchReplayFrame | null;
   stepNumber: number;
   stepCount: number;
   beat: ReplayBeat;

@@ -65,6 +65,14 @@ export function Layout() {
     }
   }, [mode, modePreference, scheme]);
 
+  // Panels animate in on first load only; later navigations render in place.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      document.documentElement.classList.add("has-entered");
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     const scroller = scrollRef.current;
     return () => {

@@ -406,6 +406,26 @@ export function MatchReplayScrubber({
           <span className="match-replay-scrubber-legend-item is-opponent">
             <span className="match-replay-scrubber-legend-swatch" /> Opponent
           </span>
+          {tickKinds?.includes("spell") ? (
+            <span className="match-replay-scrubber-legend-item is-tick is-spell">
+              <span className="match-replay-scrubber-legend-swatch" /> Spell
+            </span>
+          ) : null}
+          {tickKinds?.includes("combat") ? (
+            <span className="match-replay-scrubber-legend-item is-tick is-combat">
+              <span className="match-replay-scrubber-legend-swatch" /> Combat
+            </span>
+          ) : null}
+          {tickKinds?.includes("life") ? (
+            <span className="match-replay-scrubber-legend-item is-tick is-life">
+              <span className="match-replay-scrubber-legend-swatch" /> Life change
+            </span>
+          ) : null}
+          {keyMoments && keyMoments.length > 0 ? (
+            <span className="match-replay-scrubber-legend-item is-pin">
+              <span className="match-replay-scrubber-legend-swatch" /> Key moment
+            </span>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -441,42 +461,6 @@ export function MatchReplaySpeedControl({
   );
 }
 
-function MatchReplayHudLife({
-  side,
-  life,
-  delta,
-  flashKey,
-}: {
-  side: "self" | "opponent";
-  life?: number;
-  delta: number | null;
-  flashKey: number;
-}) {
-  return (
-    <div className={`match-replay-hud-life is-${side}`}>
-      <div className="match-replay-hud-life-body">
-        <p className="match-replay-hud-life-label">
-          {timelinePlayerLabel(side)}
-        </p>
-        <div className="match-replay-hud-life-readout">
-          <span className="match-replay-hud-life-value">
-            {typeof life === "number" ? life : "—"}
-          </span>
-          {delta !== null ? (
-            <span
-              key={flashKey}
-              className={`match-replay-hud-delta ${delta > 0 ? "is-up" : "is-down"}`}
-              aria-label={`${timelinePlayerLabel(side)} life ${delta > 0 ? "gained" : "lost"} ${Math.abs(delta)}`}
-            >
-              {delta > 0 ? `+${delta}` : delta}
-            </span>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function MatchReplayHud({
   currentFrame,
   previousFrame,
@@ -492,12 +476,6 @@ export function MatchReplayHud({
 }) {
   return (
     <section className="match-replay-hud" aria-label="Replay status">
-      <MatchReplayHudLife
-        side="opponent"
-        life={currentFrame.opponentLifeTotal}
-        delta={replayLifeDelta(previousFrame, currentFrame, "opponent")}
-        flashKey={currentFrame.id}
-      />
       <div className="match-replay-hud-center">
         <div className="match-replay-hud-meta">
           <span className="match-replay-hud-moment">
@@ -517,12 +495,6 @@ export function MatchReplayHud({
           ) : null}
         </p>
       </div>
-      <MatchReplayHudLife
-        side="self"
-        life={currentFrame.selfLifeTotal}
-        delta={replayLifeDelta(previousFrame, currentFrame, "self")}
-        flashKey={currentFrame.id}
-      />
     </section>
   );
 }

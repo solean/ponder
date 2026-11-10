@@ -672,6 +672,9 @@ export function MatchReplayFrameBoard({
               previewByCardID={previewByCardID}
               side="opponent"
               objects={currentObjects}
+              lifeTotal={currentFrame.opponentLifeTotal}
+              lifeDelta={replayLifeDelta(previousFrame, currentFrame, "opponent")}
+              lifeFlashKey={currentFrame.id}
               variant="rail"
               onOpenZone={openZone}
               endpointId={replayPlayerConnectionId("opponent")}
@@ -731,6 +734,9 @@ export function MatchReplayFrameBoard({
             previewByCardID={previewByCardID}
             side="self"
             objects={currentObjects}
+            lifeTotal={currentFrame.selfLifeTotal}
+            lifeDelta={replayLifeDelta(previousFrame, currentFrame, "self")}
+            lifeFlashKey={currentFrame.id}
             variant="rail"
             onOpenZone={openZone}
             endpointId={replayPlayerConnectionId("self")}

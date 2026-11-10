@@ -66,6 +66,10 @@
 
   --win: #00e676;
   --loss: #ff5252;
+  /* Player identity in replays and game charts. Deliberately not green/red,
+     which mean win and loss everywhere else. */
+  --side-self: #8fa8ff;
+  --side-opponent: #ec8fb4;
   --accent: #ff8a24;
   --accent-strong: #d96a10;
   --accent-contrast: #140b06;
@@ -197,6 +201,8 @@
   --muted: #775844;
   --muted-strong: #5c402d;
 
+  --side-self: #3f5fcf;
+  --side-opponent: #b8457a;
   --win: #2e7d32;
   --loss: #c62828;
   --accent: #c55a11;
@@ -3692,12 +3698,12 @@ small.settings-meta,
 
 .game-shape-life.is-self,
 .game-shape-dot.is-self {
-  stroke: var(--win);
+  stroke: var(--side-self);
 }
 
 .game-shape-life.is-opponent,
 .game-shape-dot.is-opponent {
-  stroke: var(--loss);
+  stroke: var(--side-opponent);
 }
 
 .game-shape-dot {
@@ -3776,12 +3782,12 @@ small.settings-meta,
 
 .game-shape-legend-item.is-self::before {
   border-radius: 999px;
-  background: var(--win);
+  background: var(--side-self);
 }
 
 .game-shape-legend-item.is-opponent::before {
   border-radius: 999px;
-  background: var(--loss);
+  background: var(--side-opponent);
 }
 
 .game-shape-legend-item.is-land::before {
@@ -4346,6 +4352,16 @@ small.settings-meta,
   margin-bottom: 0;
 }
 
+/* The game tabs already name the game; keep the heading for assistive tech only. */
+.match-replay-command-deck .match-replay-head-copy h4 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .match-replay-caption {
   margin: 0;
   color: var(--muted);
@@ -4435,11 +4451,11 @@ small.settings-meta,
 }
 
 .match-replay-sidebox.is-opponent {
-  border-color: rgba(255, 82, 82, 0.24);
+  border-color: color-mix(in srgb, var(--side-opponent) 30%, transparent);
 }
 
 .match-replay-sidebox.is-self {
-  border-color: rgba(0, 230, 118, 0.24);
+  border-color: color-mix(in srgb, var(--side-self) 30%, transparent);
 }
 
 .match-replay-sidebox-head,
@@ -4797,11 +4813,11 @@ small.settings-meta,
 }
 
 .match-replay-stack-ticket.is-self .match-replay-stack-ticket-edge {
-  background: var(--metric-positive-border);
+  background: var(--side-self);
 }
 
 .match-replay-stack-ticket.is-opponent .match-replay-stack-ticket-edge {
-  background: var(--metric-negative-border);
+  background: var(--side-opponent);
 }
 
 .match-replay-stack-ticket-art {
@@ -4829,11 +4845,11 @@ small.settings-meta,
 }
 
 .match-replay-stack-ticket.is-self .match-replay-stack-ticket-owner {
-  color: var(--metric-positive-text);
+  color: var(--side-self);
 }
 
 .match-replay-stack-ticket.is-opponent .match-replay-stack-ticket-owner {
-  color: var(--metric-negative-text);
+  color: var(--side-opponent);
 }
 
 .match-replay-stack-ticket-target {
@@ -5132,7 +5148,7 @@ small.settings-meta,
 }
 
 .match-replay-movelist-beat-note {
-  color: var(--win);
+  color: var(--muted-strong);
 }
 
 .match-replay-movelist-beat:focus-visible {
@@ -5181,11 +5197,11 @@ small.settings-meta,
 }
 
 .match-replay-arena > .match-replay-lane.is-opponent {
-  border-left: 2px solid rgba(255, 82, 82, 0.28);
+  border-left: 2px solid color-mix(in srgb, var(--side-opponent) 45%, transparent);
 }
 
 .match-replay-arena > .match-replay-lane.is-self {
-  border-left: 2px solid rgba(0, 230, 118, 0.28);
+  border-left: 2px solid color-mix(in srgb, var(--side-self) 45%, transparent);
 }
 
 .match-replay-arena > .match-replay-lane.is-hand {
@@ -5310,11 +5326,24 @@ small.settings-meta,
 }
 
 .match-replay-zonerail.is-opponent .match-replay-zonerail-label {
-  color: var(--metric-negative-text);
+  color: var(--side-opponent);
 }
 
 .match-replay-zonerail.is-self .match-replay-zonerail-label {
-  color: var(--metric-positive-text);
+  color: var(--side-self);
+}
+
+/* Life total sits with its player, next to the name. */
+.match-replay-zonerail-life {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .match-replay-zonerail-zones {
@@ -6332,7 +6361,7 @@ button.match-replay-zonechip.is-button {
 /* ── Replay HUD: persistent life totals + current beat headline ── */
 .match-replay-hud {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   gap: 0.6rem 1rem;
   padding: 0.7rem 0.9rem;
@@ -6647,11 +6676,11 @@ button.match-replay-zonechip.is-button {
 }
 
 .match-replay-scrubber-life.is-self {
-  stroke: var(--win);
+  stroke: var(--side-self);
 }
 
 .match-replay-scrubber-life.is-opponent {
-  stroke: var(--loss);
+  stroke: var(--side-opponent);
   opacity: 0.85;
 }
 
@@ -6759,12 +6788,41 @@ button.match-replay-zonechip.is-button {
 }
 
 .match-replay-scrubber-legend-item.is-self .match-replay-scrubber-legend-swatch {
-  background: var(--win);
+  background: var(--side-self);
 }
 
 .match-replay-scrubber-legend-item.is-opponent
   .match-replay-scrubber-legend-swatch {
+  background: var(--side-opponent);
+}
+
+/* Tick and pin keys: a short vertical mark, matching what is drawn. */
+.match-replay-scrubber-legend-item.is-tick .match-replay-scrubber-legend-swatch {
+  width: 2px;
+  height: 9px;
+}
+
+.match-replay-scrubber-legend-item.is-combat .match-replay-scrubber-legend-swatch {
   background: var(--loss);
+}
+
+.match-replay-scrubber-legend-item.is-spell .match-replay-scrubber-legend-swatch {
+  background: var(--accent);
+}
+
+.match-replay-scrubber-legend-item.is-life .match-replay-scrubber-legend-swatch {
+  background: var(--combat-connection-line);
+}
+
+.match-replay-scrubber-legend-item.is-pin .match-replay-scrubber-legend-swatch {
+  width: 7px;
+  height: 7px;
+  transform: rotate(45deg);
+  background: var(--combat-connection-line);
+}
+
+.match-replay-scrubber-legend {
+  flex-wrap: wrap;
 }
 
 .match-replay-track-panel {
@@ -11026,11 +11084,11 @@ select option {
 }
 
 .match-replay-scrubber-tooltip-life.is-self strong {
-  color: var(--win);
+  color: var(--side-self);
 }
 
 .match-replay-scrubber-tooltip-life.is-opponent strong {
-  color: var(--loss);
+  color: var(--side-opponent);
 }
 
 .match-replay-scrubber-tooltip-delta {
@@ -11084,11 +11142,11 @@ select option {
 }
 
 .match-replay-scrubber-tooltip-cell.is-side.is-self {
-  color: var(--win);
+  color: var(--side-self);
 }
 
 .match-replay-scrubber-tooltip-cell.is-side.is-opponent {
-  color: var(--loss);
+  color: var(--side-opponent);
 }
 
 .match-replay-scrubber-tooltip-beat {

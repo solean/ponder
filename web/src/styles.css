@@ -5169,10 +5169,10 @@ small.settings-meta,
     radial-gradient(circle at 50% 50%, var(--accent-soft) 0%, transparent 60%),
     linear-gradient(
       180deg,
-      rgba(255, 82, 82, 0.05) 0%,
+      color-mix(in srgb, var(--side-opponent) 6%, transparent) 0%,
       transparent 22%,
       transparent 78%,
-      rgba(0, 230, 118, 0.05) 100%
+      color-mix(in srgb, var(--side-self) 6%, transparent) 100%
     ),
     linear-gradient(
       90deg,
@@ -7110,20 +7110,23 @@ button.match-replay-zonechip.is-button {
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 0.8rem;
 }
+/* Sections flow down two columns that the browser balances, so a long
+   sideboard no longer leaves the other column half empty. Card previews are
+   portaled, so column fragmentation cannot clip them. */
 .decklist-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-  gap: 0.8rem;
-  align-items: start;
+  columns: 2 22rem;
+  column-gap: 0.8rem;
 }
 
-.decklist-column {
-  display: grid;
-  gap: 0.8rem;
-  min-width: 0;
+.decklist-columns > .decklist-column,
+.decklist-columns .grid-cards {
+  display: contents;
 }
-.decklist-column:first-child > .grid-cards {
-  grid-template-columns: 1fr;
+
+.decklist-columns .deck-card,
+.decklist-columns .deck-section-skeleton {
+  break-inside: avoid;
+  margin-bottom: 0.8rem;
 }
 
 
@@ -7240,16 +7243,9 @@ button.match-replay-zonechip.is-button {
   display: block;
 }
 
+/* The enclosing .panel is the frame; these sit flat inside it. */
 .deck-curve-panel,
 .deck-visual-panel {
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  padding: 0.8rem;
-  background: linear-gradient(
-    165deg,
-    var(--deck-card-bg-a) 0%,
-    var(--deck-card-bg-b) 100%
-  );
   position: relative;
   display: grid;
   gap: 0.82rem;
@@ -12633,9 +12629,7 @@ select option {
   flex-wrap: wrap;
   margin: 0;
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface-strong);
+  border-block: 1px solid var(--line);
 }
 
 .deck-curve-stat {
@@ -12760,11 +12754,9 @@ select option {
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
-  min-height: 2.4rem;
-  padding: 0.3rem 0.6rem;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--surface-strong);
+  min-height: 2rem;
+  padding: 0.15rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
 }
 
 .deck-curve-pips {

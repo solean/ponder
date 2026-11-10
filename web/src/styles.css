@@ -1660,10 +1660,109 @@ body.has-wide-deck-curve .app-shell {
 
 .overview-metrics-grid {
   grid-template-columns:
-    minmax(0, 1.5fr)
+    minmax(0, 1.4fr)
     minmax(0, 1fr)
-    minmax(0, 1fr)
-    minmax(0, 0.8fr);
+    minmax(0, 1fr);
+}
+
+.form-pips {
+  display: flex;
+  gap: 4px;
+  margin-top: 0.6rem;
+}
+
+.form-pip {
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border-radius: 2px;
+  border: 1.5px solid var(--loss);
+}
+
+.form-pip.is-win {
+  border-color: var(--win);
+  background: var(--win);
+}
+
+/* Overview recent matches: one line per match. */
+.recent-match-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.recent-match-row {
+  display: grid;
+  grid-template-columns: 4.2rem minmax(0, 1fr) minmax(0, 1.6fr) 11.5rem 8.5rem 5rem;
+  gap: 0.9rem;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 0.3rem;
+  border-bottom: 1px solid var(--table-row-border);
+  color: var(--text);
+  font-size: var(--text-base);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.recent-match-row:hover,
+.recent-match-row:focus-visible {
+  background: var(--table-row-hover);
+}
+
+.recent-match-opponent {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.recent-match-context {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-strong);
+}
+
+.recent-match-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-match-event {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.recent-match-timing,
+.recent-match-when {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.recent-match-timing {
+  color: var(--muted-strong);
+}
+
+.recent-match-when {
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .recent-match-row {
+    grid-template-columns: 4.2rem minmax(0, 1fr) minmax(0, 1fr) 5rem;
+  }
+
+  .recent-match-row > .match-deck-colors,
+  .recent-match-timing {
+    display: none;
+  }
 }
 
 /* ══════════════════════════════════════════
@@ -10509,6 +10608,38 @@ select option {
   border-radius: 2px;
   background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 70%, transparent), var(--accent));
   box-shadow: 0 0 6px var(--accent-glow);
+}
+
+/* Splits: bar grows left or right of a 50% tick. */
+.split-bar--centered {
+  position: relative;
+  height: 6px;
+  overflow: visible;
+  background: color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.split-bar--centered::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  width: 1px;
+  height: 12px;
+  background: var(--muted);
+}
+
+.split-bar--centered .split-bar-fill {
+  position: absolute;
+  top: 0;
+  box-shadow: none;
+}
+
+.split-bar-fill--above {
+  background: var(--win);
+}
+
+.split-bar-fill--below {
+  background: var(--loss);
 }
 
 /* Top decks / drafts columns */

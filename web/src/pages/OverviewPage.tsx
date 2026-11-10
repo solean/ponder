@@ -24,7 +24,9 @@ import {
   activityDayBoundaries,
   labelDailyActivity,
   matchAverages,
+  lastSession,
   recentForm,
+  recentResults,
   recordWinRate,
   sortMatchesDesc,
   splitRecords,
@@ -47,6 +49,16 @@ const currentActivityCalendar = () =>
   `${new Date().toDateString()}|${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
 const MTGA_DETAILED_LOGS_HELP_URL =
   "https://mtgarena-support.wizards.com/hc/en-us/articles/360000726823-Creating-Log-Files-on-PC-Mac-Steam";
+
+// A split bar grows from the 50% mark; SPLIT_BAR_RANGE points either way fills
+// its half, so a 51% and a 62% split no longer look alike.
+const SPLIT_BAR_RANGE = 0.25;
+
+function splitBarStyle(rate: number): CSSProperties {
+  const half = Math.min(Math.abs(rate - 0.5) / SPLIT_BAR_RANGE, 1) * 50;
+  const width = Math.max(half, 1);
+  return rate >= 0.5 ? { left: "50%", width: `${width}%` } : { left: `${50 - width}%`, width: `${width}%` };
+}
 
 function SplitRow({
   label,
@@ -76,9 +88,12 @@ function SplitRow({
           )}
         </span>
       </div>
-      <div className="split-bar" aria-hidden="true">
+      <div className="split-bar split-bar--centered" aria-hidden="true">
         {rate != null ? (
-          <span className="split-bar-fill" style={{ width: `${Math.max(rate * 100, 2)}%` }} />
+          <span
+            className={`split-bar-fill split-bar-fill--${rate >= 0.5 ? "above" : "below"}`}
+            style={splitBarStyle(rate)}
+          />
         ) : null}
       </div>
     </div>
@@ -638,6 +653,11 @@ export function OverviewPage() {
   const form = recentForm(allMatches, FORM_WINDOW);
   const formRate = recordWinRate(form);
   const streak = currentStreak(allMatches);
+  const formResults = recentResults(allMatches, FORM_WINDOW);
+  const session = lastSession(allMatches);
+  const sessionDecks = session
+    ? [...new Set(session.matches.map((match) => match.deckName).filter((name): name is string => !!name))].slice(0, 2)
+    : [];
   const averages = matchAverages(allMatches);
 
   const activityTotal = activity.reduce((sum, day) => sum + day.count, 0);
@@ -670,85 +690,103 @@ export function OverviewPage() {
       {header}
 
       <section className="metrics-grid overview-metrics-grid">
-        <article className="metric-card metric-card--record">
-          <p>Record</p>
+        <article className={`metric-card metric-card--toned metric-card--${winRateTone(formRate)}`}>
+          <p>Last {formResults.length || FORM_WINDOW} matches</p>
           <div className="metric-value">
-            {data.wins}W – {data.losses}L
+            {formResults.length > 0 ? `${form.wins}–${form.losses}` : "—"}
+          </div>
+          <div className="form-pips" role="img" aria-label={`Oldest to newest: ${formResults.join(", ")}`}>
+            {formResults.map((result, index) => (
+              <span key={index} className={`form-pip is-${result}`} />
+            ))}
           </div>
           <small className="metric-sub">
+            {streak ? `${streak.result === "win" ? "W" : "L"}${streak.length} streak` : "no streak"}
+            {lastPlayedAt ? ` · last played ${formatRelativeTime(lastPlayedAt)}` : ""}
+          </small>
+        </article>
+        <article className="metric-card">
+          <p>Last session{session ? ` · ${formatRelativeTime(session.startedAt)}` : ""}</p>
+          <div className="metric-value">
+            {session ? `${session.record.wins}–${session.record.losses}` : "—"}
+          </div>
+          <small className="metric-sub">
+            {session
+              ? `${session.matches.length} ${session.matches.length === 1 ? "match" : "matches"}${
+                  sessionDecks.length > 0 ? ` · ${sessionDecks.join(", ")}` : ""
+                }`
+              : "no matches yet"}
+          </small>
+        </article>
+        <article className="metric-card metric-card--record">
+          <p>All time</p>
+          <div className="metric-value">
+            {data.wins}–{data.losses}
+          </div>
+          <small className="metric-sub">
+            {overallRate == null ? "" : `${pct(overallRate)} · `}
             {data.totalMatches} matches{unknownCount > 0 ? ` · ${unknownCount} unresolved` : ""}
-          </small>
-        </article>
-        <article className={`metric-card metric-card--toned metric-card--${winRateTone(overallRate)}`}>
-          <p>Win Rate</p>
-          <div className="metric-value">{overallRate == null ? "—" : pct(overallRate)}</div>
-          <small className="metric-sub">all decided matches</small>
-        </article>
-        <article className={`metric-card metric-card--toned metric-card--${winRateTone(formRate)}`}>
-          <p>Recent Form</p>
-          <div className="metric-value">{formRate == null ? "—" : pct(formRate)}</div>
-          <small className="metric-sub">
-            last {form.wins + form.losses} · {form.wins}W – {form.losses}L
-          </small>
-        </article>
-        <article
-          className={`metric-card metric-card--toned metric-card--${
-            streak ? (streak.result === "win" ? "positive" : "negative") : "neutral"
-          }`}
-        >
-          <p>Streak</p>
-          <div className="metric-value">{streak ? `${streak.result === "win" ? "W" : "L"}${streak.length}` : "—"}</div>
-          <small className="metric-sub">
-            {lastPlayedAt ? `last played ${formatRelativeTime(lastPlayedAt)}` : "current streak"}
           </small>
         </article>
       </section>
 
-      <section className="panel activity-panel">
+      <section className="panel">
         <div className="panel-head">
-          <h3>Activity</h3>
-          <div className="activity-head-meta">
-            <p>
-              {activityQuery.data && !activityQuery.error ? `${activityTotal} match${activityTotal === 1 ? "" : "es"} · ` : ""}
-              last {ACTIVITY_DAYS} days
-            </p>
-            <div className="tabs tabs--sm" role="group" aria-label="Color activity by">
-              <button
-                type="button"
-                className={`tab ${activityColorByWinRate ? "" : "is-active"}`}
-                aria-pressed={!activityColorByWinRate}
-                onClick={() => setActivityColorByWinRate(false)}
-              >
-                Matches
-              </button>
-              <button
-                type="button"
-                className={`tab ${activityColorByWinRate ? "is-active" : ""}`}
-                aria-pressed={activityColorByWinRate}
-                onClick={() => setActivityColorByWinRate(true)}
-              >
-                Win Rate
-              </button>
-            </div>
-          </div>
+          <h3>Recent Matches</h3>
+          <Link to="/matches" className="text-link">
+            Open full history
+          </Link>
         </div>
-        {activityQuery.isPending ? (
-          <StatusMessage>Loading activity…</StatusMessage>
-        ) : activityQuery.error ? (
-          <StatusMessage tone="error">Unable to load activity: {(activityQuery.error as Error).message}</StatusMessage>
-        ) : (
-          <ActivityGraph
-            activity={activity}
-            total={activityTotal}
-            colorMode={activityColorByWinRate ? "winRate" : "matches"}
-          />
-        )}
-        {activityQuery.isSuccess && activityTotal === 0 ? (
-          <p className="state activity-empty">
-            No matches in the last {ACTIVITY_DAYS} days
-            {lastPlayedAt ? ` — last played ${formatRelativeTime(lastPlayedAt)}` : ""}.
-          </p>
-        ) : null}
+        <div className="recent-match-list">
+          {shownMatches.map((match) => {
+            const parsedEvent = parseEventName(match.eventName);
+            const eventSet = setLookup(parsedEvent.setCode);
+            const queueLabel = eventDisplayName(parsedEvent, eventSet);
+            const title = match.deckName || queueLabel;
+            const timingParts: string[] = [];
+            const duration = formatDuration(match.secondsCount ?? undefined);
+
+            if (duration !== "-") {
+              timingParts.push(duration);
+            }
+            if (match.turnCount != null) {
+              timingParts.push(`${match.turnCount} turn${match.turnCount === 1 ? "" : "s"}`);
+            }
+
+            return (
+              <Link className="recent-match-row" key={match.id} to={`/matches/${match.id}`}>
+                <ResultPill result={match.result} />
+                <span className="recent-match-opponent">{match.opponent || "Unknown"}</span>
+                <span className="recent-match-context">
+                  <span className="recent-match-title">{title}</span>
+                  {match.deckName ? (
+                    <span className="recent-match-event">
+                      <EventLabel eventName={match.eventName} lookup={setLookup} />
+                    </span>
+                  ) : null}
+                </span>
+                <MatchDeckColors
+                  className="match-deck-colors-table"
+                  hideUnknown
+                  deckColors={match.deckColors}
+                  deckColorsKnown={match.deckColorsKnown}
+                  opponentDeckColors={match.opponentDeckColors}
+                  opponentDeckColorsKnown={match.opponentDeckColorsKnown}
+                />
+                <span className="recent-match-timing">{timingParts.join(" · ") || "—"}</span>
+                <span className="recent-match-when" title={formatDateTime(match.startedAt)}>
+                  {formatRelativeTime(match.startedAt)}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+        <div className="panel-foot">
+          <span>
+            Showing {shownMatches.length} of {data.totalMatches}
+          </span>
+          {averagesLabel ? <span>Avg match {averagesLabel}</span> : null}
+        </div>
       </section>
 
       <RankProgressPanel />
@@ -773,39 +811,6 @@ export function OverviewPage() {
             <span className="split-group-title">Match Type</span>
             <SplitRow label="Best of one" record={splits.bo1} />
             <SplitRow label="Best of three" record={splits.bo3} />
-          </div>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
-          <h3>Schedule</h3>
-          <p>
-            last {allMatches.length} match{allMatches.length === 1 ? "" : "es"} · local time
-          </p>
-        </div>
-        <div className="splits-grid">
-          <div className="split-group">
-            <span className="split-group-title">Day of Week</span>
-            {weekdays.map((bucket) => (
-              <SplitRow
-                key={bucket.key}
-                label={bucket.label}
-                record={bucket.record}
-                hint={scheduleHint(bucket)}
-              />
-            ))}
-          </div>
-          <div className="split-group">
-            <span className="split-group-title">Time of Day</span>
-            {timeSlots.map((bucket) => (
-              <SplitRow
-                key={bucket.key}
-                label={bucket.label}
-                record={bucket.record}
-                hint={scheduleHint(bucket)}
-              />
-            ))}
           </div>
         </div>
       </section>
@@ -916,83 +921,83 @@ export function OverviewPage() {
         </section>
       </div>
 
+      <section className="panel activity-panel">
+        <div className="panel-head">
+          <h3>Activity</h3>
+          <div className="activity-head-meta">
+            <p>
+              {activityQuery.data && !activityQuery.error ? `${activityTotal} match${activityTotal === 1 ? "" : "es"} · ` : ""}
+              last {ACTIVITY_DAYS} days
+            </p>
+            <div className="tabs tabs--sm" role="group" aria-label="Color activity by">
+              <button
+                type="button"
+                className={`tab ${activityColorByWinRate ? "" : "is-active"}`}
+                aria-pressed={!activityColorByWinRate}
+                onClick={() => setActivityColorByWinRate(false)}
+              >
+                Matches
+              </button>
+              <button
+                type="button"
+                className={`tab ${activityColorByWinRate ? "is-active" : ""}`}
+                aria-pressed={activityColorByWinRate}
+                onClick={() => setActivityColorByWinRate(true)}
+              >
+                Win Rate
+              </button>
+            </div>
+          </div>
+        </div>
+        {activityQuery.isPending ? (
+          <StatusMessage>Loading activity…</StatusMessage>
+        ) : activityQuery.error ? (
+          <StatusMessage tone="error">Unable to load activity: {(activityQuery.error as Error).message}</StatusMessage>
+        ) : (
+          <ActivityGraph
+            activity={activity}
+            total={activityTotal}
+            colorMode={activityColorByWinRate ? "winRate" : "matches"}
+          />
+        )}
+        {activityQuery.isSuccess && activityTotal === 0 ? (
+          <p className="state activity-empty">
+            No matches in the last {ACTIVITY_DAYS} days
+            {lastPlayedAt ? ` — last played ${formatRelativeTime(lastPlayedAt)}` : ""}.
+          </p>
+        ) : null}
+      </section>
+
       <section className="panel">
         <div className="panel-head">
-          <h3>Recent Matches</h3>
-          <Link to="/matches" className="text-link">
-            Open full history
-          </Link>
+          <h3>Schedule</h3>
+          <p>
+            last {allMatches.length} match{allMatches.length === 1 ? "" : "es"} · local time
+          </p>
         </div>
-        <div className="list">
-          {shownMatches.map((match) => {
-            const parsedEvent = parseEventName(match.eventName);
-            const eventSet = setLookup(parsedEvent.setCode);
-            const queueLabel = eventDisplayName(parsedEvent, eventSet);
-            const title = match.deckName || queueLabel;
-            const timingParts: string[] = [];
-            const duration = formatDuration(match.secondsCount ?? undefined);
-
-            if (duration !== "-") {
-              timingParts.push(duration);
-            }
-            if (match.turnCount != null) {
-              timingParts.push(`${match.turnCount} turn${match.turnCount === 1 ? "" : "s"}`);
-            }
-
-            return (
-              <Link
-                className={`list-row list-row--${match.result}`}
-                key={match.id}
-                to={`/matches/${match.id}`}
-              >
-                <div className="list-main">
-                  <p className="list-title">{title}</p>
-                  {match.deckName ? (
-                    <p className="list-subtitle">
-                      <EventLabel eventName={match.eventName} lookup={setLookup} />
-                    </p>
-                  ) : null}
-                </div>
-
-                <dl className="list-meta" aria-label="Recent match summary">
-                  <div className="list-meta-item">
-                    <dt>Opponent</dt>
-                    <dd>{match.opponent || "Unknown"}</dd>
-                  </div>
-                  <div className="list-meta-item">
-                    <dt>Started</dt>
-                    <dd title={formatDateTime(match.startedAt)}>
-                      {formatRelativeTime(match.startedAt)}
-                    </dd>
-                  </div>
-                  <div className="list-meta-item list-meta-item--colors">
-                    <dt>Colors</dt>
-                    <dd>
-                      <MatchDeckColors
-                        className="match-deck-colors-list"
-                        hideUnknown
-                        deckColors={match.deckColors}
-                        deckColorsKnown={match.deckColorsKnown}
-                        opponentDeckColors={match.opponentDeckColors}
-                        opponentDeckColorsKnown={match.opponentDeckColorsKnown}
-                      />
-                    </dd>
-                  </div>
-                </dl>
-
-                <div className="list-right">
-                  <ResultPill result={match.result} />
-                  <small>{timingParts.join(" · ") || "Timing unavailable"}</small>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-        <div className="panel-foot">
-          <span>
-            Showing {shownMatches.length} of {data.totalMatches}
-          </span>
-          {averagesLabel ? <span>Avg match {averagesLabel}</span> : null}
+        <div className="splits-grid">
+          <div className="split-group">
+            <span className="split-group-title">Day of Week</span>
+            {weekdays.map((bucket) => (
+              <SplitRow
+                key={bucket.key}
+                label={bucket.label}
+                record={bucket.record}
+                hint={scheduleHint(bucket)}
+              />
+            ))}
+          </div>
+          <div className="split-group">
+            <span className="split-group-title">Time of Day</span>
+            {timeSlots.map((bucket) => (
+              <SplitRow
+                key={bucket.key}
+                label={bucket.label}
+                record={bucket.record}
+                hint={scheduleHint(bucket)}
+              />
+            ))}
+          </div>
         </div>
       </section>
     </div>

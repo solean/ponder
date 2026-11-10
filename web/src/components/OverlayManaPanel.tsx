@@ -21,11 +21,6 @@ export function OverlayManaPanel({ mana }: { mana?: LiveMana }) {
           </span>
         ))}
       </div>
-      <p className="overlay-mana-note">
-        {!mana ? "Waiting for game state" : mana.unresolved > 0
-          ? `${mana.unresolved} conditional or unknown · colors overlap`
-          : !mana.poolKnown ? "Pool unknown · colors overlap" : "Includes pool · colors overlap"}
-      </p>
     </aside>
   );
 }

@@ -13257,15 +13257,16 @@ html.overlay-document body::before {
 .game-land-table thead { color: var(--muted-strong); }
 .game-land-table td { font-variant-numeric: tabular-nums; }
 
-/* Anchor to Arena's lower battlefield, above the graveyard and library. Use
-   viewport offsets so the strip follows the board as the game window resizes. */
+/* Anchor just under your land row on Arena's battlefield, above the graveyard
+   and library. Use viewport offsets so the strip follows the board as the game
+   window resizes. */
 .overlay-hud.has-mana-panel .overlay-panel-deck {
-  max-height: calc(77vh - 4.5rem);
+  max-height: calc(82.5vh - 4.5rem);
 }
 
 .overlay-panel-mana {
   position: absolute;
-  bottom: 23vh;
+  bottom: 17.5vh;
   left: 14vw;
   display: grid;
   grid-template-columns: auto auto;
@@ -13296,8 +13297,7 @@ html.overlay-document body::before {
   font: 600 0.875rem/1 var(--font-mono);
 }
 
-.overlay-mana-totals span,
-.overlay-mana-note {
+.overlay-mana-totals span {
   color: #c0c7d1;
   font-size: 0.625rem;
   line-height: 1.4;
@@ -13320,5 +13320,3 @@ html.overlay-document body::before {
   width: 1rem;
   height: 1rem;
 }
-
-.overlay-mana-note { grid-column: 1 / -1; margin: 0; }

@@ -12656,6 +12656,13 @@ html.overlay-document body::before {
   animation: overlay-panel-in 180ms ease-out both;
 }
 
+/* Card hover previews share the app's popover style; over the transparent
+   overlay window the same outer shadow and blur outline issue applies. */
+html.overlay-document .card-preview-popover {
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
 .overlay-panel-opponent {
   margin-left: auto;
   --overlay-accent: #83c8e8;

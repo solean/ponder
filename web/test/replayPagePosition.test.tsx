@@ -49,7 +49,7 @@ test("chosen position survives returning from analytics and switching games", as
  await render("");
  act(() => container.querySelectorAll<HTMLButtonElement>(".match-replay-movelist-beat")[0]!.click());
  const section = (name: string) => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(button => button.textContent === name)!;
- act(() => section("Game Analytics").click());
+ act(() => section("Analytics").click());
  act(() => section("Replay").click());
  expect(container.querySelector('[role="slider"]')?.getAttribute("aria-valuenow")).toBe("1");
  const game = (number: number) => [...container.querySelectorAll<HTMLButtonElement>('[aria-label="Replay game selector"] button')].find(button => button.textContent === `Game ${number}`)!;
@@ -92,7 +92,7 @@ test("explicit missing-frame recovery persists when returning from analytics", a
  expect(container.textContent).toContain("position is no longer available");
  act(() => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Start from the first step")!.click());
  const section = (name: string) => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(button => button.textContent === name)!;
- act(() => section("Game Analytics").click());
+ act(() => section("Analytics").click());
  act(() => section("Replay").click());
  expect(container.querySelector('[role="slider"]')?.getAttribute("aria-valuenow")).toBe("1");
  expect(container.textContent).not.toContain("position is no longer available");

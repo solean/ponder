@@ -472,25 +472,21 @@ export function MatchReplayHud({
 }) {
   return (
     <section className="match-replay-hud" aria-label="Replay status">
-      <div className="match-replay-hud-center">
-        <div className="match-replay-hud-meta">
-          <span className="match-replay-hud-moment">
-            {replayFrameMomentLabel(currentFrame)}
+      <span className="match-replay-hud-moment">
+        {replayFrameMomentLabel(currentFrame)}
+      </span>
+      <p className="match-replay-hud-headline">
+        {beat.text}
+        {beat.note ? (
+          <span className="match-replay-hud-headline-note">
+            {" "}
+            — {beat.note}
           </span>
-          <span className="match-replay-hud-step">
-            Step {stepNumber} / {stepCount}
-          </span>
-        </div>
-        <p className="match-replay-hud-headline">
-          {beat.text}
-          {beat.note ? (
-            <span className="match-replay-hud-headline-note">
-              {" "}
-              — {beat.note}
-            </span>
-          ) : null}
-        </p>
-      </div>
+        ) : null}
+      </p>
+      <span className="match-replay-hud-step">
+        Step {stepNumber} / {stepCount}
+      </span>
     </section>
   );
 }
@@ -503,7 +499,10 @@ export function MatchReplayMoveList({
   collapsed,
   onToggleCollapsed,
   onSeek,
+  playDraw,
 }: {
+  /** Lets each turn header say whose turn it was. */
+  playDraw?: "play" | "draw" | "";
   frames: MatchReplayFrame[];
   relationships: ReplayRelationshipIndex;
   turnBoundaries: ReplayTurnBoundary[];
@@ -514,6 +513,7 @@ export function MatchReplayMoveList({
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<ReplayCategory>("all");
+  const isFiltered = query !== "" || category !== "all";
   const matchingIndices = new Set(frames.flatMap((frame, index) => replayFrameMatches(frame, relationships, query, category) ? [index] : []));
   const beats = useMemo(
     () =>
@@ -571,27 +571,33 @@ export function MatchReplayMoveList({
       className={`match-replay-movelist ${collapsed ? "is-collapsed" : ""}`}
       aria-label="Play-by-play"
     >
-      <button
-        type="button"
-        className="match-replay-movelist-title"
-        aria-expanded={!collapsed}
-        aria-controls={scrollId}
-        title={collapsed ? "Expand play-by-play" : "Minimize play-by-play"}
-        onClick={onToggleCollapsed}
-      >
-        <span className="match-replay-movelist-title-text">Play-by-play</span>
-        <span className="match-replay-movelist-title-toggle" aria-hidden="true">
-          {collapsed ? "+" : "–"}
-        </span>
-      </button>
+      <div className="match-replay-movelist-bar">
         <div className="match-replay-filters" hidden={collapsed}>
-          <input aria-label="Search replay cards" placeholder="Search cards…" value={query} onChange={event => setQuery(event.target.value)} />
+          <input type="search" aria-label="Search replay cards" placeholder="Search cards…" value={query} onChange={event => setQuery(event.target.value)} />
           <select aria-label="Replay category" value={category} onChange={event => setCategory(event.target.value as ReplayCategory)}>
             <option value="all">All events</option><option value="spells">Spells</option><option value="combat">Combat</option><option value="removal">Removal</option>
           </select>
-          <button type="button" disabled={!query && category === "all"} onClick={() => { setQuery(""); setCategory("all"); }}>Clear filters</button>
-          <span>{matchingIndices.size} of {frames.length} steps</span>
         </div>
+        <button
+          type="button"
+          className="match-replay-movelist-title"
+          aria-expanded={!collapsed}
+          aria-controls={scrollId}
+          title={collapsed ? "Expand play-by-play" : "Minimize play-by-play"}
+          onClick={onToggleCollapsed}
+        >
+          <span className="match-replay-movelist-title-text">Play-by-play</span>
+          <span className="match-replay-movelist-title-toggle" aria-hidden="true">
+            {collapsed ? "+" : "–"}
+          </span>
+        </button>
+      </div>
+      {isFiltered && !collapsed ? (
+        <p className="match-replay-filter-status">
+          <span>{matchingIndices.size} of {frames.length} steps</span>
+          <button type="button" onClick={() => { setQuery(""); setCategory("all"); }}>Clear filters</button>
+        </p>
+      ) : null}
       <div
         id={scrollId}
         ref={scrollRef}
@@ -605,7 +611,8 @@ export function MatchReplayMoveList({
             key={`${boundary.turnKey}-${boundary.firstIndex}`}
           >
             <p className="match-replay-movelist-turn-label">
-              {replayTurnLabel(boundary.turnKey)}
+              <span>{replayTurnLabel(boundary.turnKey)}{turnOwnerSuffix(boundary.turnKey, playDraw)}</span>
+              <MoveListTurnLife frame={frames[boundary.lastIndex]} />
             </p>
             {Array.from(
               { length: boundary.lastIndex - boundary.firstIndex + 1 },
@@ -629,6 +636,7 @@ export function MatchReplayMoveList({
                     onClick={() => onSeek(index)}
                   >
                     <span className="match-replay-movelist-step">{index + 1}</span>
+                    <span className={`match-replay-movelist-dot is-${beatSide(beat, frames[index])}`} aria-hidden="true" />
                     <span className="match-replay-movelist-beat-text">
                       {beat.text}
                       {tapped ? <span className="match-replay-movelist-tapped"> (tapping {tapped})</span> : null}
@@ -654,6 +662,36 @@ export function MatchReplayMoveList({
           </div>
         ))}
       </div>
+      <p className="match-replay-movelist-legend" hidden={collapsed}>
+        <span><span className="match-replay-movelist-dot is-self" aria-hidden="true" />You</span>
+        <span><span className="match-replay-movelist-dot is-opponent" aria-hidden="true" />Opponent</span>
+        <span>Number at right: sub-events</span>
+      </p>
     </aside>
+  );
+}
+
+function turnOwnerSuffix(turn: number | undefined, playDraw?: "play" | "draw" | ""): string {
+  if (typeof turn !== "number" || turn <= 0 || !playDraw) return "";
+  return (turn % 2 === 1) === (playDraw === "play") ? " · You" : " · Opponent";
+}
+
+/** Who acted in a step, for the row's dot; "neutral" when the game did. */
+function beatSide(beat: ReplayBeat, frame: MatchReplayFrame | undefined): "self" | "opponent" | "neutral" {
+  if (/^You(r)?\b/.test(beat.text)) return "self";
+  if (/^Opponent\b/.test(beat.text)) return "opponent";
+  const side = frame?.changes?.[0]?.playerSide;
+  return side === "self" || side === "opponent" ? side : "neutral";
+}
+
+/** Life totals at the end of a turn: yours, then the opponent's. */
+function MoveListTurnLife({ frame }: { frame: MatchReplayFrame | undefined }) {
+  if (typeof frame?.selfLifeTotal !== "number" || typeof frame.opponentLifeTotal !== "number") return null;
+  return (
+    <span className="match-replay-movelist-turn-life" aria-label={`Life: you ${frame.selfLifeTotal}, opponent ${frame.opponentLifeTotal}`}>
+      <span className="is-self">{frame.selfLifeTotal}</span>
+      <span aria-hidden="true"> – </span>
+      <span className="is-opponent">{frame.opponentLifeTotal}</span>
+    </span>
   );
 }

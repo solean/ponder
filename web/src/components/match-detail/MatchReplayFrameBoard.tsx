@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { replayPositionKey, saveReplayKind } from "../../lib/replay/position";
 import { isReplayDecision, replayNavigationIndex } from "../../lib/replay/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -65,7 +66,13 @@ export function MatchReplayFrameBoard({
   frames,
   gameSummary,
   previewByCardID,
+  gameTabs,
+  recordingNotice,
 }: {
+  /** Game selector, shown at the start of the playback bar. */
+  gameTabs?: ReactNode;
+  /** Recording coverage line, shown at the end of the playback bar. */
+  recordingNotice?: ReactNode;
   gameNumber: number;
   matchId?: number;
   playDraw?: "play" | "draw" | "";
@@ -541,21 +548,135 @@ export function MatchReplayFrameBoard({
   }
 
   return (
-    <article className="match-replay-game">
-      <div className="match-replay-command-deck">
-        <div className="match-replay-head">
-          <div className="match-replay-head-copy">
-            <h4>Game {gameNumber}</h4>
-            {gameSummary ? (
-              <div className="match-replay-result">
-                <ResultPill result={gameSummary.result} />
-                <p className="match-replay-result-copy">{gameSummary.detail}</p>
-              </div>
-            ) : null}
+    <article className="match-replay-game is-board-first">
+      <div
+        className={`match-replay-canvas is-arena ${
+          moveListCollapsed ? "is-movelist-collapsed" : ""
+        }`}
+      >
+        <div className="match-replay-arena" ref={canvasRef}>
+          <MatchReplayConnectionOverlay
+            surfaceRef={canvasRef}
+            cardShellsRef={replayCardShellsRef}
+            connections={overlayConnections}
+            focusedInstanceId={focusedConnectionInstanceId}
+          />
+
+          <div className="match-replay-arena-top">
+            <MatchReplayFrameSideSummary
+              previewByCardID={previewByCardID}
+              side="opponent"
+              objects={currentObjects}
+              lifeTotal={currentFrame.opponentLifeTotal}
+              lifeDelta={replayLifeDelta(previousFrame, currentFrame, "opponent")}
+              lifeFlashKey={currentFrame.id}
+              variant="rail"
+              onOpenZone={openZone}
+              endpointId={replayPlayerConnectionId("opponent")}
+              onRegisterEndpoint={registerCardShell}
+              attackSummary={
+                relationshipPresentation.attackSummaries.get("opponent") ?? null
+              }
+              relationshipTargeted={relationshipPresentation.targetedPlayerSides.has(
+                "opponent",
+              )}
+            />
+            <div className="match-replay-arena-stack">
+              <MatchReplayStack
+                frame={currentFrame}
+                targetsBySourceId={targetsBySourceId}
+                previewByCardID={previewByCardID}
+                highlightedInstanceIDs={changedInstanceIDs}
+                onRegisterCardShell={registerCardShell}
+                connectionHighlightedInstanceIDs={overlayHighlightedInstanceIDs}
+                connectionInteractiveInstanceIDs={overlayInteractiveInstanceIDs}
+                onConnectionFocusChange={setFocusedConnectionInstanceId}
+              />
+            </div>
           </div>
+
+          <MatchReplayFrameBattlefield
+            side="opponent"
+            objects={currentObjects}
+            previewByCardID={previewByCardID}
+            highlightedInstanceIDs={changedInstanceIDs}
+            onRegisterCardShell={registerCardShell}
+            connectionHighlightedInstanceIDs={overlayHighlightedInstanceIDs}
+            connectionInteractiveInstanceIDs={overlayInteractiveInstanceIDs}
+            onConnectionFocusChange={setFocusedConnectionInstanceId}
+            linkedExileObjectsByParentId={linkedExileObjectsByParentId}
+            relationshipLabelsByObjectId={
+              relationshipPresentation.relationshipLabelsByObjectId
+            }
+          />
+
+          <MatchReplayHud
+            currentFrame={currentFrame}
+            stepNumber={safeSelectedFrameIndex + 1}
+            stepCount={frames.length}
+            beat={currentBeat}
+          />
+
+          <MatchReplayFrameBattlefield
+            side="self"
+            objects={currentObjects}
+            previewByCardID={previewByCardID}
+            highlightedInstanceIDs={changedInstanceIDs}
+            onRegisterCardShell={registerCardShell}
+            connectionHighlightedInstanceIDs={overlayHighlightedInstanceIDs}
+            connectionInteractiveInstanceIDs={overlayInteractiveInstanceIDs}
+            onConnectionFocusChange={setFocusedConnectionInstanceId}
+            linkedExileObjectsByParentId={linkedExileObjectsByParentId}
+            relationshipLabelsByObjectId={
+              relationshipPresentation.relationshipLabelsByObjectId
+            }
+          />
+
+          <MatchReplayFrameSideSummary
+            previewByCardID={previewByCardID}
+            side="self"
+            objects={currentObjects}
+            lifeTotal={currentFrame.selfLifeTotal}
+            lifeDelta={replayLifeDelta(previousFrame, currentFrame, "self")}
+            lifeFlashKey={currentFrame.id}
+            variant="rail"
+            onOpenZone={openZone}
+            endpointId={replayPlayerConnectionId("self")}
+            onRegisterEndpoint={registerCardShell}
+            attackSummary={
+              relationshipPresentation.attackSummaries.get("self") ?? null
+            }
+            relationshipTargeted={relationshipPresentation.targetedPlayerSides.has(
+              "self",
+            )}
+          />
+
+          <MatchReplayHand
+            objects={currentObjects}
+            previewByCardID={previewByCardID}
+            highlightedInstanceIDs={changedInstanceIDs}
+          />
         </div>
 
-        <div className="match-replay-controls-bar">
+        <MatchReplayMoveList
+          frames={frames}
+          playDraw={playDraw}
+          relationships={relationships}
+          turnBoundaries={turnBoundaries}
+          currentIndex={safeSelectedFrameIndex}
+          collapsed={moveListCollapsed}
+          onToggleCollapsed={() => setMoveListCollapsed((value) => !value)}
+          onSeek={(nextIndex) => {
+            setIsPlaying(false);
+            setSelectedFrameIndex(nextIndex);
+          }}
+        />
+      </div>
+
+
+      <div className="match-replay-command-deck">
+        <div className="match-replay-playbar">
+          {gameTabs}
           <div
             className="match-replay-button-row"
             role="group"
@@ -625,10 +746,20 @@ export function MatchReplayFrameBoard({
             </button>
           </div>
 
-          <div className="match-replay-controls-aux">
-            <MatchReplaySpeedControl speed={speed} onSelectSpeed={setSpeed} />
-            <label className="match-replay-decision-mode"><input type="checkbox" checked={decisionMode} onChange={event => setDecisionMode(event.target.checked)} /> Decisions only</label>
+          <MatchReplaySpeedControl speed={speed} onSelectSpeed={setSpeed} />
+          <label className="match-replay-decision-mode"><input type="checkbox" checked={decisionMode} onChange={event => setDecisionMode(event.target.checked)} /> Decisions only</label>
+          <div className="match-replay-head">
+            <div className="match-replay-head-copy">
+              <h4>Game {gameNumber}</h4>
+              {gameSummary ? (
+                <div className="match-replay-result">
+                  <ResultPill result={gameSummary.result} />
+                  <p className="match-replay-result-copy">{gameSummary.detail}</p>
+                </div>
+              ) : null}
+            </div>
           </div>
+          {recordingNotice}
         </div>
 
         <div className="match-replay-track-panel">
@@ -648,129 +779,6 @@ export function MatchReplayFrameBoard({
             snapshotForIndex={scrubberSnapshotForIndex}
           />
         </div>
-      </div>
-
-      <MatchReplayHud
-        currentFrame={currentFrame}
-        stepNumber={safeSelectedFrameIndex + 1}
-        stepCount={frames.length}
-        beat={currentBeat}
-      />
-
-      <div
-        className={`match-replay-canvas is-arena ${
-          moveListCollapsed ? "is-movelist-collapsed" : ""
-        }`}
-      >
-        <div className="match-replay-arena" ref={canvasRef}>
-          <MatchReplayConnectionOverlay
-            surfaceRef={canvasRef}
-            cardShellsRef={replayCardShellsRef}
-            connections={overlayConnections}
-            focusedInstanceId={focusedConnectionInstanceId}
-          />
-
-          <div className="match-replay-arena-top">
-            <MatchReplayFrameSideSummary
-              previewByCardID={previewByCardID}
-              side="opponent"
-              objects={currentObjects}
-              lifeTotal={currentFrame.opponentLifeTotal}
-              lifeDelta={replayLifeDelta(previousFrame, currentFrame, "opponent")}
-              lifeFlashKey={currentFrame.id}
-              variant="rail"
-              onOpenZone={openZone}
-              endpointId={replayPlayerConnectionId("opponent")}
-              onRegisterEndpoint={registerCardShell}
-              attackSummary={
-                relationshipPresentation.attackSummaries.get("opponent") ?? null
-              }
-              relationshipTargeted={relationshipPresentation.targetedPlayerSides.has(
-                "opponent",
-              )}
-            />
-            <div className="match-replay-arena-stack">
-              <MatchReplayStack
-                frame={currentFrame}
-                targetsBySourceId={targetsBySourceId}
-                previewByCardID={previewByCardID}
-                highlightedInstanceIDs={changedInstanceIDs}
-                onRegisterCardShell={registerCardShell}
-                connectionHighlightedInstanceIDs={overlayHighlightedInstanceIDs}
-                connectionInteractiveInstanceIDs={overlayInteractiveInstanceIDs}
-                onConnectionFocusChange={setFocusedConnectionInstanceId}
-              />
-            </div>
-          </div>
-
-          <MatchReplayFrameBattlefield
-            side="opponent"
-            objects={currentObjects}
-            previewByCardID={previewByCardID}
-            highlightedInstanceIDs={changedInstanceIDs}
-            onRegisterCardShell={registerCardShell}
-            connectionHighlightedInstanceIDs={overlayHighlightedInstanceIDs}
-            connectionInteractiveInstanceIDs={overlayInteractiveInstanceIDs}
-            onConnectionFocusChange={setFocusedConnectionInstanceId}
-            linkedExileObjectsByParentId={linkedExileObjectsByParentId}
-            relationshipLabelsByObjectId={
-              relationshipPresentation.relationshipLabelsByObjectId
-            }
-          />
-
-          <MatchReplayFrameBattlefield
-            side="self"
-            objects={currentObjects}
-            previewByCardID={previewByCardID}
-            highlightedInstanceIDs={changedInstanceIDs}
-            onRegisterCardShell={registerCardShell}
-            connectionHighlightedInstanceIDs={overlayHighlightedInstanceIDs}
-            connectionInteractiveInstanceIDs={overlayInteractiveInstanceIDs}
-            onConnectionFocusChange={setFocusedConnectionInstanceId}
-            linkedExileObjectsByParentId={linkedExileObjectsByParentId}
-            relationshipLabelsByObjectId={
-              relationshipPresentation.relationshipLabelsByObjectId
-            }
-          />
-
-          <MatchReplayFrameSideSummary
-            previewByCardID={previewByCardID}
-            side="self"
-            objects={currentObjects}
-            lifeTotal={currentFrame.selfLifeTotal}
-            lifeDelta={replayLifeDelta(previousFrame, currentFrame, "self")}
-            lifeFlashKey={currentFrame.id}
-            variant="rail"
-            onOpenZone={openZone}
-            endpointId={replayPlayerConnectionId("self")}
-            onRegisterEndpoint={registerCardShell}
-            attackSummary={
-              relationshipPresentation.attackSummaries.get("self") ?? null
-            }
-            relationshipTargeted={relationshipPresentation.targetedPlayerSides.has(
-              "self",
-            )}
-          />
-
-          <MatchReplayHand
-            objects={currentObjects}
-            previewByCardID={previewByCardID}
-            highlightedInstanceIDs={changedInstanceIDs}
-          />
-        </div>
-
-        <MatchReplayMoveList
-          frames={frames}
-          relationships={relationships}
-          turnBoundaries={turnBoundaries}
-          currentIndex={safeSelectedFrameIndex}
-          collapsed={moveListCollapsed}
-          onToggleCollapsed={() => setMoveListCollapsed((value) => !value)}
-          onSeek={(nextIndex) => {
-            setIsPlaying(false);
-            setSelectedFrameIndex(nextIndex);
-          }}
-        />
       </div>
 
       <MatchReplayZoneDialog

@@ -59,23 +59,41 @@ export function MatchReplayPanel({
   const selectedKind = activeTimelineGameNumber === null ? null : readReplayKind(matchId, activeTimelineGameNumber);
   const wrongKind = (selectedKind === "frame" && !hasPlayableReplay) || (selectedKind === "observed" && !hasFallback);
   const positionError = !replayQuery.isPending && (missingGame || wrongKind) ? "This saved replay game or recording is no longer available." : null;
+  const showsFrameBoard =
+    !positionError &&
+    hasPlayableReplay &&
+    Boolean(activeReplayGroup) &&
+    selectedKind !== "observed";
+  const gameTabsNode =
+    showTimelineGameTabs && activeTimelineGameNumber !== null ? (
+      <MatchGameTabs
+        gameNumbers={timelineGameNumbers}
+        activeGameNumber={activeTimelineGameNumber}
+        baseId={timelineGameTabBaseId}
+        ariaLabel="Replay game selector"
+        onSelect={setSelectedTimelineGameNumber}
+        onKeyDown={handleTimelineGameTabKeyDown}
+      />
+    ) : null;
+  const recordingNode =
+    canDescribeCoverage && !positionError ? (
+      <div className="match-replay-recording" data-recording-state={coverage.state} title={coverage.detail}>
+        <p><strong>{activeTimelineGameNumber !== null ? `Game ${activeTimelineGameNumber} · ` : ""}{coverage.label}</strong></p>
+        <p>{coverage.detail}</p>
+      </div>
+    ) : null;
   return (
     <section className="panel match-replay-panel">
-      <div className="panel-head match-timeline-toolbar">
-        <div className="match-timeline-heading">
-          <h3>Game replay</h3>
+      {showsFrameBoard ? (
+        <h3 className="visually-hidden">Game replay</h3>
+      ) : (
+        <div className="panel-head match-timeline-toolbar">
+          <div className="match-timeline-heading">
+            <h3>Game replay</h3>
+          </div>
+          {gameTabsNode}
         </div>
-        {showTimelineGameTabs && activeTimelineGameNumber !== null ? (
-          <MatchGameTabs
-            gameNumbers={timelineGameNumbers}
-            activeGameNumber={activeTimelineGameNumber}
-            baseId={timelineGameTabBaseId}
-            ariaLabel="Replay game selector"
-            onSelect={setSelectedTimelineGameNumber}
-            onKeyDown={handleTimelineGameTabKeyDown}
-          />
-        ) : null}
-      </div>
+      )}
       {bestOf === "bo3" &&
       activeTimelineGameNumber !== null &&
       activeTimelineGameNumber > 1 ? (
@@ -96,12 +114,7 @@ export function MatchReplayPanel({
             </button>
           </div>
         ) : null}
-        {canDescribeCoverage && !positionError ? (
-          <div className="match-replay-recording" data-recording-state={coverage.state} title={coverage.detail}>
-            <p><strong>{activeTimelineGameNumber !== null ? `Game ${activeTimelineGameNumber} · ` : ""}{coverage.label}</strong></p>
-            <p>{coverage.detail}</p>
-          </div>
-        ) : null}
+        {showsFrameBoard ? null : recordingNode}
         {positionError ? <StatusMessage tone="error">{positionError} <Link to={`/matches/${matchId}`} onClick={() => { const game = timelineGameNumbers[0]; if (game !== undefined) { clearReplayKind(matchId, game); saveReplayGame(matchId, game); setSelectedTimelineGameNumber(game); } }}>Start from the first game</Link></StatusMessage> : replayQuery.isPending && !hasPlayableReplay ? (
           <StatusMessage>Checking replay recording…</StatusMessage>
         ) : (
@@ -119,6 +132,8 @@ export function MatchReplayPanel({
                 frames={activeReplayGroup.frames}
                 gameSummary={activeReplayGroup.summary}
                 previewByCardID={boardPreviewByCardID}
+                gameTabs={gameTabsNode}
+                recordingNotice={recordingNode}
               />
             ) : hasFallback && activeTimelineGroup ? (
               <>

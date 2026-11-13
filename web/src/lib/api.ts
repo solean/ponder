@@ -136,6 +136,8 @@ export const api = {
   },
   setOpponentArchetype: (matchId: number, archetype: string) =>
     postJSON<{ status: string; archetype: string }>(`/api/matches/${matchId}/opponent-archetype`, { archetype }),
+  setMatchSaved: (matchId: number, saved: boolean) =>
+    postJSON<{ saved: boolean }>(`/api/matches/${matchId}/bookmark`, { saved }),
   drafts: () => getJSON<DraftSession[]>("/api/drafts"),
   draftAnalytics: (set?: string, format?: string) => {
     const search = new URLSearchParams();

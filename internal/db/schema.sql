@@ -165,6 +165,13 @@ CREATE TABLE IF NOT EXISTS match_opponent_archetype_overrides (
   FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
 );
 
+-- Matches the user starred to find again later. One row per saved match.
+CREATE TABLE IF NOT EXISTS match_bookmarks (
+  match_id INTEGER PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS set_catalog (
   code TEXT PRIMARY KEY,
   name TEXT NOT NULL,

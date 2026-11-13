@@ -662,6 +662,9 @@ func (s *Server) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
 		case "opponent-archetype":
 			s.handleMatchOpponentArchetype(w, r, id)
 			return
+		case "bookmark":
+			s.handleMatchBookmark(w, r, id)
+			return
 		case "timeline":
 			rows, err := s.store.ListMatchCardPlays(r.Context(), id)
 			if err != nil {

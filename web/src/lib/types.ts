@@ -99,6 +99,7 @@ export type Match = {
   deckColorsKnown?: boolean;
   opponentDeckColors?: string[] | null;
   opponentDeckColorsKnown?: boolean;
+  saved?: boolean;
 };
 
 export type MatchList = {

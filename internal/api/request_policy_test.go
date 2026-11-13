@@ -259,7 +259,7 @@ func TestJSONMediaTypeRequiredAcrossEndpoints(t *testing.T) {
 	// A nil store is deliberate: dispatch beyond the media-type gate must fail.
 	server := NewServer(nil, "", &appstate.Service{})
 	server.SetDesktop(&recordingDesktop{})
-	for _, path := range []string{"/api/activity", "/api/runtime/config", "/api/runtime/import", "/api/runtime/autostart", "/api/runtime/reveal", "/api/runtime/open-url", "/api/matches/1/opponent-archetype"} {
+	for _, path := range []string{"/api/activity", "/api/runtime/config", "/api/runtime/import", "/api/runtime/autostart", "/api/runtime/reveal", "/api/runtime/open-url", "/api/matches/1/opponent-archetype", "/api/matches/1/bookmark"} {
 		t.Run(path, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "http://localhost:8080"+path, strings.NewReader(`{}`))
 			req.Header.Set("Content-Type", "text/plain")

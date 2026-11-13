@@ -9863,6 +9863,75 @@ select option {
   color: var(--muted);
 }
 
+/* Save (bookmark) star: a quiet toggle in the match table and detail header. */
+.save-match-button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.save-match-button:hover {
+  color: var(--text);
+}
+
+.save-match-button.is-saved {
+  color: var(--accent);
+}
+
+.save-match-button:focus-visible {
+  outline: 1px solid var(--tab-active-border);
+  outline-offset: 1px;
+}
+
+.save-match-star {
+  width: 1rem;
+  height: 1rem;
+}
+
+.match-detail-header .save-match-star {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+/* Unsaved stars stay faint until the row is hovered or focused. */
+.match-virtual-row .save-match-button:not(.is-saved) {
+  opacity: 0.3;
+}
+
+.match-virtual-row:hover .save-match-button,
+.match-virtual-row:focus-within .save-match-button {
+  opacity: 1;
+}
+
+.data-table .match-saved-cell {
+  justify-content: center;
+  padding-left: 0.3rem;
+  padding-right: 0.3rem;
+}
+
+.match-filter-saved-chip {
+  color: var(--muted-strong);
+}
+
+.match-filter-saved-chip.is-active {
+  color: var(--accent);
+}
+
+.match-filter-saved-chip .save-match-star {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
 .deck-list-table th,
 .deck-list-table td {
   padding-inline: 0.55rem;

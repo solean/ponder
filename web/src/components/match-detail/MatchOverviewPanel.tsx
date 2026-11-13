@@ -7,6 +7,7 @@ import { ContextualLink } from "../Breadcrumbs";
 import { EventLabel } from "../EventLabel";
 import { MatchDeckColors } from "../MatchDeckColors";
 import { ResultPill } from "../ResultPill";
+import { MatchTagsControl } from "../MatchTags";
 import { SaveMatchButton } from "../SaveMatchButton";
 
 /** One-line match header: result, opponent, the facts, then the section tabs. */
@@ -51,6 +52,7 @@ export function MatchOverviewPanel({
         {match.secondsCount ? <li>{formatDuration(match.secondsCount)}</li> : null}
         {match.winReason ? <li>{match.winReason}</li> : null}
       </ul>
+      <MatchTagsControl matchId={match.id} tags={match.tags ?? []} className="match-detail-tags" />
       {children}
     </header>
   );

@@ -100,6 +100,12 @@ export type Match = {
   opponentDeckColors?: string[] | null;
   opponentDeckColorsKnown?: boolean;
   saved?: boolean;
+  tags?: string[] | null;
+};
+
+export type MatchTagUsage = {
+  tag: string;
+  count: number;
 };
 
 export type MatchList = {

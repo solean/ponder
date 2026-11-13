@@ -115,6 +115,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/economy", s.handleEconomy)
 	mux.HandleFunc("/api/matches", s.handleMatches)
 	mux.HandleFunc("/api/matches/", s.handleMatchDetail)
+	mux.HandleFunc("/api/match-tags", s.handleMatchTagUsage)
 	mux.HandleFunc("/api/limited/matchups", s.handleLimitedMatchups)
 	mux.HandleFunc("/api/limited/matchups/refs", s.handleLimitedMatchupRefs)
 	mux.HandleFunc("/api/decks", s.handleDecks)
@@ -664,6 +665,9 @@ func (s *Server) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
 			return
 		case "bookmark":
 			s.handleMatchBookmark(w, r, id)
+			return
+		case "tags":
+			s.handleMatchTags(w, r, id)
 			return
 		case "timeline":
 			rows, err := s.store.ListMatchCardPlays(r.Context(), id)

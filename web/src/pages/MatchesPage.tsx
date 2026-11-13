@@ -8,6 +8,7 @@ import { ContextualLink } from "../components/Breadcrumbs";
 import { EventLabel } from "../components/EventLabel";
 import { DeckColorIdentity, MatchDeckColors } from "../components/MatchDeckColors";
 import { ManaSymbol } from "../components/ManaSymbol";
+import { MatchTagsControl } from "../components/MatchTags";
 import { ResultPill } from "../components/ResultPill";
 import { SaveMatchButton, StarIcon } from "../components/SaveMatchButton";
 import { StatusMessage } from "../components/StatusMessage";
@@ -40,6 +41,7 @@ type MatchFilters = {
   dateFrom: string;
   dateTo: string;
   savedOnly: boolean;
+  tags: string[];
 };
 
 const EMPTY_FILTERS: MatchFilters = {
@@ -51,6 +53,7 @@ const EMPTY_FILTERS: MatchFilters = {
   dateFrom: "",
   dateTo: "",
   savedOnly: false,
+  tags: [],
 };
 
 function formatBestOf(value?: Match["bestOf"]): string {
@@ -106,7 +109,8 @@ function hasActiveFilters(filters: MatchFilters): boolean {
     filters.colors.length > 0 ||
     filters.dateFrom !== "" ||
     filters.dateTo !== "" ||
-    filters.savedOnly
+    filters.savedOnly ||
+    filters.tags.length > 0
   );
 }
 
@@ -117,6 +121,10 @@ function applyFilters(matches: Match[], filters: MatchFilters): Match[] {
 
   return matches.filter((match) => {
     if (filters.savedOnly && !match.saved) return false;
+    if (filters.tags.length > 0) {
+      const matchTags = match.tags ?? [];
+      if (!filters.tags.every((tag) => matchTags.includes(tag))) return false;
+    }
     if (opponentQuery && !match.opponent.toLowerCase().includes(opponentQuery)) return false;
     if (filters.event && eventCategory(match.eventName) !== filters.event) return false;
     if (filters.deck && matchDeckLabel(match) !== filters.deck) return false;
@@ -236,11 +244,27 @@ export function MatchesPage() {
     [matches],
   );
 
+  const tagOptions = useMemo(
+    () => [...new Set(matches.flatMap((match) => match.tags ?? []))].sort(),
+    [matches],
+  );
+
   const filtered = useMemo(() => applyFilters(matches, filters), [matches, filters]);
   const filteredRecord = useMemo(() => tallyRecord(filtered), [filtered]);
 
   function updateFilters(patch: Partial<MatchFilters>) {
     setFilters((current) => ({ ...current, ...patch }));
+  }
+
+  function addTagFilter(tag: string) {
+    if (!tag) return;
+    setFilters((current) =>
+      current.tags.includes(tag) ? current : { ...current, tags: [...current.tags, tag] },
+    );
+  }
+
+  function removeTagFilter(tag: string) {
+    setFilters((current) => ({ ...current, tags: current.tags.filter((value) => value !== tag) }));
   }
 
   function toggleColor(color: string) {
@@ -323,6 +347,19 @@ export function MatchesPage() {
         },
       }),
       columnHelper.display({
+        id: "tags",
+        header: "Tags",
+        size: 200,
+        cell: (info) => (
+          <MatchTagsControl
+            matchId={info.row.original.id}
+            tags={info.row.original.tags ?? []}
+            maxVisible={2}
+            className="is-compact"
+          />
+        ),
+      }),
+      columnHelper.display({
         id: "deckColors",
         header: () => (groupByEvent ? "Opp. colors" : "Colors"),
         size: 190,
@@ -351,6 +388,9 @@ export function MatchesPage() {
     columns,
     state: { columnVisibility: groupByEvent ? GROUPED_HIDDEN_COLUMNS : {} },
     getCoreRowModel: getCoreRowModel(),
+    // Key rows by match so filtering or a refetch never remounts another
+    // match's row (and closes its open tag editor).
+    getRowId: (match) => String(match.id),
   });
 
   const rows = table.getRowModel().rows;
@@ -608,6 +648,40 @@ export function MatchesPage() {
           >
             <StarIcon filled={filters.savedOnly} />
           </button>
+        </div>
+
+        <div className="match-filter-field">
+          <span>Tags</span>
+          <div className="match-filter-tags">
+            <select
+              className="settings-input"
+              value=""
+              aria-label="Filter by tag"
+              disabled={tagOptions.length === filters.tags.length}
+              onChange={(event) => addTagFilter(event.target.value)}
+            >
+              <option value="">{tagOptions.length === 0 ? "No tags yet" : "Any tags"}</option>
+              {tagOptions
+                .filter((tag) => !filters.tags.includes(tag))
+                .map((tag) => (
+                  <option key={tag} value={tag}>
+                    {tag}
+                  </option>
+                ))}
+            </select>
+            {filters.tags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className="match-tag-chip is-filter"
+                aria-label={`Remove tag filter ${tag}`}
+                onClick={() => removeTagFilter(tag)}
+              >
+                {tag}
+                <span aria-hidden="true">×</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <label className="match-filter-field">

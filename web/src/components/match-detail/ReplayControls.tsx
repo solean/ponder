@@ -1,14 +1,13 @@
 import { scrubberTurnLabel, selectScrubberLabels } from "../../lib/replay/scrubberLabels";
-import { ReplayEventDetails } from "./ReplayEventDetails";
+import { ReplayEventDetails, replayExpandableDetails } from "./ReplayEventDetails";
+import { replayTapFolds } from "../../lib/replay/tapFolds";
 import { replayFrameMatches, type ReplayCategory } from "../../lib/replay/navigation";
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   buildReplayBeat,
   replayFrameMomentLabel,
-  replayLifeDelta,
   replayLifeSeriesDomain,
   replayTurnLabel,
-  timelinePlayerLabel,
   type ReplayBeat,
   type ReplayBoardCensus,
   type ReplayKeyMoment,
@@ -405,6 +404,26 @@ export function MatchReplayScrubber({
           <span className="match-replay-scrubber-legend-item is-opponent">
             <span className="match-replay-scrubber-legend-swatch" /> Opponent
           </span>
+          {tickKinds?.includes("spell") ? (
+            <span className="match-replay-scrubber-legend-item is-tick is-spell">
+              <span className="match-replay-scrubber-legend-swatch" /> Spell
+            </span>
+          ) : null}
+          {tickKinds?.includes("combat") ? (
+            <span className="match-replay-scrubber-legend-item is-tick is-combat">
+              <span className="match-replay-scrubber-legend-swatch" /> Combat
+            </span>
+          ) : null}
+          {tickKinds?.includes("life") ? (
+            <span className="match-replay-scrubber-legend-item is-tick is-life">
+              <span className="match-replay-scrubber-legend-swatch" /> Life change
+            </span>
+          ) : null}
+          {keyMoments && keyMoments.length > 0 ? (
+            <span className="match-replay-scrubber-legend-item is-pin">
+              <span className="match-replay-scrubber-legend-swatch" /> Key moment
+            </span>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -440,88 +459,34 @@ export function MatchReplaySpeedControl({
   );
 }
 
-function MatchReplayHudLife({
-  side,
-  life,
-  delta,
-  flashKey,
-}: {
-  side: "self" | "opponent";
-  life?: number;
-  delta: number | null;
-  flashKey: number;
-}) {
-  return (
-    <div className={`match-replay-hud-life is-${side}`}>
-      <div className="match-replay-hud-life-body">
-        <p className="match-replay-hud-life-label">
-          {timelinePlayerLabel(side)}
-        </p>
-        <div className="match-replay-hud-life-readout">
-          <span className="match-replay-hud-life-value">
-            {typeof life === "number" ? life : "—"}
-          </span>
-          {delta !== null ? (
-            <span
-              key={flashKey}
-              className={`match-replay-hud-delta ${delta > 0 ? "is-up" : "is-down"}`}
-              aria-label={`${timelinePlayerLabel(side)} life ${delta > 0 ? "gained" : "lost"} ${Math.abs(delta)}`}
-            >
-              {delta > 0 ? `+${delta}` : delta}
-            </span>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function MatchReplayHud({
   currentFrame,
-  previousFrame,
   stepNumber,
   stepCount,
   beat,
 }: {
   currentFrame: MatchReplayFrame;
-  previousFrame: MatchReplayFrame | null;
   stepNumber: number;
   stepCount: number;
   beat: ReplayBeat;
 }) {
   return (
     <section className="match-replay-hud" aria-label="Replay status">
-      <MatchReplayHudLife
-        side="opponent"
-        life={currentFrame.opponentLifeTotal}
-        delta={replayLifeDelta(previousFrame, currentFrame, "opponent")}
-        flashKey={currentFrame.id}
-      />
-      <div className="match-replay-hud-center">
-        <div className="match-replay-hud-meta">
-          <span className="match-replay-hud-moment">
-            {replayFrameMomentLabel(currentFrame)}
+      <span className="match-replay-hud-moment">
+        {replayFrameMomentLabel(currentFrame)}
+      </span>
+      <p className="match-replay-hud-headline">
+        {beat.text}
+        {beat.note ? (
+          <span className="match-replay-hud-headline-note">
+            {" "}
+            — {beat.note}
           </span>
-          <span className="match-replay-hud-step">
-            Step {stepNumber} / {stepCount}
-          </span>
-        </div>
-        <p className="match-replay-hud-headline">
-          {beat.text}
-          {beat.note ? (
-            <span className="match-replay-hud-headline-note">
-              {" "}
-              — {beat.note}
-            </span>
-          ) : null}
-        </p>
-      </div>
-      <MatchReplayHudLife
-        side="self"
-        life={currentFrame.selfLifeTotal}
-        delta={replayLifeDelta(previousFrame, currentFrame, "self")}
-        flashKey={currentFrame.id}
-      />
+        ) : null}
+      </p>
+      <span className="match-replay-hud-step">
+        Step {stepNumber} / {stepCount}
+      </span>
     </section>
   );
 }
@@ -534,7 +499,10 @@ export function MatchReplayMoveList({
   collapsed,
   onToggleCollapsed,
   onSeek,
+  playDraw,
 }: {
+  /** Lets each turn header say whose turn it was. */
+  playDraw?: "play" | "draw" | "";
   frames: MatchReplayFrame[];
   relationships: ReplayRelationshipIndex;
   turnBoundaries: ReplayTurnBoundary[];
@@ -545,6 +513,7 @@ export function MatchReplayMoveList({
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<ReplayCategory>("all");
+  const isFiltered = query !== "" || category !== "all";
   const matchingIndices = new Set(frames.flatMap((frame, index) => replayFrameMatches(frame, relationships, query, category) ? [index] : []));
   const beats = useMemo(
     () =>
@@ -557,6 +526,21 @@ export function MatchReplayMoveList({
       ),
     [frames, relationships],
   );
+  // Tap frames that pay for an adjacent cast ride on the cast's row.
+  const tapFolds = useMemo(() => replayTapFolds(frames), [frames]);
+  const tappedByHost = useMemo(() => {
+    const out = new Map<number, number>();
+    for (const fold of tapFolds.values()) out.set(fold.hostIndex, (out.get(fold.hostIndex) ?? 0) + fold.count);
+    return out;
+  }, [tapFolds]);
+  const currentRowIndex = tapFolds.get(currentIndex)?.hostIndex ?? currentIndex;
+  const [openDetails, setOpenDetails] = useState<ReadonlySet<number>>(new Set());
+  const toggleDetails = (index: number) =>
+    setOpenDetails((current) => {
+      const next = new Set(current);
+      if (!next.delete(index)) next.add(index);
+      return next;
+    });
   const scrollId = useId();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const activeRef = useRef<HTMLButtonElement | null>(null);
@@ -587,27 +571,33 @@ export function MatchReplayMoveList({
       className={`match-replay-movelist ${collapsed ? "is-collapsed" : ""}`}
       aria-label="Play-by-play"
     >
-      <button
-        type="button"
-        className="match-replay-movelist-title"
-        aria-expanded={!collapsed}
-        aria-controls={scrollId}
-        title={collapsed ? "Expand play-by-play" : "Minimize play-by-play"}
-        onClick={onToggleCollapsed}
-      >
-        <span className="match-replay-movelist-title-text">Play-by-play</span>
-        <span className="match-replay-movelist-title-toggle" aria-hidden="true">
-          {collapsed ? "+" : "–"}
-        </span>
-      </button>
+      <div className="match-replay-movelist-bar">
         <div className="match-replay-filters" hidden={collapsed}>
-          <input aria-label="Search replay cards" placeholder="Search cards…" value={query} onChange={event => setQuery(event.target.value)} />
+          <input type="search" aria-label="Search replay cards" placeholder="Search cards…" value={query} onChange={event => setQuery(event.target.value)} />
           <select aria-label="Replay category" value={category} onChange={event => setCategory(event.target.value as ReplayCategory)}>
             <option value="all">All events</option><option value="spells">Spells</option><option value="combat">Combat</option><option value="removal">Removal</option>
           </select>
-          <button type="button" disabled={!query && category === "all"} onClick={() => { setQuery(""); setCategory("all"); }}>Clear filters</button>
-          <span>{matchingIndices.size} of {frames.length} steps</span>
         </div>
+        <button
+          type="button"
+          className="match-replay-movelist-title"
+          aria-expanded={!collapsed}
+          aria-controls={scrollId}
+          title={collapsed ? "Expand play-by-play" : "Minimize play-by-play"}
+          onClick={onToggleCollapsed}
+        >
+          <span className="match-replay-movelist-title-text">Play-by-play</span>
+          <span className="match-replay-movelist-title-toggle" aria-hidden="true">
+            {collapsed ? "+" : "–"}
+          </span>
+        </button>
+      </div>
+      {isFiltered && !collapsed ? (
+        <p className="match-replay-filter-status">
+          <span>{matchingIndices.size} of {frames.length} steps</span>
+          <button type="button" onClick={() => { setQuery(""); setCategory("all"); }}>Clear filters</button>
+        </p>
+      ) : null}
       <div
         id={scrollId}
         ref={scrollRef}
@@ -621,43 +611,87 @@ export function MatchReplayMoveList({
             key={`${boundary.turnKey}-${boundary.firstIndex}`}
           >
             <p className="match-replay-movelist-turn-label">
-              {replayTurnLabel(boundary.turnKey)}
+              <span>{replayTurnLabel(boundary.turnKey)}{turnOwnerSuffix(boundary.turnKey, playDraw)}</span>
+              <MoveListTurnLife frame={frames[boundary.lastIndex]} />
             </p>
             {Array.from(
               { length: boundary.lastIndex - boundary.firstIndex + 1 },
               (_, offset) => boundary.firstIndex + offset,
             ).map((index) => {
-              const isCurrent = index === currentIndex;
+              const isCurrent = index === currentRowIndex;
               const beat = beats[index];
-              if (!beat || !matchingIndices.has(index)) {
+              if (!beat || !matchingIndices.has(index) || tapFolds.has(index)) {
                 return null;
               }
+              const tapped = tappedByHost.get(index);
+              const details = replayExpandableDetails(frames[index]!, relationships);
+              const detailsOpen = openDetails.has(index);
               return (
                 <div key={index} className="match-replay-event-row">
-                <button
-                  ref={isCurrent ? activeRef : undefined}
-                  type="button"
-                  className={`match-replay-movelist-beat ${isCurrent ? "is-current" : ""}`}
-                  aria-current={isCurrent ? "step" : undefined}
-                  onClick={() => onSeek(index)}
-                >
-                  <span className="match-replay-movelist-beat-text">
-                    <small>Step {index + 1} · </small>{beat.text}
-                  </span>
-                  {beat.note ? (
-                    <span className="match-replay-movelist-beat-note">
-                      {" "}
-                      · {beat.note}
+                  <button
+                    ref={isCurrent ? activeRef : undefined}
+                    type="button"
+                    className={`match-replay-movelist-beat ${isCurrent ? "is-current" : ""}`}
+                    aria-current={isCurrent ? "step" : undefined}
+                    onClick={() => onSeek(index)}
+                  >
+                    <span className="match-replay-movelist-step">{index + 1}</span>
+                    <span className={`match-replay-movelist-dot is-${beatSide(beat, frames[index])}`} aria-hidden="true" />
+                    <span className="match-replay-movelist-beat-text">
+                      {beat.text}
+                      {tapped ? <span className="match-replay-movelist-tapped"> (tapping {tapped})</span> : null}
+                      {beat.note ? <span className="match-replay-movelist-beat-note"> · {beat.note}</span> : null}
                     </span>
+                  </button>
+                  {details.length > 0 ? (
+                    <button
+                      type="button"
+                      className="match-replay-details-toggle"
+                      aria-expanded={detailsOpen}
+                      aria-label={`${detailsOpen ? "Hide" : "Show"} ${details.length} event details for step ${index + 1}`}
+                      title="Event details"
+                      onClick={() => toggleDetails(index)}
+                    >
+                      {details.length}
+                    </button>
                   ) : null}
-                </button>
-                <ReplayEventDetails frame={frames[index]!} relationships={relationships} />
+                  {detailsOpen ? <ReplayEventDetails details={details} /> : null}
                 </div>
               );
             })}
           </div>
         ))}
       </div>
+      <p className="match-replay-movelist-legend" hidden={collapsed}>
+        <span><span className="match-replay-movelist-dot is-self" aria-hidden="true" />You</span>
+        <span><span className="match-replay-movelist-dot is-opponent" aria-hidden="true" />Opponent</span>
+        <span>Number at right: sub-events</span>
+      </p>
     </aside>
+  );
+}
+
+function turnOwnerSuffix(turn: number | undefined, playDraw?: "play" | "draw" | ""): string {
+  if (typeof turn !== "number" || turn <= 0 || !playDraw) return "";
+  return (turn % 2 === 1) === (playDraw === "play") ? " · You" : " · Opponent";
+}
+
+/** Who acted in a step, for the row's dot; "neutral" when the game did. */
+function beatSide(beat: ReplayBeat, frame: MatchReplayFrame | undefined): "self" | "opponent" | "neutral" {
+  if (/^You(r)?\b/.test(beat.text)) return "self";
+  if (/^Opponent\b/.test(beat.text)) return "opponent";
+  const side = frame?.changes?.[0]?.playerSide;
+  return side === "self" || side === "opponent" ? side : "neutral";
+}
+
+/** Life totals at the end of a turn: yours, then the opponent's. */
+function MoveListTurnLife({ frame }: { frame: MatchReplayFrame | undefined }) {
+  if (typeof frame?.selfLifeTotal !== "number" || typeof frame.opponentLifeTotal !== "number") return null;
+  return (
+    <span className="match-replay-movelist-turn-life" aria-label={`Life: you ${frame.selfLifeTotal}, opponent ${frame.opponentLifeTotal}`}>
+      <span className="is-self">{frame.selfLifeTotal}</span>
+      <span aria-hidden="true"> – </span>
+      <span className="is-opponent">{frame.opponentLifeTotal}</span>
+    </span>
   );
 }

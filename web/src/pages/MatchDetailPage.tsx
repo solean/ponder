@@ -26,9 +26,9 @@ import { useMatchReplayView } from "../lib/replay/useMatchReplayView";
 
 const MATCH_SECTIONS = [
   { id: "replay", label: "Replay" },
-  { id: "analytics", label: "Game Analytics" },
-  { id: "opponent", label: "Opponent Cards" },
-  { id: "review", label: "AI Game Review" },
+  { id: "analytics", label: "Analytics" },
+  { id: "opponent", label: "Opponent cards" },
+  { id: "review", label: "AI review" },
 ] as const;
 
 type MatchSection = (typeof MATCH_SECTIONS)[number]["id"];
@@ -173,16 +173,16 @@ function MatchDetailContent() {
   const { match } = query.data;
 
   return (
-    <div className="stack-lg">
-      <MatchOverviewPanel match={match} setLookup={setLookup} />
-
-      <SectionTabs
-        sections={MATCH_SECTIONS}
-        activeSection={activeSection}
-        baseId={sectionTabBaseId}
-        label="Match detail sections"
-        onSelect={setActiveSection}
-      />
+    <div className="stack-lg match-detail-page">
+      <MatchOverviewPanel match={match} setLookup={setLookup}>
+        <SectionTabs
+          sections={MATCH_SECTIONS}
+          activeSection={activeSection}
+          baseId={sectionTabBaseId}
+          label="Match detail sections"
+          onSelect={setActiveSection}
+        />
+      </MatchOverviewPanel>
 
       {activeSection === "review" ? (
         <div

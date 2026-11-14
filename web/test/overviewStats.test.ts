@@ -6,8 +6,10 @@ import {
   dailyActivity,
   labelDailyActivity,
   isLimitedEvent,
+  lastSession,
   matchAverages,
   recentForm,
+  recentResults,
   recordOf,
   recordWinRate,
   splitRecords,
@@ -247,5 +249,35 @@ describe("timeOfDayPerformance", () => {
     expect(buckets[1]).toMatchObject({ matches: 1, record: { wins: 1, losses: 0 } });
     expect(buckets[5]).toMatchObject({ matches: 1, record: { wins: 0, losses: 1 } });
     expect(buckets.every((bucket) => bucket.range.length > 0)).toBe(true);
+  });
+});
+
+describe("recentResults", () => {
+  test("returns decided results oldest first, capped to count", () => {
+    const matches = [
+      makeMatch({ result: "win" }),
+      makeMatch({ result: "unknown" }),
+      makeMatch({ result: "loss" }),
+      makeMatch({ result: "win" }),
+    ];
+    expect(recentResults(matches, 2)).toEqual(["loss", "win"]);
+    expect(recentResults(matches, 10)).toEqual(["win", "loss", "win"]);
+  });
+});
+
+describe("lastSession", () => {
+  test("is null without matches", () => {
+    expect(lastSession([])).toBeNull();
+  });
+
+  test("covers matches from the newest match's local day only", () => {
+    const at = (day: number, hour: number) => new Date(2026, 6, day, hour).toISOString();
+    const session = lastSession([
+      makeMatch({ id: 3, startedAt: at(2, 20), result: "win" }),
+      makeMatch({ id: 2, startedAt: at(2, 9), result: "loss" }),
+      makeMatch({ id: 1, startedAt: at(1, 23), result: "win" }),
+    ]);
+    expect(session?.matches.map((match) => match.id)).toEqual([3, 2]);
+    expect(session?.record).toEqual({ wins: 1, losses: 1 });
   });
 });

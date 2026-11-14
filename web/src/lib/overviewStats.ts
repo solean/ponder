@@ -44,6 +44,33 @@ export function recentForm(matches: Match[], count: number): WinLossRecord {
   return recordOf(decided.slice(0, count));
 }
 
+/** Results of the `count` most recent decided matches, oldest first. */
+export function recentResults(matches: Match[], count: number): ("win" | "loss")[] {
+  const out: ("win" | "loss")[] = [];
+  for (const match of matches) {
+    if (match.result !== "win" && match.result !== "loss") continue;
+    out.push(match.result);
+    if (out.length === count) break;
+  }
+  return out.reverse();
+}
+
+/**
+ * The most recent play session: every match started on the same local calendar
+ * day as the newest one (input newest first). Null when there are no matches.
+ */
+export function lastSession(matches: Match[]): { startedAt: string; matches: Match[]; record: WinLossRecord } | null {
+  const newest = matches[0];
+  if (!newest) return null;
+  const day = new Date(newest.startedAt).toDateString();
+  const session: Match[] = [];
+  for (const match of matches) {
+    if (new Date(match.startedAt).toDateString() !== day) break;
+    session.push(match);
+  }
+  return { startedAt: newest.startedAt, matches: session, record: recordOf(session) };
+}
+
 /**
  * Current run of identical results starting from the most recent decided
  * match; unknown results are skipped rather than breaking the run.

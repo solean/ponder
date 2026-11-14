@@ -6,7 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { ContextualLink } from "../components/Breadcrumbs";
 import { EventLabel } from "../components/EventLabel";
-import { MatchDeckColors } from "../components/MatchDeckColors";
+import { DeckColorIdentity, MatchDeckColors } from "../components/MatchDeckColors";
 import { ManaSymbol } from "../components/ManaSymbol";
 import { ResultPill } from "../components/ResultPill";
 import { StatusMessage } from "../components/StatusMessage";
@@ -72,9 +72,13 @@ function matchDeckLabel(match: Match): string {
   return match.deckName || (match.deckId ? `Deck ${match.deckId}` : NO_DECK_LABEL);
 }
 
+function isLimitedMatch(match: Match): boolean {
+  return /draft|sealed|limited/i.test(`${match.format} ${match.eventName}`);
+}
+
 function matchFormatLabel(match: Match, setLookup: SetLookup): string {
   const fallback = formatGameFormat(match.format);
-  if (!/draft|sealed|limited/i.test(`${match.format} ${match.eventName}`)) return fallback;
+  if (!isLimitedMatch(match)) return fallback;
 
   const setCode = parseEventName(match.eventName).setCode;
   return setLookup(setCode)?.name ?? setCode ?? fallback;
@@ -122,26 +126,45 @@ function applyFilters(matches: Match[], filters: MatchFilters): Match[] {
   });
 }
 
+// Columns whose value is constant within a group; the group header carries
+// them instead, so grouped rows stay one line tall.
+const GROUPED_HIDDEN_COLUMNS = { eventName: false, format: false, bestOf: false, deckName: false };
+
+// Cap on the win/loss pips in a group header (the most recent results).
+const MAX_GROUP_PIPS = 24;
+
 /**
- * Groups rows by consecutive event name (the list is sorted newest-first, so
- * a run of the same event reads as one session, e.g. a draft run).
+ * Groups rows by consecutive event + deck + best-of (the list is sorted
+ * newest-first, so a run reads as one session). Keying on the deck splits
+ * back-to-back draft runs of the same event and lets the header name the deck.
  */
 function groupRowsByEvent(rows: Row<Match>[]): { eventName: string; rows: Row<Match>[] }[] {
-  const groups: { eventName: string; rows: Row<Match>[] }[] = [];
+  const groups: { eventName: string; groupKey: string; rows: Row<Match>[] }[] = [];
   for (const row of rows) {
     const eventName = row.original.eventName || "Unknown event";
+    const groupKey = [eventName, row.original.deckId ?? matchDeckLabel(row.original), row.original.bestOf ?? ""].join("|");
     const lastGroup = groups[groups.length - 1];
-    if (lastGroup && lastGroup.eventName === eventName) {
+    if (lastGroup && lastGroup.groupKey === groupKey) {
       lastGroup.rows.push(row);
     } else {
-      groups.push({ eventName, rows: [row] });
+      groups.push({ eventName, groupKey, rows: [row] });
     }
   }
   return groups;
 }
 
 type VirtualRow =
-  | { kind: "group"; key: string; eventName: string; record: MatchRecord; count: number }
+  | {
+      kind: "group";
+      key: string;
+      eventName: string;
+      record: MatchRecord;
+      count: number;
+      /** Newest match of the run; the header reads the shared deck/format off it. */
+      lead: Match;
+      /** Results oldest to newest, capped to the most recent MAX_GROUP_PIPS. */
+      results: Match["result"][];
+    }
   | { kind: "match"; key: string; row: Row<Match> };
 
 /**
@@ -161,6 +184,11 @@ function buildVirtualRows(rows: Row<Match>[], groupByEvent: boolean): VirtualRow
       eventName: group.eventName,
       record: tallyRecord(group.rows.map((row) => row.original)),
       count: group.rows.length,
+      lead: group.rows[0].original,
+      results: group.rows
+        .slice(0, MAX_GROUP_PIPS)
+        .map((row) => row.original.result)
+        .reverse(),
     });
     for (const row of group.rows) {
       out.push({ kind: "match", key: row.id, row });
@@ -220,32 +248,32 @@ export function MatchesPage() {
     () => [
       columnHelper.accessor("startedAt", {
         header: "Started",
-        size: 130,
+        size: 150,
         cell: (info) => formatCompactDateTime(info.getValue()),
       }),
       columnHelper.accessor("eventName", {
         header: "Event",
-        size: 200,
+        size: 170,
         cell: (info) => <EventLabel eventName={info.getValue()} lookup={setLookup} />,
       }),
       columnHelper.accessor("format", {
         header: "Format",
-        size: 160,
+        size: 110,
         cell: (info) => matchFormatLabel(info.row.original, setLookup),
       }),
       columnHelper.accessor("bestOf", {
         header: "Best Of",
-        size: 80,
+        size: 70,
         cell: (info) => formatBestOf(info.getValue()),
       }),
       columnHelper.accessor("playDraw", {
         header: "G1",
-        size: 64,
+        size: 60,
         cell: (info) => formatPlayDraw(info.getValue()),
       }),
       columnHelper.accessor("opponent", {
         header: "Opponent",
-        size: 170,
+        size: 160,
         cell: (info) => info.getValue() || "Unknown",
       }),
       columnHelper.accessor("result", {
@@ -255,12 +283,12 @@ export function MatchesPage() {
       }),
       columnHelper.accessor("turnCount", {
         header: "Turns",
-        size: 70,
+        size: 60,
         cell: (info) => info.getValue() ?? "-",
       }),
       columnHelper.accessor("secondsCount", {
         header: "Duration",
-        size: 100,
+        size: 95,
         cell: (info) => formatDuration(info.getValue()),
       }),
       columnHelper.accessor("deckName", {
@@ -280,9 +308,15 @@ export function MatchesPage() {
       }),
       columnHelper.display({
         id: "deckColors",
-        header: "Colors",
-        size: 160,
-        cell: (info) => (
+        header: () => (groupByEvent ? "Opp. colors" : "Colors"),
+        size: 190,
+        cell: (info) =>
+          groupByEvent ? (
+            <DeckColorIdentity
+              colors={info.row.original.opponentDeckColors}
+              known={info.row.original.opponentDeckColorsKnown}
+            />
+          ) : (
           <MatchDeckColors
             className="match-deck-colors-table"
             deckColors={info.row.original.deckColors}
@@ -290,15 +324,16 @@ export function MatchesPage() {
             opponentDeckColors={info.row.original.opponentDeckColors}
             opponentDeckColorsKnown={info.row.original.opponentDeckColorsKnown}
           />
-        ),
+          ),
       }),
     ],
-    [setLookup],
+    [setLookup, groupByEvent],
   );
 
   const table = useReactTable({
     data: filtered,
     columns,
+    state: { columnVisibility: groupByEvent ? GROUPED_HIDDEN_COLUMNS : {} },
     getCoreRowModel: getCoreRowModel(),
   });
 
@@ -403,12 +438,35 @@ export function MatchesPage() {
           <span className="match-group-name">
             <EventLabel eventName={virtualRow.eventName} lookup={setLookup} />
           </span>
-          <span className="match-group-record">
-            {formatRecord(virtualRow.record)}
-            {virtualRow.record.unknown > 0 ? ` (+${virtualRow.record.unknown}?)` : ""}
+          <span className="match-group-meta">
+            {isLimitedMatch(virtualRow.lead) ? null : (
+              <span>{matchFormatLabel(virtualRow.lead, setLookup)}</span>
+            )}
+            {virtualRow.lead.bestOf ? <span>{formatBestOf(virtualRow.lead.bestOf)}</span> : null}
+            {virtualRow.lead.deckId ? (
+              <ContextualLink className="text-link" to={`/decks/${virtualRow.lead.deckId}`}>
+                {matchDeckLabel(virtualRow.lead)}
+              </ContextualLink>
+            ) : (
+              <span>{matchDeckLabel(virtualRow.lead)}</span>
+            )}
+            {virtualRow.lead.deckColorsKnown ? (
+              <DeckColorIdentity colors={virtualRow.lead.deckColors} known />
+            ) : null}
           </span>
-          <span className="match-group-count">
-            {virtualRow.count} {virtualRow.count === 1 ? "match" : "matches"}
+          <span className="match-group-tally">
+            <span className="match-group-pips" aria-hidden="true">
+              {virtualRow.results.map((result, index) => (
+                <span key={index} className={`match-group-pip is-${result}`} />
+              ))}
+            </span>
+            <span className="match-group-record">
+              {formatRecord(virtualRow.record)}
+              {virtualRow.record.unknown > 0 ? ` (+${virtualRow.record.unknown}?)` : ""}
+            </span>
+            <span className="match-group-count">
+              {virtualRow.count} {virtualRow.count === 1 ? "match" : "matches"}
+            </span>
           </span>
         </td>
       </tr>
@@ -417,9 +475,27 @@ export function MatchesPage() {
 
   return (
     <section className="panel matches-page">
-      <div className="panel-head">
+      <div className="panel-head matches-head">
         <h3>Match History</h3>
         <p>{summary}</p>
+        <div className="match-filter-actions">
+          <button
+            type="button"
+            className={`control-button match-filter-toggle${groupByEvent ? " is-active" : ""}`}
+            aria-pressed={groupByEvent}
+            onClick={() => setGroupByEvent((current) => !current)}
+          >
+            Group by Event
+          </button>
+          <button
+            type="button"
+            className="control-button"
+            onClick={() => setFilters(EMPTY_FILTERS)}
+            disabled={!filtersActive}
+          >
+            Clear Filters
+          </button>
+        </div>
       </div>
 
       <div className="match-filter-bar" aria-label="Match filters">
@@ -501,7 +577,7 @@ export function MatchesPage() {
         <label className="match-filter-field">
           <span>From</span>
           <input
-            className="settings-input"
+            className={`settings-input${filters.dateFrom ? "" : " is-empty"}`}
             type="date"
             value={filters.dateFrom}
             onChange={(event) => updateFilters({ dateFrom: event.target.value })}
@@ -511,31 +587,13 @@ export function MatchesPage() {
         <label className="match-filter-field">
           <span>To</span>
           <input
-            className="settings-input"
+            className={`settings-input${filters.dateTo ? "" : " is-empty"}`}
             type="date"
             value={filters.dateTo}
             onChange={(event) => updateFilters({ dateTo: event.target.value })}
           />
         </label>
 
-        <div className="match-filter-actions">
-          <button
-            type="button"
-            className={`control-button match-filter-toggle${groupByEvent ? " is-active" : ""}`}
-            aria-pressed={groupByEvent}
-            onClick={() => setGroupByEvent((current) => !current)}
-          >
-            Group by Event
-          </button>
-          <button
-            type="button"
-            className="control-button"
-            onClick={() => setFilters(EMPTY_FILTERS)}
-            disabled={!filtersActive}
-          >
-            Clear Filters
-          </button>
-        </div>
       </div>
 
       {virtualRows.length === 0 ? (

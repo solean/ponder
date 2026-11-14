@@ -69,6 +69,17 @@ function DraftSessionSet({ draft, lookup }: { draft: DraftSession; lookup: SetLo
   );
 }
 
+/** Net entry-vs-prize currency for a finished run, e.g. "+700 gems". */
+function draftNetLabel(draft: DraftSession): string {
+  const economy = draft.economy;
+  if (!economy) return "-";
+  const parts: string[] = [];
+  const signed = (value: number) => `${value > 0 ? "+" : "−"}${Math.abs(value).toLocaleString()}`;
+  if (economy.netGems !== 0) parts.push(`${signed(economy.netGems)} gems`);
+  if (economy.netGold !== 0) parts.push(`${signed(economy.netGold)} gold`);
+  return parts.length > 0 ? parts.join(" · ") : "even";
+}
+
 function DraftSessionRow({ draft, setLookup }: { draft: DraftSession; setLookup: SetLookup }) {
   const rowLink = useRowLink(`/drafts/${draft.id}`);
   const games = (draft.wins ?? 0) + (draft.losses ?? 0);
@@ -86,9 +97,22 @@ function DraftSessionRow({ draft, setLookup }: { draft: DraftSession; setLookup:
         <DraftSessionSet draft={draft} lookup={setLookup} />
       </td>
       <td>
-        <DraftWins wins={draft.wins} />
+        <span className="draft-result-pips" aria-hidden="true">
+          {Array.from({ length: draft.wins ?? 0 }, (_, index) => (
+            <span key={`w${index}`} className="match-group-pip is-win" />
+          ))}
+          {Array.from({ length: draft.losses ?? 0 }, (_, index) => (
+            <span key={`l${index}`} className="match-group-pip is-loss" />
+          ))}
+        </span>
       </td>
-      <td>{draft.losses ?? "-"}</td>
+      <td className="draft-session-record">
+        {draft.wins == null ? (
+          "-"
+        ) : (
+          <DraftWins wins={draft.wins} label={`${draft.wins}–${draft.losses ?? 0}`} />
+        )}
+      </td>
       <td>
         {winRate == null ? (
           "-"
@@ -96,10 +120,11 @@ function DraftSessionRow({ draft, setLookup }: { draft: DraftSession; setLookup:
           <strong className={`win-rate win-rate--${winRateTone(winRate)}`}>{pct(winRate)}</strong>
         )}
       </td>
+      <td className="draft-session-net">{draftNetLabel(draft)}</td>
       <td>
         {draft.deckId != null ? (
           <ContextualLink to={`/decks/${draft.deckId}`} className="text-link">
-            View deck
+            Deck
           </ContextualLink>
         ) : (
           "-"
@@ -300,9 +325,10 @@ function DraftsOverview({
                 <th>Date</th>
                 <th>Type</th>
                 <th>Set</th>
-                <th>Wins</th>
-                <th>Losses</th>
+                <th>Result</th>
+                <th>Record</th>
                 <th>Win Rate</th>
+                <th>Net</th>
                 <th>Deck</th>
               </tr>
             </thead>

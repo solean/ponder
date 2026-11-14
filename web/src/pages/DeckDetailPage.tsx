@@ -481,7 +481,8 @@ function parseManaCostParts(manaCost: string): ManaCostPart[] {
 function ManaCostDisplay({ manaCost }: { manaCost: string }) {
   const trimmed = manaCost.trim();
   if (!trimmed) {
-    return <code className="deck-card-mana-cost">-</code>;
+    // Lands have no cost; an empty cell keeps the column aligned without a stray dash.
+    return <code className="deck-card-mana-cost" aria-hidden="true" />;
   }
 
   const parts = parseManaCostParts(trimmed);

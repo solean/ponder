@@ -1,11 +1,11 @@
 /** Wins that earn a trophy: 7 is the ceiling for both Premier and Quick Draft. */
 export const TROPHY_WINS = 7;
 
-/** A draft win count, badged with a trophy once the run maxes out. */
-export function DraftWins({ wins }: { wins?: number | null }) {
+/** A draft win count (or a custom label such as "7–1"), badged with a trophy once the run maxes out. */
+export function DraftWins({ wins, label }: { wins?: number | null; label?: string }) {
   return (
     <span className="draft-wins">
-      {wins ?? "-"}
+      {label ?? wins ?? "-"}
       {wins != null && wins >= TROPHY_WINS ? (
         <svg className="draft-trophy" viewBox="0 0 16 16" role="img" aria-label={`${TROPHY_WINS}-win draft`}>
           <path d="M4.6 1.8h6.8v3.6a3.4 3.4 0 0 1-6.8 0V1.8Z" />

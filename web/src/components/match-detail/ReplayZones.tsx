@@ -215,6 +215,8 @@ export function MatchReplayFrameSideSummary({
   objects,
   previewByCardID = new Map(),
   lifeTotal,
+  lifeDelta = null,
+  lifeFlashKey,
   includeHand = false,
   onOpenZone,
   variant = "box",
@@ -227,6 +229,9 @@ export function MatchReplayFrameSideSummary({
   objects: MatchReplayFrameObject[];
   previewByCardID?: Map<number, CardPreview | null>;
   lifeTotal?: number;
+  /** Change since the previous step, flashed beside the total in the rail. */
+  lifeDelta?: number | null;
+  lifeFlashKey?: number;
   includeHand?: boolean;
   onOpenZone?: (state: MatchReplayZoneDialogState) => void;
   variant?: "box" | "rail";
@@ -267,6 +272,16 @@ export function MatchReplayFrameSideSummary({
           <span className="match-replay-zonerail-label">
             {timelinePlayerLabel(side)}
           </span>
+          {typeof lifeTotal === "number" ? (
+            <span className="match-replay-zonerail-life" aria-label={`${timelinePlayerLabel(side)} life ${lifeTotal}`}>
+              {lifeTotal}
+              {lifeDelta ? (
+                <span key={lifeFlashKey} className={`match-replay-hud-delta ${lifeDelta > 0 ? "is-up" : "is-down"}`}>
+                  {lifeDelta > 0 ? `+${lifeDelta}` : lifeDelta}
+                </span>
+              ) : null}
+            </span>
+          ) : null}
           {side === "opponent" ? (
             <div
               className="match-replay-compact-hand"

@@ -8,7 +8,9 @@ import { ContextualLink } from "../components/Breadcrumbs";
 import { EventLabel } from "../components/EventLabel";
 import { DeckColorIdentity, MatchDeckColors } from "../components/MatchDeckColors";
 import { ManaSymbol } from "../components/ManaSymbol";
+import { MatchTagsControl } from "../components/MatchTags";
 import { ResultPill } from "../components/ResultPill";
+import { SaveMatchButton, StarIcon } from "../components/SaveMatchButton";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { eventCategory, parseEventName } from "../lib/events";
@@ -38,6 +40,8 @@ type MatchFilters = {
   colors: string[];
   dateFrom: string;
   dateTo: string;
+  savedOnly: boolean;
+  tags: string[];
 };
 
 const EMPTY_FILTERS: MatchFilters = {
@@ -48,6 +52,8 @@ const EMPTY_FILTERS: MatchFilters = {
   colors: [],
   dateFrom: "",
   dateTo: "",
+  savedOnly: false,
+  tags: [],
 };
 
 function formatBestOf(value?: Match["bestOf"]): string {
@@ -102,7 +108,9 @@ function hasActiveFilters(filters: MatchFilters): boolean {
     filters.result !== "" ||
     filters.colors.length > 0 ||
     filters.dateFrom !== "" ||
-    filters.dateTo !== ""
+    filters.dateTo !== "" ||
+    filters.savedOnly ||
+    filters.tags.length > 0
   );
 }
 
@@ -112,6 +120,11 @@ function applyFilters(matches: Match[], filters: MatchFilters): Match[] {
   const toTime = filters.dateTo ? Date.parse(`${filters.dateTo}T23:59:59.999`) : Number.POSITIVE_INFINITY;
 
   return matches.filter((match) => {
+    if (filters.savedOnly && !match.saved) return false;
+    if (filters.tags.length > 0) {
+      const matchTags = match.tags ?? [];
+      if (!filters.tags.every((tag) => matchTags.includes(tag))) return false;
+    }
     if (opponentQuery && !match.opponent.toLowerCase().includes(opponentQuery)) return false;
     if (filters.event && eventCategory(match.eventName) !== filters.event) return false;
     if (filters.deck && matchDeckLabel(match) !== filters.deck) return false;
@@ -128,6 +141,9 @@ function applyFilters(matches: Match[], filters: MatchFilters): Match[] {
 
 // Columns whose value is constant within a group; the group header carries
 // them instead, so grouped rows stay one line tall.
+const SAVED_COLUMN_SIZE = 36;
+const SAVED_COLUMN_WIDTH = "2.6rem";
+
 const GROUPED_HIDDEN_COLUMNS = { eventName: false, format: false, bestOf: false, deckName: false };
 
 // Cap on the win/loss pips in a group header (the most recent results).
@@ -228,11 +244,27 @@ export function MatchesPage() {
     [matches],
   );
 
+  const tagOptions = useMemo(
+    () => [...new Set(matches.flatMap((match) => match.tags ?? []))].sort(),
+    [matches],
+  );
+
   const filtered = useMemo(() => applyFilters(matches, filters), [matches, filters]);
   const filteredRecord = useMemo(() => tallyRecord(filtered), [filtered]);
 
   function updateFilters(patch: Partial<MatchFilters>) {
     setFilters((current) => ({ ...current, ...patch }));
+  }
+
+  function addTagFilter(tag: string) {
+    if (!tag) return;
+    setFilters((current) =>
+      current.tags.includes(tag) ? current : { ...current, tags: [...current.tags, tag] },
+    );
+  }
+
+  function removeTagFilter(tag: string) {
+    setFilters((current) => ({ ...current, tags: current.tags.filter((value) => value !== tag) }));
   }
 
   function toggleColor(color: string) {
@@ -246,6 +278,14 @@ export function MatchesPage() {
 
   const columns = useMemo(
     () => [
+      columnHelper.display({
+        id: "saved",
+        header: () => <span className="visually-hidden">Saved</span>,
+        size: SAVED_COLUMN_SIZE,
+        cell: (info) => (
+          <SaveMatchButton matchId={info.row.original.id} saved={info.row.original.saved ?? false} />
+        ),
+      }),
       columnHelper.accessor("startedAt", {
         header: "Started",
         size: 150,
@@ -307,6 +347,19 @@ export function MatchesPage() {
         },
       }),
       columnHelper.display({
+        id: "tags",
+        header: "Tags",
+        size: 200,
+        cell: (info) => (
+          <MatchTagsControl
+            matchId={info.row.original.id}
+            tags={info.row.original.tags ?? []}
+            maxVisible={2}
+            className="is-compact"
+          />
+        ),
+      }),
+      columnHelper.display({
         id: "deckColors",
         header: () => (groupByEvent ? "Opp. colors" : "Colors"),
         size: 190,
@@ -335,6 +388,9 @@ export function MatchesPage() {
     columns,
     state: { columnVisibility: groupByEvent ? GROUPED_HIDDEN_COLUMNS : {} },
     getCoreRowModel: getCoreRowModel(),
+    // Key rows by match so filtering or a refetch never remounts another
+    // match's row (and closes its open tag editor).
+    getRowId: (match) => String(match.id),
   });
 
   const rows = table.getRowModel().rows;
@@ -395,7 +451,9 @@ export function MatchesPage() {
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 
-  function cellWidthStyle(size: number): CSSProperties {
+  function cellWidthStyle(size: number, columnId?: string): CSSProperties {
+    // The star column keeps a fixed width so it doesn't grow with the table.
+    if (columnId === "saved") return { flex: `0 0 ${SAVED_COLUMN_WIDTH}` };
     // flex-grow proportional to the column's size, flex-basis 0 → columns fill
     // the container while staying aligned between header and body.
     return { flexGrow: size, flexBasis: 0 };
@@ -417,7 +475,11 @@ export function MatchesPage() {
         tabIndex={0}
       >
         {row.getVisibleCells().map((cell) => (
-          <td key={cell.id} style={cellWidthStyle(cell.column.getSize())}>
+          <td
+            key={cell.id}
+            className={cell.column.id === "saved" ? "match-saved-cell" : undefined}
+            style={cellWidthStyle(cell.column.getSize(), cell.column.id)}
+          >
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
           </td>
         ))}
@@ -574,6 +636,54 @@ export function MatchesPage() {
           </div>
         </div>
 
+        <div className="match-filter-field">
+          <span>Saved</span>
+          <button
+            type="button"
+            className={`match-filter-color-chip match-filter-saved-chip${filters.savedOnly ? " is-active" : ""}`}
+            aria-pressed={filters.savedOnly}
+            aria-label="Show saved matches only"
+            title="Show saved matches only"
+            onClick={() => updateFilters({ savedOnly: !filters.savedOnly })}
+          >
+            <StarIcon filled={filters.savedOnly} />
+          </button>
+        </div>
+
+        <div className="match-filter-field">
+          <span>Tags</span>
+          <div className="match-filter-tags">
+            <select
+              className="settings-input"
+              value=""
+              aria-label="Filter by tag"
+              disabled={tagOptions.length === filters.tags.length}
+              onChange={(event) => addTagFilter(event.target.value)}
+            >
+              <option value="">{tagOptions.length === 0 ? "No tags yet" : "Any tags"}</option>
+              {tagOptions
+                .filter((tag) => !filters.tags.includes(tag))
+                .map((tag) => (
+                  <option key={tag} value={tag}>
+                    {tag}
+                  </option>
+                ))}
+            </select>
+            {filters.tags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className="match-tag-chip is-filter"
+                aria-label={`Remove tag filter ${tag}`}
+                onClick={() => removeTagFilter(tag)}
+              >
+                {tag}
+                <span aria-hidden="true">×</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <label className="match-filter-field">
           <span>From</span>
           <input
@@ -607,7 +717,11 @@ export function MatchesPage() {
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
-                    <th key={header.id} style={cellWidthStyle(header.getSize())}>
+                    <th
+                      key={header.id}
+                      className={header.column.id === "saved" ? "match-saved-cell" : undefined}
+                      style={cellWidthStyle(header.getSize(), header.column.id)}
+                    >
                       {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                     </th>
                   ))}

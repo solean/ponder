@@ -23,6 +23,7 @@ import type {
   MatchList,
   MatchReplayFrame,
   MatchReplayStatus,
+  MatchTagUsage,
   MatchupMatchRef,
   DeckMatchupsResponse,
   LimitedMatchupsResponse,
@@ -136,6 +137,11 @@ export const api = {
   },
   setOpponentArchetype: (matchId: number, archetype: string) =>
     postJSON<{ status: string; archetype: string }>(`/api/matches/${matchId}/opponent-archetype`, { archetype }),
+  setMatchSaved: (matchId: number, saved: boolean) =>
+    postJSON<{ saved: boolean }>(`/api/matches/${matchId}/bookmark`, { saved }),
+  setMatchTags: (matchId: number, tags: string[]) =>
+    postJSON<{ tags: string[] }>(`/api/matches/${matchId}/tags`, { tags }),
+  matchTagUsage: () => getJSON<MatchTagUsage[]>("/api/match-tags"),
   drafts: () => getJSON<DraftSession[]>("/api/drafts"),
   draftAnalytics: (set?: string, format?: string) => {
     const search = new URLSearchParams();

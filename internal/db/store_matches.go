@@ -415,13 +415,14 @@ func (s *Store) ListMatches(ctx context.Context, limit int64, eventName, result 
 				WHERE md.match_id = m.id
 				ORDER BY md.id ASC
 				LIMIT 1
-			)
+			),
+			%s
 		FROM matches m
 		WHERE (? = '' OR m.event_name = ?)
 		  AND (? = '' OR m.result = ?)
 		ORDER BY COALESCE(m.started_at, m.ended_at, m.updated_at) DESC
 		LIMIT ?
-	`, matchBestOfSQL, matchPlayDrawSQL, matchFullTurnCountSQL)
+	`, matchBestOfSQL, matchPlayDrawSQL, matchFullTurnCountSQL, matchSavedSQL)
 	rows, err := s.db.QueryContext(ctx, query, eventName, eventName, result, result, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list matches: %w", err)
@@ -449,6 +450,7 @@ func (s *Store) ListMatches(ctx context.Context, limit int64, eventName, result 
 			&r.DeckName,
 			&r.DeckVersionID,
 			&r.DeckVersionNumber,
+			&r.Saved,
 		); err != nil {
 			return nil, fmt.Errorf("scan match row: %w", err)
 		}
@@ -456,6 +458,19 @@ func (s *Store) ListMatches(ctx context.Context, limit int64, eventName, result 
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate matches: %w", err)
+	}
+	// Close before the next query: the test pool has a single connection.
+	_ = rows.Close()
+
+	tagsByMatch, err := s.ListAllMatchTags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for index := range resultRows {
+		resultRows[index].Tags = tagsByMatch[resultRows[index].ID]
+		if resultRows[index].Tags == nil {
+			resultRows[index].Tags = []string{}
+		}
 	}
 
 	return resultRows, nil
@@ -682,11 +697,12 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 				WHERE md.match_id = m.id
 				ORDER BY md.id ASC
 				LIMIT 1
-			)
+			),
+			%s
 		FROM matches m
 		WHERE m.id = ?
 		LIMIT 1
-	`, matchBestOfSQL, matchPlayDrawSQL, matchFullTurnCountSQL)
+	`, matchBestOfSQL, matchPlayDrawSQL, matchFullTurnCountSQL, matchSavedSQL)
 
 	err := s.db.QueryRowContext(ctx, query, matchID).Scan(
 		&out.Match.ID,
@@ -706,12 +722,16 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 		&out.Match.DeckName,
 		&out.Match.DeckVersionID,
 		&out.Match.DeckVersionNumber,
+		&out.Match.Saved,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return out, sql.ErrNoRows
 	}
 	if err != nil {
 		return out, fmt.Errorf("get match detail: %w", err)
+	}
+	if out.Match.Tags, err = s.ListMatchTags(ctx, matchID); err != nil {
+		return out, err
 	}
 
 	quantities, err := s.ListMatchOpponentCardQuantities(ctx, []int64{matchID})

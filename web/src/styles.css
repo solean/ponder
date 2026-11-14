@@ -9863,6 +9863,276 @@ select option {
   color: var(--muted);
 }
 
+/* Save (bookmark) star: a quiet toggle in the match table and detail header. */
+.save-match-button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.save-match-button:hover {
+  color: var(--text);
+}
+
+.save-match-button.is-saved {
+  color: var(--accent);
+}
+
+.save-match-button:focus-visible {
+  outline: 1px solid var(--tab-active-border);
+  outline-offset: 1px;
+}
+
+.save-match-star {
+  width: 1rem;
+  height: 1rem;
+}
+
+.match-detail-header .save-match-star {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+/* Unsaved stars stay faint until the row is hovered or focused. */
+.match-virtual-row .save-match-button:not(.is-saved) {
+  opacity: 0.3;
+}
+
+.match-virtual-row:hover .save-match-button,
+.match-virtual-row:focus-within .save-match-button {
+  opacity: 1;
+}
+
+.data-table .match-saved-cell {
+  justify-content: center;
+  padding-left: 0.3rem;
+  padding-right: 0.3rem;
+}
+
+.match-filter-saved-chip {
+  color: var(--muted-strong);
+}
+
+.match-filter-saved-chip.is-active {
+  color: var(--accent);
+}
+
+.match-filter-saved-chip .save-match-star {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+/* Match tags: user-written labels, so Inter rather than the mono label face. */
+.match-tags-control {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.match-tags-button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.15rem;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.match-tags-button:hover {
+  color: var(--text);
+}
+
+.match-tags-button:focus-visible {
+  outline: 1px solid var(--tab-active-border);
+  outline-offset: 1px;
+}
+
+.match-tag-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+/* Like the star: an empty tag button stays faint until the row is hovered. */
+.match-virtual-row .match-tags-button.is-empty {
+  opacity: 0.3;
+}
+
+.match-virtual-row:hover .match-tags-button.is-empty,
+.match-virtual-row:focus-within .match-tags-button.is-empty {
+  opacity: 1;
+}
+
+.match-tag-chips {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* inline-block, not flex: text-overflow needs a block box around the text. */
+.match-tag-chip {
+  display: inline-block;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 10rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--muted-strong);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.match-tag-chip.is-more {
+  flex: none;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.match-tags-button:hover .match-tag-chip {
+  border-color: var(--tab-active-border);
+  color: var(--text);
+}
+
+.match-tag-chip.is-filter,
+.match-tag-chip.is-removable {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-color: var(--tab-active-border);
+  color: var(--text);
+}
+
+.match-tag-chip.is-filter {
+  appearance: none;
+  height: 2.4rem;
+  padding: 0 0.6rem;
+  border-radius: 3px;
+  background: transparent;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.match-tag-chip.is-filter span,
+.match-tag-chip.is-removable button {
+  color: var(--muted);
+}
+
+.match-tag-chip.is-filter:hover span,
+.match-tag-chip.is-removable button:hover {
+  color: var(--text);
+}
+
+.match-tag-chip.is-removable button {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--text-sm);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.match-filter-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.34rem;
+}
+
+.match-detail-header > .match-tags-control .match-tag-chip {
+  font-size: var(--text-sm);
+}
+
+.match-tag-popover {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--popover-bg);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+}
+
+.match-tag-popover-current {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.match-tag-popover-current .match-tag-chip {
+  max-width: 100%;
+}
+
+.match-tag-chip.is-removable span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.match-tag-input.settings-input {
+  height: 2.2rem;
+  min-height: 2.2rem;
+  padding: 0 0.55rem;
+  font-size: var(--text-base);
+}
+
+.match-tag-suggestions {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.match-tag-suggestion {
+  padding: 0.3rem 0.5rem;
+  border-radius: 3px;
+  color: var(--muted-strong);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.match-tag-suggestion.is-highlighted {
+  background: var(--table-row-hover);
+  color: var(--text);
+}
+
+.match-tag-error {
+  margin: 0;
+  color: var(--error);
+  font-size: var(--text-sm);
+}
+
 .deck-list-table th,
 .deck-list-table td {
   padding-inline: 0.55rem;

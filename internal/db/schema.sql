@@ -165,6 +165,25 @@ CREATE TABLE IF NOT EXISTS match_opponent_archetype_overrides (
   FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
 );
 
+-- Matches the user starred to find again later. One row per saved match.
+CREATE TABLE IF NOT EXISTS match_bookmarks (
+  match_id INTEGER PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
+);
+
+-- Free-form labels the user puts on a match ("land flooded", "misplayed").
+-- Tags are stored normalised: trimmed, single-spaced, lowercase.
+CREATE TABLE IF NOT EXISTS match_tags (
+  match_id INTEGER NOT NULL,
+  tag TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY(match_id, tag),
+  FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_match_tags_tag ON match_tags(tag);
+
 CREATE TABLE IF NOT EXISTS set_catalog (
   code TEXT PRIMARY KEY,
   name TEXT NOT NULL,

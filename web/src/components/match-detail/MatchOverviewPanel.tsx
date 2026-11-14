@@ -7,6 +7,8 @@ import { ContextualLink } from "../Breadcrumbs";
 import { EventLabel } from "../EventLabel";
 import { MatchDeckColors } from "../MatchDeckColors";
 import { ResultPill } from "../ResultPill";
+import { MatchTagsControl } from "../MatchTags";
+import { SaveMatchButton } from "../SaveMatchButton";
 
 /** One-line match header: result, opponent, the facts, then the section tabs. */
 export function MatchOverviewPanel({
@@ -24,6 +26,7 @@ export function MatchOverviewPanel({
       <div className="match-detail-header-title">
         <ResultPill result={match.result} />
         <h2>vs {match.opponent || "Unknown opponent"}</h2>
+        <SaveMatchButton matchId={match.id} saved={match.saved ?? false} />
         <MatchDeckColors
           className="match-deck-colors-detail"
           deckColors={match.deckColors}
@@ -49,6 +52,7 @@ export function MatchOverviewPanel({
         {match.secondsCount ? <li>{formatDuration(match.secondsCount)}</li> : null}
         {match.winReason ? <li>{match.winReason}</li> : null}
       </ul>
+      <MatchTagsControl matchId={match.id} tags={match.tags ?? []} className="match-detail-tags" />
       {children}
     </header>
   );

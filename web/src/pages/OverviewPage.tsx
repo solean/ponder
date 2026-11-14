@@ -730,6 +730,53 @@ export function OverviewPage() {
         </article>
       </section>
 
+      <section className="panel activity-panel">
+        <div className="panel-head">
+          <h3>Activity</h3>
+          <div className="activity-head-meta">
+            <p>
+              {activityQuery.data && !activityQuery.error ? `${activityTotal} match${activityTotal === 1 ? "" : "es"} · ` : ""}
+              last {ACTIVITY_DAYS} days
+            </p>
+            <div className="tabs tabs--sm" role="group" aria-label="Color activity by">
+              <button
+                type="button"
+                className={`tab ${activityColorByWinRate ? "" : "is-active"}`}
+                aria-pressed={!activityColorByWinRate}
+                onClick={() => setActivityColorByWinRate(false)}
+              >
+                Matches
+              </button>
+              <button
+                type="button"
+                className={`tab ${activityColorByWinRate ? "is-active" : ""}`}
+                aria-pressed={activityColorByWinRate}
+                onClick={() => setActivityColorByWinRate(true)}
+              >
+                Win Rate
+              </button>
+            </div>
+          </div>
+        </div>
+        {activityQuery.isPending ? (
+          <StatusMessage>Loading activity…</StatusMessage>
+        ) : activityQuery.error ? (
+          <StatusMessage tone="error">Unable to load activity: {(activityQuery.error as Error).message}</StatusMessage>
+        ) : (
+          <ActivityGraph
+            activity={activity}
+            total={activityTotal}
+            colorMode={activityColorByWinRate ? "winRate" : "matches"}
+          />
+        )}
+        {activityQuery.isSuccess && activityTotal === 0 ? (
+          <p className="state activity-empty">
+            No matches in the last {ACTIVITY_DAYS} days
+            {lastPlayedAt ? ` — last played ${formatRelativeTime(lastPlayedAt)}` : ""}.
+          </p>
+        ) : null}
+      </section>
+
       <section className="panel">
         <div className="panel-head">
           <h3>Recent Matches</h3>
@@ -920,53 +967,6 @@ export function OverviewPage() {
           )}
         </section>
       </div>
-
-      <section className="panel activity-panel">
-        <div className="panel-head">
-          <h3>Activity</h3>
-          <div className="activity-head-meta">
-            <p>
-              {activityQuery.data && !activityQuery.error ? `${activityTotal} match${activityTotal === 1 ? "" : "es"} · ` : ""}
-              last {ACTIVITY_DAYS} days
-            </p>
-            <div className="tabs tabs--sm" role="group" aria-label="Color activity by">
-              <button
-                type="button"
-                className={`tab ${activityColorByWinRate ? "" : "is-active"}`}
-                aria-pressed={!activityColorByWinRate}
-                onClick={() => setActivityColorByWinRate(false)}
-              >
-                Matches
-              </button>
-              <button
-                type="button"
-                className={`tab ${activityColorByWinRate ? "is-active" : ""}`}
-                aria-pressed={activityColorByWinRate}
-                onClick={() => setActivityColorByWinRate(true)}
-              >
-                Win Rate
-              </button>
-            </div>
-          </div>
-        </div>
-        {activityQuery.isPending ? (
-          <StatusMessage>Loading activity…</StatusMessage>
-        ) : activityQuery.error ? (
-          <StatusMessage tone="error">Unable to load activity: {(activityQuery.error as Error).message}</StatusMessage>
-        ) : (
-          <ActivityGraph
-            activity={activity}
-            total={activityTotal}
-            colorMode={activityColorByWinRate ? "winRate" : "matches"}
-          />
-        )}
-        {activityQuery.isSuccess && activityTotal === 0 ? (
-          <p className="state activity-empty">
-            No matches in the last {ACTIVITY_DAYS} days
-            {lastPlayedAt ? ` — last played ${formatRelativeTime(lastPlayedAt)}` : ""}.
-          </p>
-        ) : null}
-      </section>
 
       <section className="panel">
         <div className="panel-head">

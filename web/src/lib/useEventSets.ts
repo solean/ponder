@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "./api";
@@ -32,10 +33,17 @@ export function useSetCodes(setCodes: string[]): {
     staleTime: 1000 * 60 * 60 * 24,
   });
 
-  const lookup: SetLookup = (code) => {
-    if (!code) return undefined;
-    return query.data?.[code.toLowerCase()];
-  };
+  // Stable between renders while the data is unchanged: callers put it in
+  // memo deps (the Matches table's columns), and a new identity per render
+  // remounts every cell.
+  const data = query.data;
+  const lookup = useCallback<SetLookup>(
+    (code) => {
+      if (!code) return undefined;
+      return data?.[code.toLowerCase()];
+    },
+    [data],
+  );
 
   return { lookup, isLoading: query.isLoading };
 }

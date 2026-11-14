@@ -459,6 +459,19 @@ func (s *Store) ListMatches(ctx context.Context, limit int64, eventName, result 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate matches: %w", err)
 	}
+	// Close before the next query: the test pool has a single connection.
+	_ = rows.Close()
+
+	tagsByMatch, err := s.ListAllMatchTags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for index := range resultRows {
+		resultRows[index].Tags = tagsByMatch[resultRows[index].ID]
+		if resultRows[index].Tags == nil {
+			resultRows[index].Tags = []string{}
+		}
+	}
 
 	return resultRows, nil
 }
@@ -716,6 +729,9 @@ func (s *Store) GetMatchDetail(ctx context.Context, matchID int64) (model.MatchD
 	}
 	if err != nil {
 		return out, fmt.Errorf("get match detail: %w", err)
+	}
+	if out.Match.Tags, err = s.ListMatchTags(ctx, matchID); err != nil {
+		return out, err
 	}
 
 	quantities, err := s.ListMatchOpponentCardQuantities(ctx, []int64{matchID})

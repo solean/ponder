@@ -39,6 +39,13 @@ type MatchRow struct {
 	OpponentDeckColors      []string `json:"opponentDeckColors"`
 	OpponentDeckColorsKnown bool     `json:"opponentDeckColorsKnown"`
 	Saved                   bool     `json:"saved"`
+	Tags                    []string `json:"tags"`
+}
+
+// MatchTagUsage is one tag and how many matches carry it.
+type MatchTagUsage struct {
+	Tag   string `json:"tag"`
+	Count int64  `json:"count"`
 }
 
 // MatchListResponse carries the total alongside the page so the UI can say

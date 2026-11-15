@@ -9875,9 +9875,7 @@ select option {
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  transition:
-    color 160ms ease,
-    opacity 160ms ease;
+  transition: color 160ms ease;
 }
 
 .save-match-button:hover {
@@ -9903,14 +9901,21 @@ select option {
   height: 1.15rem;
 }
 
-/* Unsaved stars stay faint until the row is hovered or focused. */
+/* Unsaved stars stay faint until the row is hovered or focused. The fade is a
+   color change, not opacity: an opacity transition gives the icon its own
+   compositing layer while it runs, and WebKit snaps that layer to a different
+   pixel grid than the row, so the row content jiggles on every hover. */
 .match-virtual-row .save-match-button:not(.is-saved) {
-  opacity: 0.3;
+  color: color-mix(in srgb, var(--muted) 30%, transparent);
 }
 
-.match-virtual-row:hover .save-match-button,
-.match-virtual-row:focus-within .save-match-button {
-  opacity: 1;
+.match-virtual-row:hover .save-match-button:not(.is-saved),
+.match-virtual-row:focus-within .save-match-button:not(.is-saved) {
+  color: var(--muted);
+}
+
+.match-virtual-row .save-match-button:not(.is-saved):hover {
+  color: var(--text);
 }
 
 .data-table .match-saved-cell {
@@ -9951,9 +9956,7 @@ select option {
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  transition:
-    color 160ms ease,
-    opacity 160ms ease;
+  transition: color 160ms ease;
 }
 
 .match-tags-button:hover {
@@ -9970,14 +9973,19 @@ select option {
   height: 0.95rem;
 }
 
-/* Like the star: an empty tag button stays faint until the row is hovered. */
+/* Like the star: an empty tag button stays faint (via color, not opacity)
+   until the row is hovered. */
 .match-virtual-row .match-tags-button.is-empty {
-  opacity: 0.3;
+  color: color-mix(in srgb, var(--muted) 30%, transparent);
 }
 
 .match-virtual-row:hover .match-tags-button.is-empty,
 .match-virtual-row:focus-within .match-tags-button.is-empty {
-  opacity: 1;
+  color: var(--muted);
+}
+
+.match-virtual-row .match-tags-button.is-empty:hover {
+  color: var(--text);
 }
 
 .match-tag-chips {

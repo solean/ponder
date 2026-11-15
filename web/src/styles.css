@@ -3401,13 +3401,19 @@ small.settings-meta,
 
 .data-table tbody tr.data-table-row-link {
   cursor: pointer;
+  /* Hover-out only: the highlight lands instantly (see :hover below) so the
+     table feels responsive, then fades briefly as the pointer moves on. */
   transition:
-    background-color 160ms ease,
-    box-shadow 160ms ease;
+    background-color 100ms ease-out,
+    box-shadow 100ms ease-out;
 }
 
 .data-table tbody tr:hover {
   background-color: var(--table-row-hover);
+}
+
+.data-table tbody tr.data-table-row-link:hover {
+  transition-duration: 0ms;
 }
 
 .data-table tbody tr.data-table-row-link:focus-visible {
@@ -9899,6 +9905,17 @@ select option {
 .match-detail-header .save-match-star {
   width: 1.15rem;
   height: 1.15rem;
+}
+
+/* Row icons track the row highlight: instant on hover-in, a quick fade out. */
+.match-virtual-row .save-match-button,
+.match-virtual-row .match-tags-button {
+  transition-duration: 100ms;
+}
+
+.match-virtual-row:hover .save-match-button,
+.match-virtual-row:hover .match-tags-button {
+  transition-duration: 0ms;
 }
 
 /* Unsaved stars stay faint until the row is hovered or focused. The fade is a

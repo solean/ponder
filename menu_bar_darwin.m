@@ -1,4 +1,5 @@
 #import <Cocoa/Cocoa.h>
+#import <objc/runtime.h>
 
 #import "_cgo_export.h"
 #import "menu_bar_darwin.h"
@@ -8,15 +9,67 @@
 // entry point runs on the main thread (Go calls through application.InvokeSync;
 // AppKit delivers actions there), so this state needs no locking.
 
-static const CGFloat ponderHeaderWidth = 280;
+static const CGFloat ponderHeaderWidth = 360; // Fits "In match vs <name> · Game 2 · Turn 5 · <deck>".
 static const CGFloat ponderHeaderInset = 14;
 static const CGFloat ponderHeaderPadding = 6;
 static const CGFloat ponderHeaderSwitchGap = 12;
 
+// AppKit fills an NSSwitch with the accent color only while its window has
+// key appearance, and a menu's window never does, so the switch would read
+// gray even when on. Control Center's own menus draw their switches in windows
+// that do have it. To match them, the header marks the menu window it lands in,
+// and that window's class answers the private -hasKeyAppearance with YES for
+// marked windows only; every other window keeps AppKit's answer. If a future
+// macOS drops the method, nothing is installed and the switch falls back to
+// gray.
+static char ponderForcedKeyAppearance;
+static NSMutableDictionary<NSString *, NSValue *> *ponderOriginalKeyAppearance;
+
+static BOOL ponderHasKeyAppearance(NSWindow *self, SEL _cmd) {
+    if (objc_getAssociatedObject(self, &ponderForcedKeyAppearance) != nil) {
+        return YES;
+    }
+    // Look up by the class that installed this override, not the instance's
+    // class, so a subclass inheriting it still reaches the right original.
+    for (Class cls = object_getClass(self); cls != Nil; cls = class_getSuperclass(cls)) {
+        NSValue *original = ponderOriginalKeyAppearance[NSStringFromClass(cls)];
+        if (original != nil) {
+            return ((BOOL (*)(id, SEL))original.pointerValue)(self, _cmd);
+        }
+    }
+    return NO;
+}
+
+static void ponderForceKeyAppearance(NSWindow *window, BOOL force) {
+    if (window == nil) {
+        return;
+    }
+    Class cls = [window class]; // -class sees through KVO's dynamic subclass.
+    SEL sel = NSSelectorFromString(@"hasKeyAppearance");
+    if (force) {
+        if (ponderOriginalKeyAppearance == nil) {
+            ponderOriginalKeyAppearance = [NSMutableDictionary dictionary];
+        }
+        NSString *key = NSStringFromClass(cls);
+        if (ponderOriginalKeyAppearance[key] == nil) {
+            Method method = class_getInstanceMethod(cls, sel);
+            if (method == NULL) {
+                return;
+            }
+            ponderOriginalKeyAppearance[key] = [NSValue valueWithPointer:method_getImplementation(method)];
+            // Add the override on the menu window's own class when it only
+            // inherits the method, so NSWindow itself is never changed.
+            if (!class_addMethod(cls, sel, (IMP)ponderHasKeyAppearance, method_getTypeEncoding(method))) {
+                method_setImplementation(method, (IMP)ponderHasKeyAppearance);
+            }
+        }
+    }
+    objc_setAssociatedObject(window, &ponderForcedKeyAppearance, force ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 @interface PonderMenuBarHeaderView : NSView
 @property(nonatomic, strong) NSTextField *titleLabel;
 @property(nonatomic, strong) NSTextField *statusLabel;
-@property(nonatomic, strong) NSTextField *activityLabel;
 @property(nonatomic, strong) NSSwitch *toggle;
 @end
 
@@ -32,8 +85,6 @@ static const CGFloat ponderHeaderSwitchGap = 12;
     _titleLabel.stringValue = title;
     _statusLabel = [self addLabelWithFont:[NSFont systemFontOfSize:12]
                                     color:[NSColor secondaryLabelColor]];
-    _activityLabel = [self addLabelWithFont:[NSFont systemFontOfSize:12]
-                                      color:[NSColor secondaryLabelColor]];
     _toggle = [[NSSwitch alloc] init];
     _toggle.target = self;
     _toggle.action = @selector(toggled:);
@@ -46,6 +97,16 @@ static const CGFloat ponderHeaderSwitchGap = 12;
 
 - (BOOL)isFlipped {
     return YES;
+}
+
+- (void)viewWillMoveToWindow:(NSWindow *)newWindow {
+    ponderForceKeyAppearance(self.window, NO);
+    [super viewWillMoveToWindow:newWindow];
+}
+
+- (void)viewDidMoveToWindow {
+    [super viewDidMoveToWindow];
+    ponderForceKeyAppearance(self.window, YES);
 }
 
 - (NSTextField *)addLabelWithFont:(NSFont *)font color:(NSColor *)color {
@@ -63,15 +124,13 @@ static const CGFloat ponderHeaderSwitchGap = 12;
 }
 
 // Frames rather than Auto Layout: NSMenu sizes a custom item from its view's
-// frame, so the height must be settled whenever a line appears or disappears.
+// frame. Both lines are always present, so the height only changes with the
+// system font size, never with tracking state.
 - (void)layoutContent {
     NSSize switchSize = self.toggle.intrinsicContentSize;
     CGFloat textWidth = ponderHeaderWidth - 2 * ponderHeaderInset - switchSize.width - ponderHeaderSwitchGap;
     CGFloat y = ponderHeaderPadding;
-    for (NSTextField *label in @[ self.titleLabel, self.statusLabel, self.activityLabel ]) {
-        if (label.hidden) {
-            continue;
-        }
+    for (NSTextField *label in @[ self.titleLabel, self.statusLabel ]) {
         CGFloat height = ceil(label.intrinsicContentSize.height);
         label.frame = NSMakeRect(ponderHeaderInset, y, textWidth, height);
         y += height;
@@ -189,7 +248,6 @@ void ponderMenuBarRenderOverlay(const char *label) {
 
 void ponderMenuBarRender(
     const char *status,
-    const char *activity,
     bool on,
     bool canToggle,
     const char *indicator,
@@ -200,9 +258,6 @@ void ponderMenuBarRender(
     }
     PonderMenuBarHeaderView *header = ponderMenuBar.header;
     header.statusLabel.stringValue = ponderString(status);
-    NSString *activityText = ponderString(activity);
-    header.activityLabel.stringValue = activityText;
-    header.activityLabel.hidden = activityText.length == 0;
     header.toggle.state = on ? NSControlStateValueOn : NSControlStateValueOff;
     header.toggle.enabled = canToggle;
     [header layoutContent];

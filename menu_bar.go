@@ -20,14 +20,24 @@ import (
 )
 
 // menuBarStatus is everything the native status item renders. The dropdown
-// header reads "Live Tracking" with status beneath it and a switch beside it.
+// header reads "Live Tracking" with one status line beneath it and a switch
+// beside it.
 type menuBarStatus struct {
 	status    string
-	activity  string // Third header line; empty hides it.
+	activity  string // Follows status on the same line; may be empty.
 	on        bool   // Switch position.
 	canToggle bool
 	indicator string // Text beside the menu bar icon.
 	detail    string // Tooltip only.
+}
+
+// statusLine joins status and activity so the header is always two lines tall:
+// toggling tracking changes the text but never the menu's height.
+func (s menuBarStatus) statusLine() string {
+	if s.activity == "" || s.activity == s.status {
+		return s.status
+	}
+	return s.status + " · " + s.activity
 }
 
 func (s menuBarStatus) tooltip() string {

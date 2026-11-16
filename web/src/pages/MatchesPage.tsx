@@ -11,6 +11,7 @@ import { ManaSymbol } from "../components/ManaSymbol";
 import { MatchTagsControl } from "../components/MatchTags";
 import { ResultPill } from "../components/ResultPill";
 import { SaveMatchButton, StarIcon } from "../components/SaveMatchButton";
+import { PageHeader } from "../components/PageHeader";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { eventCategory, parseEventName } from "../lib/events";
@@ -536,11 +537,12 @@ export function MatchesPage() {
   }
 
   return (
-    <section className="panel matches-page">
-      <div className="panel-head matches-head">
-        <h3>Match History</h3>
-        <p>{summary}</p>
-        <div className="match-filter-actions">
+    <div className="stack-lg">
+      <PageHeader
+        title="Matches"
+        meta={summary}
+        actions={
+          <>
           <button
             type="button"
             className={`control-button match-filter-toggle${groupByEvent ? " is-active" : ""}`}
@@ -557,9 +559,10 @@ export function MatchesPage() {
           >
             Clear Filters
           </button>
-        </div>
-      </div>
-
+          </>
+        }
+      />
+      <section className="panel matches-page">
       <div className="match-filter-bar" aria-label="Match filters">
         <label className="match-filter-field match-filter-search">
           <span>Opponent</span>
@@ -740,5 +743,6 @@ export function MatchesPage() {
         </div>
       )}
     </section>
+    </div>
   );
 }

@@ -4,8 +4,6 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
 import { EventLabel } from "../components/EventLabel";
-import { ErrorBoundary } from "../components/ErrorBoundary";
-import { LiveMatchBanner } from "../components/LiveMatchBanner";
 import { MatchDeckColors } from "../components/MatchDeckColors";
 import { RankProgressPanel } from "../components/RankProgressPanel";
 import { ResultPill } from "../components/ResultPill";
@@ -38,7 +36,7 @@ import {
   type WinLossRecord,
 } from "../lib/overviewStats";
 import { usePersistedFlag } from "../lib/persistedFlag";
-import type { DraftSession, RuntimeStatus } from "../lib/types";
+import type { DraftSession } from "../lib/types";
 import { useEventSets } from "../lib/useEventSets";
 
 const RECENT_MATCH_COUNT = 8;
@@ -490,36 +488,6 @@ function ActivityGraph({
   );
 }
 
-function syncSummary(
-  status: RuntimeStatus | undefined,
-  lastMatchAt: string | undefined,
-): { head: string; sub: string; live: boolean } {
-  if (!status) return { head: "…", sub: "checking status", live: false };
-
-  const importedAt = status.lastImport?.completedAt ?? "";
-  const tickedAt = status.liveLastTickAt ?? "";
-  const lastSyncedAt = [importedAt, tickedAt]
-    .filter(Boolean)
-    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
-    .pop();
-
-  if (status.liveRunning) {
-    return {
-      head: "Live tracker on",
-      sub: lastSyncedAt ? `last activity ${formatRelativeTime(lastSyncedAt)}` : "waiting for activity",
-      live: true,
-    };
-  }
-  if (lastSyncedAt) {
-    return { head: `Synced ${formatRelativeTime(lastSyncedAt)}`, sub: "live tracker off", live: false };
-  }
-  // No sync this session; fall back to how fresh the stored data is.
-  if (lastMatchAt) {
-    return { head: `Data through ${formatRelativeTime(lastMatchAt)}`, sub: "live tracker off", live: false };
-  }
-  return { head: "Never synced", sub: "live tracker off", live: false };
-}
-
 function draftRecordLabel(draft: DraftSession): string | null {
   if (draft.wins == null || draft.losses == null) return null;
   return `${draft.wins}W–${draft.losses}L`;
@@ -560,11 +528,6 @@ export function OverviewPage() {
     queryKey: ["drafts"],
     queryFn: api.drafts,
   });
-  const statusQuery = useQuery({
-    queryKey: ["runtime-status"],
-    queryFn: api.runtimeStatus,
-    refetchInterval: 30_000,
-  });
 
   const allMatches = useMemo(
     () => sortMatchesDesc(matchesQuery.data?.matches ?? data?.recent ?? []),
@@ -591,24 +554,10 @@ export function OverviewPage() {
   if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
   if (!data) return <StatusMessage>No data.</StatusMessage>;
 
-  const sync = syncSummary(statusQuery.data, allMatches[0]?.startedAt);
-
   const header = (
     <PageHeader
       className="overview-header"
       title={data.playerName || "Overview"}
-      actions={
-        <>
-          <ErrorBoundary label="LiveMatchBanner">
-            <LiveMatchBanner />
-          </ErrorBoundary>
-          <div className="overview-sync" aria-label="Data status">
-            <span className={`sync-dot ${sync.live ? "is-live" : ""}`} aria-hidden="true" />
-            <strong>{sync.head}</strong>
-            <small>{sync.sub}</small>
-          </div>
-        </>
-      }
     />
   );
 

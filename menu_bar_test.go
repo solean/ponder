@@ -45,3 +45,20 @@ func TestTrackingMenuBarStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestMenuBarStatusLine(t *testing.T) {
+	tests := []struct {
+		status menuBarStatus
+		want   string
+	}{
+		{menuBarStatus{status: "Off"}, "Off"},
+		{menuBarStatus{status: "On", activity: "MTGA activity 4 hr ago"}, "On · MTGA activity 4 hr ago"},
+		{menuBarStatus{status: "In match vs Rival", activity: "Game 2 · Turn 5"}, "In match vs Rival · Game 2 · Turn 5"},
+		{menuBarStatus{status: "Starting…", activity: "Starting…"}, "Starting…"},
+	}
+	for _, tt := range tests {
+		if got := tt.status.statusLine(); got != tt.want {
+			t.Errorf("statusLine(%+v) = %q; want %q", tt.status, got, tt.want)
+		}
+	}
+}

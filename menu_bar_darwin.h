@@ -15,7 +15,6 @@ void ponderMenuBarCreate(
 );
 void ponderMenuBarRender(
     const char *status,
-    const char *activity,
     bool on,
     bool canToggle,
     const char *indicator,

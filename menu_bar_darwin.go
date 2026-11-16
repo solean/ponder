@@ -33,13 +33,12 @@ func menuBarCreate(onIcon, offIcon []byte, title, openLabel, quitLabel string) {
 
 // menuBarRender updates the status item in place. Main thread only.
 func menuBarRender(s menuBarStatus) {
-	cStatus, cActivity := C.CString(s.status), C.CString(s.activity)
+	cStatus := C.CString(s.statusLine())
 	cIndicator, cTooltip := C.CString(s.indicator), C.CString(s.tooltip())
 	defer C.free(unsafe.Pointer(cStatus))
-	defer C.free(unsafe.Pointer(cActivity))
 	defer C.free(unsafe.Pointer(cIndicator))
 	defer C.free(unsafe.Pointer(cTooltip))
-	C.ponderMenuBarRender(cStatus, cActivity, C.bool(s.on), C.bool(s.canToggle), cIndicator, cTooltip)
+	C.ponderMenuBarRender(cStatus, C.bool(s.on), C.bool(s.canToggle), cIndicator, cTooltip)
 }
 
 // menuBarRenderOverlay keeps the dropdown action in sync with the app menu.

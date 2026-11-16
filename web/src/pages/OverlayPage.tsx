@@ -207,10 +207,6 @@ function DeckPanel({ live, hoveredCard, shortcut }: { live: LiveMatch; hoveredCa
       ) : (
         <p className="overlay-empty">Waiting for the submitted decklist.</p>
       )}
-      <footer className="overlay-panel-foot">
-        <span className={`overlay-state-dot ${hasLibraryCount ? "is-ready" : ""}`} aria-hidden="true" />
-        {hasLibraryCount ? `${live.deckTotal - libraryCount} known outside the library` : "Waiting for full game state"}
-      </footer>
       <div className="overlay-panel-foot">
         {overlayShortcutLabel(shortcut)} · hide/show overlay
       </div>

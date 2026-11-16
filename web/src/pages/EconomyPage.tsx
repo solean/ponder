@@ -4,6 +4,7 @@ import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { EventLabel } from "../components/EventLabel";
+import { PageHeader } from "../components/PageHeader";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import {
@@ -301,12 +302,7 @@ export function EconomyPage() {
   if (!latest) {
     return (
       <div className="stack-lg economy-page">
-        <header className="page-heading">
-          <div>
-            <p className="eyebrow">Arena inventory</p>
-            <h2>Economy</h2>
-          </div>
-        </header>
+        <PageHeader title="Economy" />
         <section className="panel empty-panel">
           <h3>No economy snapshots yet</h3>
           <p>
@@ -332,19 +328,18 @@ export function EconomyPage() {
 
   return (
     <div className="stack-lg economy-page">
-      <header className="page-heading economy-heading">
-        <div>
-          <p className="eyebrow">Arena inventory</p>
-          <h2>Economy</h2>
-        </div>
-        <div className="economy-freshness">
-          <span>Last snapshot</span>
-          <strong title={formatDateTime(latest.observedAt)}>
-            {latest.observedAt ? formatRelativeTime(latest.observedAt) : "time unavailable"}
-          </strong>
-          <small>{integerFormatter.format(data.history.length)} snapshots tracked</small>
-        </div>
-      </header>
+      <PageHeader
+        title="Economy"
+        meta={`${integerFormatter.format(data.history.length)} snapshots tracked`}
+        actions={
+          <div className="economy-freshness">
+            <span>Last snapshot</span>
+            <strong title={formatDateTime(latest.observedAt)}>
+              {latest.observedAt ? formatRelativeTime(latest.observedAt) : "time unavailable"}
+            </strong>
+          </div>
+        }
+      />
 
       <section className="metrics-grid" aria-label="Current economy balances">
         <article className="metric-card economy-metric economy-metric--gold">

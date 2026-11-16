@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, type KeyboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { PageHeader } from "../components/PageHeader";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { pct, winRateTone } from "../lib/format";
@@ -263,11 +264,10 @@ export function SeasonDetailsPage() {
 
   return (
     <div className="stack-lg season-details-page">
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">{LADDER_CONFIG[ladder].label} · {seasonScopeLabel}</p>
-          <h2>Season details</h2>
-        </div>
+      <PageHeader
+        title="Season details"
+        meta={`${LADDER_CONFIG[ladder].label} · ${seasonScopeLabel}`}
+        actions={
         <div className="rank-controls" role="group" aria-label="Season details filters">
           <div className="tabs rank-toggle" role="group" aria-label="Ladder">
             {ladderOptions.map((value) => (
@@ -299,7 +299,8 @@ export function SeasonDetailsPage() {
             </select>
           </label>
         </div>
-      </header>
+        }
+      />
 
       {matches.length === 0 ? (
         <section className="panel empty-panel">

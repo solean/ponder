@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { ManaSymbol } from "../components/ManaSymbol";
 import { DeckColorIdentity } from "../components/MatchDeckColors";
+import { PageHeader } from "../components/PageHeader";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import {
@@ -314,12 +315,9 @@ export function DecksPage() {
 
   return (
     <div className="stack-lg">
+      <PageHeader title="Decks" meta={countLabel} />
       <DeckSummaryStrip summary={summary} />
       <section className="panel decks-page">
-        <div className="panel-head">
-          <h3>Decks</h3>
-          <p>{countLabel}</p>
-        </div>
 
         <div className="match-filter-bar" aria-label="Deck filters">
           <label className="match-filter-field match-filter-search">

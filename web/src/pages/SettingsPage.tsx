@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { SettingToggle } from "../components/SettingToggle";
+import { PageHeader } from "../components/PageHeader";
 import { StatusMessage } from "../components/StatusMessage";
 import { OverlaySettingsPanel } from "../components/OverlaySettingsPanel";
 import { api } from "../lib/api";
@@ -536,9 +537,14 @@ export function SettingsPage() {
 
   return (
     <div className="stack-lg">
-      <div className="settings-save-status" role="status" aria-live="polite">
-        {saving || autostartMutation.isPending ? "Saving…" : savedFlash ? "Saved" : pathDirty ? "Finish editing the log path to save." : ""}
-      </div>
+      <PageHeader
+        title="Settings"
+        actions={
+          <div className="settings-save-status" role="status" aria-live="polite">
+            {saving || autostartMutation.isPending ? "Saving…" : savedFlash ? "Saved" : pathDirty ? "Finish editing the log path to save." : ""}
+          </div>
+        }
+      />
       {saveError ? (
         <StatusMessage tone="error">
           Settings could not be saved: {saveError}{" "}

@@ -8,6 +8,7 @@ import { DraftPerformancePanel } from "../components/DraftPerformancePanel";
 import { DraftWins } from "../components/DraftWins";
 import { LimitedMatchupsPanel } from "../components/MatchupPanels";
 import { SetSymbol } from "../components/SetSymbol";
+import { PageHeader } from "../components/PageHeader";
 import { SectionTabs, sectionPanelID, sectionTabID } from "../components/SectionTabs";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
@@ -251,12 +252,17 @@ export function DraftsPage() {
 
   return (
     <div className="stack-lg">
-      <SectionTabs
-        sections={DRAFT_SECTIONS}
-        activeSection={activeSection}
-        baseId={sectionTabBaseId}
-        label="Draft sections"
-        onSelect={(section) => updateParams({ tab: section === "overview" ? null : section })}
+      <PageHeader
+        title="Drafts"
+        tabs={
+          <SectionTabs
+            sections={DRAFT_SECTIONS}
+            activeSection={activeSection}
+            baseId={sectionTabBaseId}
+            label="Draft sections"
+            onSelect={(section) => updateParams({ tab: section === "overview" ? null : section })}
+          />
+        }
         actions={
           <DraftFilterControls
             drafts={drafts}

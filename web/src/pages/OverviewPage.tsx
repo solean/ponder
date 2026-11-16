@@ -9,6 +9,7 @@ import { LiveMatchBanner } from "../components/LiveMatchBanner";
 import { MatchDeckColors } from "../components/MatchDeckColors";
 import { RankProgressPanel } from "../components/RankProgressPanel";
 import { ResultPill } from "../components/ResultPill";
+import { PageHeader } from "../components/PageHeader";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { eventDisplayName, parseEventName } from "../lib/events";
@@ -593,27 +594,22 @@ export function OverviewPage() {
   const sync = syncSummary(statusQuery.data, allMatches[0]?.startedAt);
 
   const header = (
-    <section className="overview-header">
-      {data.playerName ? (
-        <div className="overview-identity" aria-label="Tracked username">
-          <p>Username</p>
-          <h2>{data.playerName}</h2>
-        </div>
-      ) : (
-        <div />
-      )}
-      <ErrorBoundary label="LiveMatchBanner">
-        <LiveMatchBanner />
-      </ErrorBoundary>
-      <div className="overview-sync" aria-label="Data status">
-        <p>Data status</p>
-        <div className="overview-sync-line">
-          <span className={`sync-dot ${sync.live ? "is-live" : ""}`} aria-hidden="true" />
-          <strong>{sync.head}</strong>
-        </div>
-        <small>{sync.sub}</small>
-      </div>
-    </section>
+    <PageHeader
+      className="overview-header"
+      title={data.playerName || "Overview"}
+      actions={
+        <>
+          <ErrorBoundary label="LiveMatchBanner">
+            <LiveMatchBanner />
+          </ErrorBoundary>
+          <div className="overview-sync" aria-label="Data status">
+            <span className={`sync-dot ${sync.live ? "is-live" : ""}`} aria-hidden="true" />
+            <strong>{sync.head}</strong>
+            <small>{sync.sub}</small>
+          </div>
+        </>
+      }
+    />
   );
 
   if (data.totalMatches === 0) {

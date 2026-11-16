@@ -16,7 +16,7 @@ import {
 import { APP_NAME } from "../lib/branding";
 import { BreadcrumbProvider, Breadcrumbs } from "./Breadcrumbs";
 import { AppErrorFallback, ErrorBoundary } from "./ErrorBoundary";
-import { LiveMatchBanner } from "./LiveMatchBanner";
+import { LiveStatus } from "./LiveStatus";
 import { Plasma } from "./Plasma";
 
 const tabs = [
@@ -119,6 +119,9 @@ export function Layout() {
               ))}
             </nav>
             <div className="topbar-controls">
+              <ErrorBoundary label="LiveStatus" fallback={() => null}>
+                <LiveStatus />
+              </ErrorBoundary>
               <ThemeToggle mode={mode} onToggle={() => setModePreference(mode === "dark" ? "light" : "dark")} />
             </div>
           </header>
@@ -126,11 +129,6 @@ export function Layout() {
             <div className={`app-shell${location.pathname === "/matches" ? " is-viewport-page" : ""}`}>
               <main id="main-content" className="content">
                 <div className="page-context-bar">
-                  {location.pathname === "/" || location.pathname === "/settings" ? null : (
-                    <ErrorBoundary label="LiveMatchBanner">
-                      <LiveMatchBanner />
-                    </ErrorBoundary>
-                  )}
                   <Breadcrumbs />
                 </div>
                 <ErrorBoundary

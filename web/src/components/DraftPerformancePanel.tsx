@@ -62,11 +62,13 @@ export function DraftPerformancePanel({
   const chartOption = useMemo(() => {
     if (points.length < MIN_CHART_EVENTS) return null;
 
-    // One line carries the story: recent form (last 10) in the accent. The
-    // all-time rate stays as a thin reference so the level is still readable;
-    // the per-event bars underneath show what each point is made of.
+    // Recent form (last 10) carries the story in the accent; last 50 is the
+    // slower trend in the contrast hue. The all-time rate stays as a thin
+    // reference so the level is still readable; the per-event bars underneath
+    // show what each point is made of.
     const allSpecs: SeriesSpec[] = [
       { name: "All Events", value: (p) => p.all, color: chartTheme.axisText, dashed: true, width: 1.2 },
+      { name: "Last 50 Events", value: (p) => p.rolling[50], color: chartTheme.contrast, dashed: false, width: 1.8 },
       { name: "Last 10 Events", value: (p) => p.rolling[10], color: chartTheme.accent, dashed: false, width: 2.4 },
     ];
     const specs = allSpecs.filter((spec) => points.some((point) => spec.value(point) != null));
@@ -238,13 +240,14 @@ export function DraftPerformancePanel({
     ? performance.wins / (performance.wins + performance.losses)
     : null;
   const lastTen = latest?.rolling[10] ?? null;
+  const lastFifty = latest?.rolling[50] ?? null;
 
   return (
     <section className="panel" aria-labelledby={headingId}>
       <div className="panel-head rank-toolbar">
         <div>
           <h3 id={headingId}>Event Win Rate</h3>
-          <p>Match win rate pooled over your last 10 draft events, with each event's wins underneath.</p>
+          <p>Match win rate pooled over your last 10 and 50 draft events, with each event's wins underneath.</p>
         </div>
       </div>
 
@@ -253,6 +256,10 @@ export function DraftPerformancePanel({
           <div className="rank-chip rank-chip--selected">
             <span>Last 10 events</span>
             <strong>{lastTen == null ? "—" : pct(lastTen)}</strong>
+          </div>
+          <div className="rank-chip">
+            <span>Last 50 events</span>
+            <strong>{lastFifty == null ? "—" : pct(lastFifty)}</strong>
           </div>
           <div className="rank-chip">
             <span>All events</span>

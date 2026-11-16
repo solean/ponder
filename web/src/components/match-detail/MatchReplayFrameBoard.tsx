@@ -747,7 +747,7 @@ export function MatchReplayFrameBoard({
           </div>
 
           <MatchReplaySpeedControl speed={speed} onSelectSpeed={setSpeed} />
-          <label className="match-replay-decision-mode"><input type="checkbox" checked={decisionMode} onChange={event => setDecisionMode(event.target.checked)} /> Decisions only</label>
+          <label className="match-replay-decision-mode" title="Step and play through key events only, skipping taps, untaps and other routine steps"><input type="checkbox" checked={decisionMode} onChange={event => setDecisionMode(event.target.checked)} /> Key events</label>
           <div className="match-replay-head">
             <div className="match-replay-head-copy">
               <h4>Game {gameNumber}</h4>

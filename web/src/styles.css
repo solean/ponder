@@ -999,9 +999,9 @@ body.has-wide-deck-curve .app-shell {
   z-index: 1;
   flex: none;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 1rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 1.75rem;
   min-height: 52px;
   padding: 0 1.25rem 0 var(--titlebar-inset-start);
   border-bottom: 1px solid var(--line);
@@ -1016,16 +1016,49 @@ body.has-wide-deck-curve .app-shell {
   --titlebar-inset-start: 96px;
 }
 
+/* Primary nav: plain labels; the current page is underlined on the bar's edge. */
 .titlebar .tabs {
   grid-column: 2;
   flex-wrap: nowrap;
+  justify-self: start;
+  gap: 0.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  backdrop-filter: none;
+  overflow: visible;
   /* Keep navigation interactive inside the draggable titlebar. */
   --wails-draggable: no-drag;
 }
 
 .titlebar .tab {
-  min-height: 1.75rem;
-  padding: 0.3rem 0.85rem;
+  min-height: 100%;
+  padding: 0 0.75rem;
+  border: 0;
+  border-radius: 0;
+  font-weight: 600;
+}
+
+.titlebar .tab:hover {
+  background: none;
+  color: var(--text);
+}
+
+.titlebar .tab.is-active {
+  background: none;
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.titlebar .tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.titlebar .brand,
+.titlebar .topbar-controls {
+  align-self: center;
 }
 
 .topbar-controls {
@@ -1345,13 +1378,12 @@ body.has-wide-deck-curve .app-shell {
 
 .tabs {
   display: flex;
-  gap: 2px;
+  gap: 0;
   flex-wrap: wrap;
-  padding: 3px;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--tabs-bg);
-  backdrop-filter: blur(10px);
+  overflow: hidden;
 }
 
 .tabs:focus-within {
@@ -1363,42 +1395,36 @@ body.has-wide-deck-curve .app-shell {
   cursor: pointer;
   touch-action: manipulation;
   text-decoration: none;
-  color: var(--muted);
-  border: 1px solid transparent;
+  color: var(--muted-strong);
+  border: 0;
   background: transparent;
-  border-radius: 3px;
+  border-radius: 0;
   min-height: 2rem;
   display: inline-flex;
   align-items: center;
   padding: 0.44rem 0.92rem;
   font-family: var(--font-display);
   font-size: var(--text-base);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: var(--track-display);
   transition:
     color 160ms ease,
-    border-color 160ms ease,
-    background-color 160ms ease,
-    box-shadow 160ms ease;
+    background-color 160ms ease;
 }
 
 .tab:hover {
-  color: var(--muted-strong);
-  border-color: var(--tab-hover-border);
+  color: var(--text);
   background: var(--accent-soft);
 }
 
 .tab.is-active {
   color: var(--accent);
-  border-color: var(--tab-active-border);
-  background: linear-gradient(
-    160deg,
-    var(--tab-active-bg-a) 0%,
-    var(--tab-active-bg-b) 100%
-  );
-  box-shadow:
-    0 0 12px var(--accent-soft),
-    inset 0 1px 0 var(--tab-active-shine);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .tab:disabled {
@@ -1422,81 +1448,59 @@ body.has-wide-deck-curve .app-shell {
 .section-tabs {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0 1.65rem;
-  border-bottom: 1px solid var(--line);
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .section-tab {
-  position: relative;
   appearance: none;
   cursor: pointer;
   touch-action: manipulation;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0 0.75rem;
   border: 0;
-  border-radius: 3px 3px 0 0;
+  border-radius: 3px;
   background: transparent;
-  color: var(--muted);
-  font-family: var(--font-display);
-  font-size: var(--display-sm);
-  font-weight: 700;
-  letter-spacing: var(--track-display);
-  line-height: 1.15;
-  padding: 0.3rem 0.14rem 0.52rem;
+  color: var(--muted-strong);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 500;
   white-space: nowrap;
-  transition: color 160ms ease;
-}
-
-.section-tab::after {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  bottom: -1px;
-  height: 2px;
-  background: transparent;
-  transition: background-color 160ms ease;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
 }
 
 .section-tab:hover {
-  color: var(--muted-strong);
-}
-
-.section-tab:hover::after {
-  background: var(--line-strong);
+  background: var(--accent-soft);
+  color: var(--text);
 }
 
 .section-tab.is-active {
-  color: var(--text-soft);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
 }
 
-.section-tab.is-active::after {
-  background: var(--accent);
-  box-shadow: 0 0 10px var(--accent-glow);
+.section-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
-/* Tab row with page-wide filters at its right end. The bar carries the
-   baseline so the active tab's underline still sits on it. */
+/* Tab row with page-wide filters at its right end. */
 .section-tabs-bar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 0.5rem 1.5rem;
-  border-bottom: 1px solid var(--line);
-}
-
-.section-tabs-bar > .section-tabs {
-  border-bottom: 0;
-}
-
-.section-tabs-actions {
-  padding-bottom: 0.45rem;
 }
 
 /* Panel-scoped switcher: segmented shell demoted to control weight so it
    never competes with the section tabs above it. */
 .tabs--sm {
-  gap: 1px;
-  padding: 2px;
+  gap: 0;
 }
 
 .tabs--sm .tab {
@@ -9352,7 +9356,6 @@ select option {
 
   .section-tabs {
     flex-wrap: nowrap;
-    gap: 0 1.15rem;
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -9368,12 +9371,10 @@ select option {
   .section-tabs-actions {
     order: -1;
     width: 100%;
-    padding-bottom: 0;
   }
 
   .section-tab {
-    padding-top: 0.5rem;
-    padding-bottom: 0.62rem;
+    min-height: 2.75rem;
   }
 
   .deck-version-trigger {
@@ -14031,18 +14032,13 @@ html.overlay-document .card-preview-popover {
   min-height: 0;
 }
 
-/* Tabs share the line when it fits, and take their own row when it doesn't. */
-.match-detail-header > .section-tabs {
-  flex: 1 0 auto;
-  justify-content: flex-end;
-  border-bottom: 0;
+/* Tabs share the title's line when it fits, and wrap under it when it doesn't. */
+.match-detail-header {
+  padding-bottom: 0.5rem;
 }
 
-@media (max-width: 1700px) {
-  .match-detail-header > .section-tabs {
-    flex-basis: 100%;
-    justify-content: flex-start;
-  }
+.match-detail-header > .section-tabs {
+  margin-left: auto;
 }
 
 /* Playback bar: game, transport, speed, result and recording on one row. */

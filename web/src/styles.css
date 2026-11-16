@@ -6429,6 +6429,7 @@ button.match-replay-zonechip.is-button {
 }
 
 .match-replay-speed-button {
+  position: relative;
   min-width: 2.5rem;
   min-height: 1.9rem;
   padding: 0.28rem 0.5rem;
@@ -6464,11 +6465,14 @@ button.match-replay-zonechip.is-button {
 }
 
 .match-replay-speed-button:hover {
+  z-index: 2;
   border-color: var(--tab-active-border);
   color: var(--text);
 }
 
+/* Raised above its neighbours so the shared edges show the active colour. */
 .match-replay-speed-button.is-active {
+  z-index: 1;
   border-color: var(--tab-active-border);
   background: linear-gradient(
     160deg,
@@ -6479,6 +6483,7 @@ button.match-replay-zonechip.is-button {
 }
 
 .match-replay-speed-button:focus-visible {
+  z-index: 2;
   outline: none;
   border-color: var(--tab-active-border);
   box-shadow:
@@ -6894,6 +6899,24 @@ button.match-replay-zonechip.is-button {
     padding-left: 0.62rem;
     border-radius: 0;
     white-space: nowrap;
+  }
+
+  /* Joined buttons share a 1px edge. Without a stacking order each button
+     paints over its left neighbour's right border, which hides the edge of
+     the play button and of a hovered button. */
+  .match-replay-button-row .match-replay-button {
+    position: relative;
+  }
+
+  .match-replay-button-row .match-replay-button.is-primary {
+    z-index: 1;
+  }
+
+  .match-replay-button-row .match-replay-button:hover:not(:disabled),
+  .match-replay-button-row .match-replay-button:focus-visible {
+    z-index: 2;
+    /* A lifted button pulls its edges out of line with its neighbours. */
+    transform: none;
   }
 
   .match-replay-button + .match-replay-button {
@@ -13531,7 +13554,29 @@ html.overlay-document .card-preview-popover {
 .match-replay-filters input { width: 100%; min-width: 0; }
 .match-replay-filters input, .match-replay-filters select, .match-replay-filters button { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 3px; padding: 6px; font-family: var(--font-sans); font-size: var(--text-sm); }
 .match-replay-filters span, .match-replay-movelist-beat small { opacity: .65; font-size: 11px; }
-.match-replay-decision-mode { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+/* Sits in the playbar beside the speed buttons, so it borrows their look. */
+.match-replay-decision-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 1.9rem;
+  padding: 0.28rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-md);
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+.match-replay-decision-mode:hover { border-color: var(--tab-active-border); color: var(--text); }
+.match-replay-decision-mode:has(input:checked) { border-color: var(--tab-active-border); color: var(--text-soft); }
+.match-replay-decision-mode:has(input:focus-visible) { border-color: var(--tab-active-border); box-shadow: 0 0 0 3px var(--accent-glow); }
+.match-replay-decision-mode input { margin: 0; accent-color: var(--accent); cursor: pointer; }
+.match-replay-decision-mode input:focus-visible { outline: none; }
 
 /* IXN-29: complete replay event detail disclosure */
 /* Play-by-play rows: one line per step — number, text, and a count that
@@ -13786,6 +13831,12 @@ html.overlay-document .card-preview-popover {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* One row, one height: speed and the decisions toggle match the transport. */
+.match-replay-playbar .match-replay-speed-button,
+.match-replay-playbar .match-replay-decision-mode {
+  min-height: 2.5rem;
 }
 
 .match-replay-playbar .match-replay-head {

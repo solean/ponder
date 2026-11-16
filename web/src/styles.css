@@ -2311,6 +2311,7 @@ h4.settings-group-title::after {
 }
 
 .settings-field > span,
+.settings-field > legend,
 .settings-status-card > span,
 .settings-strip-item > span {
   color: var(--muted);
@@ -2671,6 +2672,89 @@ small.settings-meta,
 
 .settings-theme-field {
   margin-top: 0.95rem;
+}
+
+.app-icon-picker {
+  min-inline-size: 0;
+  margin-inline: 0;
+  padding: 0;
+  border: 0;
+}
+
+.app-icon-picker legend {
+  padding: 0;
+  margin-bottom: 0.55rem;
+}
+
+.app-icon-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.app-icon-option {
+  position: relative;
+  cursor: pointer;
+}
+
+.app-icon-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.app-icon-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 7rem;
+  padding: 0.9rem 1rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--tabs-bg);
+  color: var(--muted-strong);
+  font-size: var(--text-sm);
+}
+
+.app-icon-card img {
+  display: block;
+  width: 4rem;
+  height: 4rem;
+}
+
+.app-icon-option:hover .app-icon-card {
+  border-color: var(--tab-hover-border);
+  color: var(--text);
+}
+
+.app-icon-option input:checked + .app-icon-card {
+  border-color: var(--tab-active-border);
+  background: var(--tab-active-bg-a);
+  color: var(--text);
+}
+
+.app-icon-option input:focus-visible + .app-icon-card {
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
+}
+
+.app-icon-check {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 1rem;
+  height: 1rem;
+  visibility: hidden;
+}
+
+.app-icon-option input:checked + .app-icon-card .app-icon-check {
+  visibility: visible;
 }
 
 .settings-segmented {

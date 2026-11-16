@@ -3,6 +3,7 @@ import { RuntimeConfigSaveQueue } from "../src/lib/runtimeConfigSaveQueue";
 import type { RuntimeConfig } from "../src/lib/types";
 
 const initial: RuntimeConfig = {
+  appIcon: "white", seventeenLandsFormat: "", seventeenLandsUserGroup: "",
   logPath: "original.log", pollIntervalSeconds: 2, includePrev: true,
   autoStartLive: true, autoCheckUpdates: false, aiProvider: "claude", aiModel: "opus",
 };
@@ -15,6 +16,23 @@ function deferred<T>() {
 }
 
 describe("runtime config autosave queue", () => {
+  test("keeps the latest icon choice through rapid clicks and unrelated saves", async () => {
+    const queue = new RuntimeConfigSaveQueue(initial);
+    const first = deferred<RuntimeConfig>();
+    const requests: RuntimeConfig[] = [];
+    queue.enqueue({ appIcon: "blue" });
+    const saving = queue.drain(async (config) => {
+      requests.push(config);
+      return requests.length === 1 ? first.promise : config;
+    });
+    queue.enqueue({ appIcon: "charcoal" });
+    queue.enqueue({ autoCheckUpdates: true });
+    first.resolve(requests[0]);
+    await saving;
+    expect(requests).toHaveLength(2);
+    expect(queue.baseline).toEqual({ ...initial, appIcon: "charcoal", autoCheckUpdates: true });
+  });
+
   test("serializes rapid edits and preserves unrelated saved fields", async () => {
     const queue = new RuntimeConfigSaveQueue(initial);
     const first = deferred<RuntimeConfig>();

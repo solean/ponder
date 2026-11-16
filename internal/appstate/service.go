@@ -34,19 +34,22 @@ type Options struct {
 	DefaultPollInterval    time.Duration
 	Capabilities           Capabilities
 	OverlayShortcutChanged func(string) error
+	AppIconChanged         func(string) error
 	// LiveDataChanged runs after a successful live parse commits new lines.
 	// It must return promptly and is called without holding the service lock.
 	LiveDataChanged func()
 }
 
 // Capabilities advertises native-shell integrations available to the frontend.
-// Both are false in headless serve mode; the desktop app enables them.
+// These are false in headless serve mode; the desktop app enables supported ones.
 type Capabilities struct {
 	PickFile bool `json:"pickFile"`
 	Reveal   bool `json:"reveal"`
+	AppIcon  bool `json:"appIcon"`
 }
 
 type Config struct {
+	AppIcon             string           `json:"appIcon"`
 	Overlay             *OverlaySettings `json:"overlay,omitempty"`
 	LogPath             string           `json:"logPath"`
 	PollIntervalSeconds int              `json:"pollIntervalSeconds"`
@@ -135,6 +138,7 @@ type Service struct {
 
 	updateMu               sync.Mutex
 	overlayShortcutChanged func(string) error
+	appIconChanged         func(string) error
 	liveDataChanged        func()
 	mu                     sync.RWMutex
 	config                 Config
@@ -216,6 +220,7 @@ func NewService(opts Options) (*Service, error) {
 		capabilities:           opts.Capabilities,
 		config:                 normalizeConfig(cfg, poll),
 		overlayShortcutChanged: opts.OverlayShortcutChanged,
+		appIconChanged:         opts.AppIconChanged,
 		liveDataChanged:        opts.LiveDataChanged,
 	}, nil
 }
@@ -327,9 +332,30 @@ func (s Status) RevealablePaths() []string {
 func (s *Service) UpdateConfig(next Config) (Status, error) {
 	s.updateMu.Lock()
 	defer s.updateMu.Unlock()
-	next.Overlay = s.Config().Overlay // Dedicated overlay endpoint owns these settings.
+	previous := s.Config()
+	next.Overlay = previous.Overlay // Dedicated overlay endpoint owns these settings.
+	// Older clients omit this field when saving unrelated preferences.
+	if next.AppIcon == "" {
+		next.AppIcon = previous.AppIcon
+	} else if !validAppIcon(next.AppIcon) {
+		return s.Status(), fmt.Errorf("app icon must be white, blue, or charcoal")
+	}
 	cfg := normalizeConfig(next, s.defaultPoll)
+	iconChanged := cfg.AppIcon != previous.AppIcon
+	if iconChanged {
+		if s.appIconChanged == nil {
+			return s.Status(), fmt.Errorf("app icon selection is unavailable")
+		}
+		if err := s.appIconChanged(cfg.AppIcon); err != nil {
+			return s.Status(), err
+		}
+	}
 	if err := s.saveConfig(cfg); err != nil {
+		if iconChanged {
+			if rollbackErr := s.appIconChanged(previous.AppIcon); rollbackErr != nil {
+				return s.Status(), fmt.Errorf("%v; restore app icon: %w", err, rollbackErr)
+			}
+		}
 		return s.Status(), err
 	}
 
@@ -600,6 +626,9 @@ func supportDirPath(base string) string {
 }
 
 func normalizeConfig(cfg Config, poll time.Duration) Config {
+	if !validAppIcon(cfg.AppIcon) {
+		cfg.AppIcon = "white"
+	}
 	if cfg.Overlay == nil || ValidateOverlaySettings(*cfg.Overlay) != nil {
 		defaults := DefaultOverlaySettings()
 		cfg.Overlay = &defaults
@@ -618,6 +647,11 @@ func normalizeConfig(cfg Config, poll time.Duration) Config {
 	}
 	return cfg
 }
+
+func validAppIcon(value string) bool {
+	return value == "white" || value == "blue" || value == "charcoal"
+}
+
 func trackingConfigChanged(a, b Config) bool {
 	return a.LogPath != b.LogPath ||
 		a.PollIntervalSeconds != b.PollIntervalSeconds ||

@@ -537,7 +537,7 @@ export function MatchesPage() {
   }
 
   return (
-    <div className="stack-lg">
+    <div className="stack-lg matches-layout">
       <PageHeader
         title="Matches"
         meta={summary}

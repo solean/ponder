@@ -10248,6 +10248,14 @@ select option {
  * its native table layout. Rows are flex so column widths come from the
  * virtualizer/column sizes and stay aligned between header and body. */
 
+/* The page header + panel wrapper takes the viewport page's bounded row, then
+   hands the remaining height to the panel so the table scrolls on its own and
+   the virtualizer only renders visible rows. */
+.app-shell.is-viewport-page .matches-layout {
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
 .matches-page {
   display: flex;
   flex-direction: column;

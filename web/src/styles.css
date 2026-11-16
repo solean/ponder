@@ -1123,32 +1123,12 @@ body.has-wide-deck-curve .app-shell {
   letter-spacing: var(--track-display);
 }
 
-.title-sigil {
-  width: 1.05rem;
-  height: 1.05rem;
-  transform: rotate(45deg);
-  border: 1.5px solid var(--accent);
-  background: var(--accent-soft);
-  position: relative;
+.brand-logo {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--accent);
   flex: 0 0 auto;
-  box-shadow: 0 0 14px var(--accent-glow);
-  animation: pulse-sigil 3s ease-in-out infinite;
-}
-
-.title-sigil::before {
-  content: "";
-  position: absolute;
-  inset: 3px;
-  border: 1px solid var(--accent);
-  opacity: 0.45;
-}
-
-.title-sigil::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--accent);
-  opacity: 0.15;
 }
 
 /* ══════════════════════════════════════════
@@ -9011,20 +8991,6 @@ select option {
   }
 }
 
-@keyframes pulse-sigil {
-  0%,
-  100% {
-    box-shadow: 0 0 14px var(--accent-glow);
-    opacity: 1;
-  }
-  50% {
-    box-shadow:
-      0 0 22px var(--accent-glow),
-      0 0 6px var(--accent);
-    opacity: 0.85;
-  }
-}
-
 @keyframes popover-in {
   from {
     opacity: 0;
@@ -9073,7 +9039,6 @@ select option {
   .deck-visual-card,
   .match-replay-turn-pill,
   .match-replay-button,
-  .title-sigil,
   .card-preview-popover {
     animation: none;
     transition: none;

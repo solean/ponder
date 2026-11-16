@@ -18,6 +18,7 @@ import { BreadcrumbProvider, Breadcrumbs } from "./Breadcrumbs";
 import { AppErrorFallback, ErrorBoundary } from "./ErrorBoundary";
 import { LiveStatus } from "./LiveStatus";
 import { Plasma } from "./Plasma";
+import { OrbLogo } from "./OrbLogo";
 
 const tabs = [
   { to: "/", label: "Overview" },
@@ -103,7 +104,7 @@ export function Layout() {
         <div className="app-frame">
           <header className="titlebar">
             <div className="brand">
-              <span className="title-sigil" aria-hidden="true" />
+              <OrbLogo className="brand-logo" />
               <h1>{APP_NAME}</h1>
             </div>
             <nav className="tabs" aria-label="Primary">

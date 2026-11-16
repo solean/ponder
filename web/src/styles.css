@@ -5083,11 +5083,21 @@ small.settings-meta,
   gap: 0.45rem 0.7rem;
   min-height: 2.2rem;
   padding: 0.28rem 0.5rem;
-  border: 1px solid transparent;
+  /* Always outlined, so the attacked and targeted states only change colour. */
+  border: 1px solid var(--line);
   border-left-width: 3px;
   border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 3%, transparent);
   transition: border-color 140ms ease, background-color 140ms ease,
     box-shadow 140ms ease;
+}
+
+.match-replay-zonerail.is-opponent {
+  border-left-color: color-mix(in srgb, var(--side-opponent) 55%, transparent);
+}
+
+.match-replay-zonerail.is-self {
+  border-left-color: color-mix(in srgb, var(--side-self) 55%, transparent);
 }
 
 .match-replay-zonerail.is-targeted {

@@ -903,8 +903,10 @@ h1 {
   flex: 1;
   min-height: 0;
   overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
+  /* Always show the (custom, 12px) scrollbar so pages that fit and pages that
+     scroll have the same width. scrollbar-gutter: stable isn't enough: WebKit
+     reserves the native 15px gutter, ignoring ::-webkit-scrollbar's width. */
+  overflow-y: scroll;
 }
 
 /* Transparent track so the gutter shows the app background; the thumb is

@@ -184,10 +184,10 @@ test("opponent hand renders only identities known in the selected snapshot", asy
   expect(container.querySelector('a[aria-label="Open Known Island on Scryfall"]')).not.toBeNull();
   renderHand("private");
   expect(container.querySelector("a")).toBeNull();
-  expect(container.querySelector('[aria-label="Face-down card"]')).not.toBeNull();
+  expect(container.querySelector('[aria-label="Opponent\'s hand, 1 card"]')).not.toBeNull();
   renderHand("private", 0);
   expect(container.textContent).not.toContain("Known Island");
-  expect(container.querySelector('[aria-label="Face-down card"]')).not.toBeNull();
+  expect(container.querySelector('[aria-label="Opponent\'s hand, 1 card"]')).not.toBeNull();
 });
 
 

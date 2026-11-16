@@ -70,9 +70,7 @@ function MatchDetailContent() {
   );
   const { lookup: setLookup } = useEventSets([query.data?.match.eventName]);
   useBreadcrumbLabel(
-    query.data
-      ? `Match #${query.data.match.id} · ${query.data.match.opponent || "Unknown opponent"}`
-      : null,
+    query.data ? `Match #${query.data.match.id}` : null,
   );
 
   const opponentCards = useOpponentCardsMetadata(

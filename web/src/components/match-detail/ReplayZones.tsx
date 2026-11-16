@@ -1,6 +1,5 @@
 import { useEffect, useId, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import magicCardbackURL from "../../assets/magic-cardback.jpg";
 import {
   boardZoneKind,
   replayHandIdentityKnown,
@@ -258,6 +257,15 @@ export function MatchReplayFrameSideSummary({
       (kind) => (zoneCounts.get(kind) ?? 0) > 0,
     );
 
+    const handCount = zoneCounts.get("hand") ?? 0;
+    // The opponent's hand is a count; only cards the log revealed are drawn.
+    const knownHandObjects =
+      side === "opponent"
+        ? sideObjects.filter(
+            (object) => boardZoneKind(object.zoneType) === "hand" && replayHandIdentityKnown(object),
+          )
+        : [];
+
     return (
       <section
         className={`match-replay-zonerail is-${side} ${attackSummary ? "is-under-attack" : ""} ${relationshipTargeted ? "is-targeted" : ""}`}
@@ -282,35 +290,21 @@ export function MatchReplayFrameSideSummary({
               ) : null}
             </span>
           ) : null}
-          {side === "opponent" ? (
+          {knownHandObjects.length > 0 ? (
             <div
               className="match-replay-compact-hand"
-              aria-label={`Opponent's hand, ${zoneCounts.get("hand") ?? 0} cards`}
+              aria-label={`Known cards in opponent's hand, ${knownHandObjects.length}`}
             >
               <div className="match-replay-compact-hand-cards">
-                {sideObjects
-                  .filter((object) => boardZoneKind(object.zoneType) === "hand")
-                  .map((object) => replayHandIdentityKnown(object) ? (
-                    <MatchReplayObjectCard
-                      key={object.instanceId}
-                      object={object}
-                      preview={previewByCardID.get(object.cardId) ?? null}
-                      size="hand"
-                    />
-                  ) : (
-                    <div
-                      key={object.instanceId}
-                      className="match-replay-card is-cardback"
-                      role="img"
-                      aria-label="Face-down card"
-                    >
-                      <img src={magicCardbackURL} alt="" aria-hidden="true" />
-                    </div>
-                  ))}
+                {knownHandObjects.map((object) => (
+                  <MatchReplayObjectCard
+                    key={object.instanceId}
+                    object={object}
+                    preview={previewByCardID.get(object.cardId) ?? null}
+                    size="hand"
+                  />
+                ))}
               </div>
-              <span className="match-replay-compact-hand-count">
-                {zoneCounts.get("hand") ?? 0}
-              </span>
             </div>
           ) : null}
         </div>
@@ -350,6 +344,12 @@ export function MatchReplayFrameSideSummary({
           </span>
         ) : null}
         <div className="match-replay-zonerail-zones">
+          {side === "opponent" ? (
+            <span className="match-replay-zonechip" aria-label={`Opponent's hand, ${handCount} card${handCount === 1 ? "" : "s"}`}>
+              <span className="match-replay-zonechip-term">Hand</span>
+              <span className="match-replay-zonechip-value">{handCount}</span>
+            </span>
+          ) : null}
           {visibleZones.map((kind) => {
             const count = zoneCounts.get(kind) ?? 0;
             const canOpen = isInspectableZoneKind(kind) && onOpenZone;

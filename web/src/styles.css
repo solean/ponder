@@ -5183,13 +5183,6 @@ small.settings-meta,
   margin-left: -10px;
 }
 
-.match-replay-compact-hand-count {
-  color: var(--muted-strong);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
 .match-replay-zonerail.is-opponent .match-replay-zonerail-label {
   color: var(--side-opponent);
 }
@@ -9895,7 +9888,7 @@ select option {
   gap: 0.34rem;
 }
 
-.match-detail-header > .match-tags-control .match-tag-chip {
+.match-detail-header .match-tags-control .match-tag-chip {
   font-size: var(--text-sm);
 }
 
@@ -13643,21 +13636,23 @@ html.overlay-document .card-preview-popover {
 
 .match-detail-header {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 0.3rem 1.25rem;
   min-width: 0;
+  padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--line);
 }
 
 .match-detail-header-title {
   display: flex;
+  flex: 0 1 auto;
   align-items: center;
   gap: 0.6rem;
   min-width: 0;
 }
 
 .match-detail-header h2 {
+  min-width: 4rem;
   margin: 0;
   overflow: hidden;
   font-family: var(--font-display);
@@ -13669,42 +13664,88 @@ html.overlay-document .card-preview-popover {
   white-space: nowrap;
 }
 
+/* The star and tag button read as one pair of actions. */
+.match-detail-header-title > .save-match-button + .match-tags-control {
+  margin-left: -0.3rem;
+}
+
+/* The facts: one line in one text style. Long names give way first, so the
+   section tabs keep their place at the end of the row. */
 .match-detail-header-meta {
   display: flex;
-  flex-wrap: wrap;
+  flex: 1 1 0;
   align-items: center;
-  gap: 0.1rem 0;
   min-width: 0;
   margin: 0;
   padding: 0;
+  overflow: hidden;
   list-style: none;
   color: var(--muted-strong);
+  font-family: var(--font-sans);
   font-size: var(--text-sm);
 }
 
 .match-detail-header-meta li {
   display: inline-flex;
+  flex: none;
   align-items: center;
+  min-width: 0;
   white-space: nowrap;
 }
 
+.match-detail-header-meta li.is-shrinkable {
+  flex: 0 1 auto;
+}
+
 .match-detail-header-meta li + li::before {
+  flex: none;
   content: "·";
   margin: 0 0.5rem;
   color: var(--muted);
 }
 
-.match-detail-header-meta .text-link {
-  min-height: 0;
+.match-detail-header-colors {
+  gap: 0.35rem;
 }
 
-/* Tabs share the title's line when it fits, and wrap under it when it doesn't. */
-.match-detail-header {
-  padding-bottom: 0.5rem;
+.match-detail-header-vs {
+  color: var(--muted);
+}
+
+.match-detail-header-link {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-detail-header-link:hover {
+  text-decoration: underline;
 }
 
 .match-detail-header > .section-tabs {
+  flex: none;
   margin-left: auto;
+}
+
+@media (max-width: 1100px) {
+  .match-detail-header {
+    flex-wrap: wrap;
+  }
+
+  .match-detail-header-meta {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    row-gap: 0.1rem;
+  }
+
+  .match-detail-header > .section-tabs {
+    max-width: 100%;
+    margin-left: 0;
+  }
 }
 
 /* Playback bar: game, transport, speed, result and recording on one row. */
@@ -13846,7 +13887,27 @@ html.overlay-document .card-preview-popover {
 .match-replay-game.is-board-first .match-replay-zonerail-life {
   order: -1;
   min-width: 2ch;
-  font-size: var(--text-2xl);
+  font-size: var(--text-xl);
+}
+
+/* Player rails are one tight line: life, name, then zone counts. */
+.match-replay-game.is-board-first .match-replay-zonerail {
+  min-height: 1.75rem;
+  padding-block: 0.1rem;
+}
+
+.match-replay-game.is-board-first .match-replay-zonechip {
+  padding-block: 0.1rem;
+}
+
+.match-replay-game.is-board-first .match-replay-compact-hand-cards {
+  padding-block: 0;
+}
+
+.match-replay-game.is-board-first .match-replay-compact-hand-cards .match-replay-card {
+  width: 20px;
+  height: 28px;
+  flex-basis: 20px;
 }
 
 .match-replay-game.is-board-first .match-replay-zonerail-label {

@@ -31,6 +31,22 @@ export function formatMediumDateTime(ts: string): string {
   return mediumDateTimeFormatter.format(d);
 }
 
+const shortDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+/** "Nov 13, 8:37 PM"; the year is added only when it is not the current one. */
+export function formatShortDateTime(ts: string): string {
+  if (!ts) return "-";
+  const d = parseTimestamp(ts);
+  if (!d) return ts;
+  if (d.getFullYear() !== new Date().getFullYear()) return mediumDateTimeFormatter.format(d);
+  return shortDateTimeFormatter.format(d);
+}
+
 export function formatCompactDateTime(ts: string): string {
   if (!ts) return "-";
   const d = parseTimestamp(ts);

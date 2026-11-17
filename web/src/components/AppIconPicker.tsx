@@ -2,6 +2,7 @@ import whiteIcon from "../assets/app-icons/white.png";
 import blueIcon from "../assets/app-icons/blue.png";
 import charcoalIcon from "../assets/app-icons/charcoal.png";
 import type { AppIconAppearance } from "../lib/types";
+import { SettingRow } from "./SettingRow";
 
 const options: { value: AppIconAppearance; label: string; image: string }[] = [
   { value: "white", label: "White", image: whiteIcon },
@@ -9,29 +10,32 @@ const options: { value: AppIconAppearance; label: string; image: string }[] = [
   { value: "charcoal", label: "Charcoal", image: charcoalIcon },
 ];
 
+/** The Appearance row that picks the Dock icon. */
 export function AppIconPicker({ value, onChange }: {
   value: AppIconAppearance;
   onChange: (value: AppIconAppearance) => void;
 }) {
   return (
-    <fieldset className="settings-field settings-theme-field app-icon-picker" aria-describedby="app-icon-hint">
-      <legend>App icon</legend>
-      <div className="app-icon-options">
+    <SettingRow
+      label={<span id="settings-app-icon-label">App icon</span>}
+      help={<span id="settings-app-icon-help">Changes the Dock icon while Ponder is running, and is kept for the next launch.</span>}
+    >
+      <div className="settings-swatches" role="radiogroup" aria-labelledby="settings-app-icon-label"
+        aria-describedby="settings-app-icon-help">
         {options.map((option) => (
-          <label className="app-icon-option" key={option.value}>
-            <input type="radio" name="app-icon" value={option.value}
-              checked={value === option.value} onChange={() => onChange(option.value)} />
-            <span className="app-icon-card">
-              <img src={option.image} width="64" height="64" alt="" />
-              <span>{option.label}</span>
-              <svg className="app-icon-check" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="m3 8 3 3 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </span>
-          </label>
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={value === option.value}
+            className={`settings-swatch settings-swatch--icon${value === option.value ? " is-active" : ""}`}
+            onClick={() => onChange(option.value)}
+          >
+            <img src={option.image} width="36" height="36" alt="" />
+            {option.label}
+          </button>
         ))}
       </div>
-      <small id="app-icon-hint">Changes the Dock icon while Ponder is running. Your choice is saved for the next launch.</small>
-    </fieldset>
+    </SettingRow>
   );
 }

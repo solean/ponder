@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { SettingToggle } from "../components/SettingToggle";
+import { SettingRow, ToggleRow } from "../components/SettingRow";
 import { PageHeader } from "../components/PageHeader";
 import { StatusMessage } from "../components/StatusMessage";
 import { OverlaySettingsPanel } from "../components/OverlaySettingsPanel";
@@ -11,7 +11,7 @@ import { RuntimeConfigSaveQueue } from "../lib/runtimeConfigSaveQueue";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { APP_NAME } from "../lib/branding";
 import { SEVENTEEN_LANDS_FORMAT_LABELS, SEVENTEEN_LANDS_USER_GROUP_LABELS } from "../lib/seventeenLands";
-import { formatBytes, formatDateTime, formatRelativeTime, shortenHomePath } from "../lib/format";
+import { formatBytes, formatRelativeTime, formatShortDateTime, shortenHomePath } from "../lib/format";
 import { useThemeControls, type ColorScheme, type ModePreference } from "../lib/theme";
 import type {
   AiModelOption,
@@ -25,43 +25,7 @@ import type {
   UpdateCheck,
 } from "../lib/types";
 
-function StatusPill({
-  tone,
-  pulsing,
-  compact,
-  children,
-}: {
-  tone: "positive" | "negative" | "neutral";
-  pulsing?: boolean;
-  compact?: boolean;
-  children: ReactNode;
-}) {
-  const toneClass = tone === "neutral" ? "" : tone === "positive" ? " is-positive" : " is-negative";
-  return (
-    <span className={`settings-status-pill${toneClass}${pulsing ? " is-pulsing" : ""}${compact ? " is-compact" : ""}`}>
-      {children}
-    </span>
-  );
-}
-
-function CopyIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-      <rect x="5.5" y="5.5" width="8" height="8" rx="1" />
-      <path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-      <path d="M2.8 8.6 6.2 12l7-8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function CopyButton({ text, label }: { text: string; label: string }) {
+function CopyPathButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -72,9 +36,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
     return () => window.clearTimeout(timer);
   }, [copied]);
 
-  const copy = async (event: React.MouseEvent) => {
-    // Stop label-wrapped instances from re-focusing their input.
-    event.preventDefault();
+  const copy = async () => {
     try {
       await copyTextToClipboard(text);
       setCopied(true);
@@ -84,23 +46,9 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   };
 
   return (
-    <button
-      type="button"
-      className={`settings-copy-button${copied ? " is-copied" : ""}`}
-      onClick={(event) => void copy(event)}
-      aria-label={copied ? "Copied" : `Copy ${label}`}
-      title={copied ? "Copied" : `Copy ${label}`}
-    >
-      {copied ? <CheckIcon /> : <CopyIcon />}
+    <button type="button" className={`settings-button${copied ? " is-done" : ""}`} onClick={() => void copy()}>
+      {copied ? "Copied" : "Copy path"}
     </button>
-  );
-}
-
-function FolderIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-      <path d="M1.8 4.2a1 1 0 0 1 1-1h3.4l1.5 1.6h5.5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H2.8a1 1 0 0 1-1-1v-7.6Z" strokeLinejoin="round" />
-    </svg>
   );
 }
 
@@ -110,37 +58,43 @@ function RevealButton({ path }: { path: string }) {
   return (
     <button
       type="button"
-      className={`settings-copy-button${failed ? " is-failed" : ""}`}
-      onClick={(event) => {
-        event.preventDefault();
-        revealMutation.mutate();
-      }}
+      className={`settings-button${failed ? " is-failed" : ""}`}
+      onClick={() => revealMutation.mutate()}
       disabled={revealMutation.isPending}
-      aria-label="Reveal in Finder"
-      title={failed ? `Reveal failed: ${(revealMutation.error as Error).message}` : "Reveal in Finder"}
+      title={failed ? `Could not show the file: ${(revealMutation.error as Error).message}` : undefined}
     >
-      <FolderIcon />
+      Show in Finder
     </button>
   );
 }
 
-function PathValue({
-  path,
-  copyLabel = "path",
-  canReveal = false,
-}: {
-  path: string;
-  copyLabel?: string;
-  canReveal?: boolean;
-}) {
+/** A file the app uses: its name, its path, and buttons to copy or reveal it. */
+function PathRow({ label, detail, path, canReveal }: { label: string; detail?: string; path: string; canReveal: boolean }) {
   return (
-    <span className="settings-path-row">
-      <code className="settings-path" title={path}>
-        {shortenHomePath(path)}
-      </code>
-      <CopyButton text={path} label={copyLabel} />
+    <SettingRow
+      label={
+        <>
+          {label}
+          {detail ? <span className="settings-row-detail">{detail}</span> : null}
+        </>
+      }
+      help={
+        <code className="settings-path" title={path}>
+          {shortenHomePath(path)}
+        </code>
+      }
+    >
+      <CopyPathButton text={path} />
       {canReveal ? <RevealButton path={path} /> : null}
-    </span>
+    </SettingRow>
+  );
+}
+
+function Chevron() {
+  return (
+    <svg className="settings-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <path d="M4 2 8 6 4 10" />
+    </svg>
   );
 }
 
@@ -170,55 +124,93 @@ function MonitorIcon() {
   );
 }
 
-function FlameIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-      <path
-        d="M8 1.8c.4 2.2-2.9 3.6-2.9 6.6a2.9 2.9 0 0 0 5.8 0c0-.9-.4-1.7-.9-2.4-.1 1-.5 1.6-1.2 1.9.5-2.3-.1-4.6-.8-6.1Z"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function DropIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-      <path d="M8 1.8S3.6 7 3.6 10a4.4 4.4 0 0 0 8.8 0C12.4 7 8 1.8 8 1.8Z" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function HexIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-      <path d="M8 1.6 13.6 4.8v6.4L8 14.4 2.4 11.2V4.8L8 1.6Z" strokeLinejoin="round" />
-      <circle cx="8" cy="8" r="1.6" />
-    </svg>
-  );
-}
-
-function LeafIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-      <path d="M3.6 12.4C2.5 8.2 5.2 4 11.6 3c1 5.8-2.2 9.8-8 9.4Z" strokeLinejoin="round" />
-      <path d="M3.2 13.2c1.3-2.9 3.4-5.1 6.2-6.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 const modeOptions: Array<{ value: ModePreference; label: string; icon: () => JSX.Element }> = [
   { value: "dark", label: "Dark", icon: MoonIcon },
   { value: "light", label: "Light", icon: SunIcon },
   { value: "system", label: "System", icon: MonitorIcon },
 ];
 
-const schemeOptions: Array<{ value: ColorScheme; label: string; icon: () => JSX.Element }> = [
-  { value: "bamboo", label: "Bamboo", icon: LeafIcon },
-  { value: "ember", label: "Ember", icon: FlameIcon },
-  { value: "dimir", label: "Dimir Ink", icon: DropIcon },
-  { value: "steel", label: "Cold Steel", icon: HexIcon },
+/** Each scheme's dark background and accent, for its swatch. */
+const schemeOptions: Array<{ value: ColorScheme; label: string; swatch: [string, string] }> = [
+  { value: "bamboo", label: "Bamboo", swatch: ["#1c1e1b", "#8fb573"] },
+  { value: "ember", label: "Ember", swatch: ["#020101", "#ff8a24"] },
+  { value: "dimir", label: "Dimir Ink", swatch: ["#020507", "#37b7e0"] },
+  { value: "steel", label: "Cold Steel", swatch: ["#040507", "#8ab2dd"] },
 ];
+
+const sections = [
+  { id: "settings-tracking", label: "Tracking" },
+  { id: "settings-overlay", label: "Overlay" },
+  { id: "settings-ratings", label: "Draft ratings" },
+  { id: "settings-ai", label: "AI" },
+  { id: "settings-appearance", label: "Appearance" },
+  { id: "settings-app", label: "App and data" },
+] as const;
+
+/**
+ * Tracks which section is at the top of the scrolling page. Sections near the
+ * end cannot reach the top, so a section chosen from the list stays current
+ * until the reader scrolls by hand.
+ */
+function useActiveSection(ready: boolean): [string, (id: string) => void] {
+  const [active, setActive] = useState<string>(sections[0].id);
+  const chosen = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    const root = document.querySelector<HTMLElement>(".app-scroll");
+    if (!root) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      if (chosen.current) return;
+      const line = root.getBoundingClientRect().top + 96;
+      let current: string = sections[0].id;
+      for (const section of sections) {
+        const element = document.getElementById(section.id);
+        if (element && element.getBoundingClientRect().top <= line) current = section.id;
+      }
+      setActive(current);
+    };
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    const release = () => {
+      chosen.current = null;
+      onScroll();
+    };
+    update();
+    root.addEventListener("scroll", onScroll, { passive: true });
+    root.addEventListener("wheel", release, { passive: true });
+    root.addEventListener("touchmove", release, { passive: true });
+    root.addEventListener("pointerdown", release, { passive: true });
+    window.addEventListener("keydown", release);
+    return () => {
+      root.removeEventListener("scroll", onScroll);
+      root.removeEventListener("wheel", release);
+      root.removeEventListener("touchmove", release);
+      root.removeEventListener("pointerdown", release);
+      window.removeEventListener("keydown", release);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [ready]);
+  const choose = (id: string) => {
+    chosen.current = id;
+    setActive(id);
+    const element = document.getElementById(id);
+    if (!element) return;
+    // Jump straight there: smooth scrolling sometimes did not move the page at all.
+    const root = document.querySelector<HTMLElement>(".app-scroll");
+    if (root) {
+      const offset = element.getBoundingClientRect().top - root.getBoundingClientRect().top;
+      root.scrollTo({ top: id === sections[0].id ? 0 : root.scrollTop + offset - 16, behavior: "auto" });
+    }
+    // Mark the section, since one near the end may not move to the top.
+    for (const marked of document.querySelectorAll(".settings-section.is-target")) marked.classList.remove("is-target");
+    void element.offsetWidth;
+    element.classList.add("is-target");
+  };
+  return [active, choose];
+}
 
 const runtimeStatusKey = ["runtime-status"] as const;
 const autostartKey = ["autostart-status"] as const;
@@ -226,8 +218,17 @@ const aiStatusKey = ["ai-status"] as const;
 
 const aiUsageNumberFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
+const aiUsageCompactFormatter = new Intl.NumberFormat(undefined, { notation: "compact", maximumSignificantDigits: 3 });
+
 function formatTokenCount(value: number): string {
   return `${aiUsageNumberFormatter.format(value)} ${value === 1 ? "token" : "tokens"}`;
+}
+
+function providerState(provider: AiProviderStatus): { label: string; tone: "positive" | "negative" | "neutral" } {
+  if (provider.available) return { label: "Ready", tone: "positive" };
+  if (provider.installed && provider.version) return { label: "Sign-in needed", tone: "negative" };
+  if (provider.installed) return { label: "CLI error", tone: "negative" };
+  return { label: "Not installed", tone: "neutral" };
 }
 
 const fallbackAIProviders: AiProviderStatus[] = [
@@ -301,7 +302,7 @@ function summarizeOperation(operation?: RuntimeOperation): string {
     `${operation.decksUpserted} decks`,
     `${operation.draftPicksAdded} picks`,
     formatRuntimeDuration(operation.durationMs),
-  ].join(" • ");
+  ].join(" · ");
 }
 
 async function refreshDataQueries(queryClient: ReturnType<typeof useQueryClient>) {
@@ -378,6 +379,9 @@ export function SettingsPage() {
   const saveQueue = useRef(new RuntimeConfigSaveQueue(form)).current;
   const logDraft = useRef<string | null>(null);
   const [pathDirty, setPathDirty] = useState(false);
+  const [pathEditing, setPathEditing] = useState(false);
+  const [overlayStatus, setOverlayStatus] = useState<"idle" | "saving" | "error">("idle");
+  const [activeSection, chooseSection] = useActiveSection(Boolean(data));
 
   useEffect(() => {
     if (!data || saveQueue.running || Object.keys(saveQueue.pending).length) return;
@@ -538,13 +542,46 @@ export function SettingsPage() {
     else if (!settingsPending) startLiveMutation.mutate();
   };
 
+
+  const customLogPath = form.logPath.trim().length > 0;
+  const showPathEditor = pathEditing || pathDirty || Boolean(pathError);
+  const previousLogPath = data.previousLogPath || data.defaultPrevLogPath;
+  const autostart = autostartQuery.data;
+  const autostartEnabled = autostartDraft ?? autostart?.enabled ?? false;
+  // A note on a supported platform is an error from the OS lookup, so the
+  // switch can only be used to turn an existing login item off.
+  const autostartUnavailable = !autostart?.supported || (Boolean(autostart.note) && !autostartEnabled);
+  const savingAny = saving || autostartMutation.isPending || overlayStatus === "saving";
+  const saveStatus = savingAny
+    ? "Saving…"
+    : pathDirty
+      ? "Finish editing the log path to save."
+      : saveError || overlayStatus === "error" || autostartMutation.error
+        ? "Some changes were not saved"
+        : "All changes saved";
+  const activityText = lastActivity?.completedAt
+    ? `last activity ${formatRelativeTime(lastActivity.completedAt)}`
+    : data.liveRunning
+      ? "watching for Arena activity"
+      : "no activity yet";
+  const usageSummary = aiUsage
+    ? [
+        `${aiUsageNumberFormatter.format(aiUsage.runs)} ${aiUsage.runs === 1 ? "run" : "runs"}`,
+        `${aiUsageCompactFormatter.format(aiUsage.inputTokens)} in`,
+        `${aiUsageCompactFormatter.format(aiUsage.outputTokens)} out`,
+        aiUsage.lastRun ? `last ${formatShortDateTime(aiUsage.lastRun.createdAt)}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "Loading…";
+
   return (
     <div className="stack-lg">
       <PageHeader
         title="Settings"
         actions={
           <div className="settings-save-status" role="status" aria-live="polite">
-            {saving || autostartMutation.isPending ? "Saving…" : savedFlash ? "Saved" : pathDirty ? "Finish editing the log path to save." : ""}
+            {saveStatus}
           </div>
         }
       />
@@ -554,618 +591,559 @@ export function SettingsPage() {
           <button type="button" className="settings-text-button" onClick={() => void drainSaves()} disabled={saving}>Retry</button>
         </StatusMessage>
       ) : null}
-      <section className="panel" aria-label="Runtime status">
-        {data.lastError && data.lastError !== dismissedError ? (
-          <div className="settings-last-error" role="alert">
-            <span>Last runtime error</span>
-            <p>{data.lastError}</p>
-            <button type="button" onClick={() => setDismissedError(data.lastError ?? "")}>
-              Dismiss
+
+      <div className="settings-layout">
+        <nav className="settings-nav" aria-label="Settings sections">
+          {sections.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              className={`settings-nav-item${activeSection === section.id ? " is-active" : ""}`}
+              aria-current={activeSection === section.id ? "true" : undefined}
+              onClick={() => chooseSection(section.id)}
+            >
+              {section.label}
             </button>
-          </div>
-        ) : null}
+          ))}
+        </nav>
 
-        <div className="settings-strip">
-          <div className="settings-strip-item">
-            <span>Live Tracking</span>
-            <StatusPill tone={data.liveRunning ? "positive" : "neutral"} pulsing={data.liveRunning}>
-              {data.liveRunning ? "Running" : "Stopped"}
-            </StatusPill>
-          </div>
-          <div className="settings-strip-item">
-            <span>Active Log</span>
-            <StatusPill tone={data.activeLogPathExists ? "positive" : "negative"}>
-              {data.activeLogPathExists ? "Found" : "Missing"}
-            </StatusPill>
-          </div>
-          <div className="settings-strip-item">
-            <span>Last Activity</span>
-            <small>
-              {lastActivity?.completedAt
-                ? `${lastActivity.kind === "import" ? "Manual check" : "Live"} · ${summarizeOperation(lastActivity)} · ${formatRelativeTime(lastActivity.completedAt)}`
-                : data.liveRunning
-                  ? "Watching for Arena activity"
-                  : "No activity yet"}
-            </small>
-          </div>
-        </div>
-      </section>
+        <div className="settings-sections">
+          <section id="settings-tracking" className="settings-section" aria-labelledby="settings-tracking-title">
+            <div className="settings-section-head">
+              <h3 id="settings-tracking-title">Tracking</h3>
+            </div>
+            {data.lastError && data.lastError !== dismissedError ? (
+              <div className="settings-last-error" role="alert">
+                <span>Last runtime error</span>
+                <p>{data.lastError}</p>
+                <button type="button" onClick={() => setDismissedError(data.lastError ?? "")}>
+                  Dismiss
+                </button>
+              </div>
+            ) : null}
+            <div className="panel settings-card">
+              <div className="settings-row settings-row--status">
+                <div className="settings-status">
+                  <span className={`settings-status-dot${data.liveRunning ? " is-on" : ""}`} aria-hidden="true" />
+                  <div className="settings-row-text">
+                    <div className="settings-status-title">
+                      {data.liveRunning ? "Recording Arena activity" : "Tracking is stopped"}
+                    </div>
+                    <div className="settings-row-help">
+                      {data.activeLogPathExists ? "Arena log found" : <strong className="is-negative">Arena log not found</strong>}
+                      {" · "}
+                      {activityText}
+                      {lastActivity?.completedAt ? ` · ${summarizeOperation(lastActivity)}` : ""}
+                    </div>
+                  </div>
+                </div>
+                <div className="settings-row-control">
+                  <button
+                    type="button"
+                    className={`settings-button${data.liveRunning ? "" : " settings-button--primary"}`}
+                    onClick={() => void handleLiveToggle()}
+                    disabled={liveMutationPending || (!data.liveRunning && settingsPending)}
+                  >
+                    {liveMutationPending
+                      ? data.liveRunning
+                        ? "Stopping…"
+                        : "Starting…"
+                      : data.liveRunning
+                        ? "Stop tracking"
+                        : "Start tracking"}
+                  </button>
+                </div>
+              </div>
+              <ToggleRow
+                label={`Start tracking when ${APP_NAME} opens`}
+                help={`Also picks up anything Arena logged while ${APP_NAME} was closed.`}
+                checked={form.autoStartLive ?? true}
+                onChange={(autoStartLive) => savePatch({ autoStartLive })}
+              />
 
-      <section className="panel">
-        <div className="panel-head panel-head--stacked">
-          <h3>Tracking</h3>
-          <p>
-
-            Ponder checks Arena&apos;s retained logs, then records new matches while tracking is active.
-          </p>
-        </div>
-
-        <div className="settings-tracking-primary">
-          <div className="settings-tracking-copy">
-            <span>Automatic tracking</span>
-            <strong>{data.liveRunning ? "Recording Arena activity" : "Tracking is stopped"}</strong>
-            <small>
-              {data.activeLogPathExists
-                ? "Arena log found. Starting tracking also recovers any unprocessed recent activity."
-                : "Arena log not found. Open Advanced tracking to choose a different source."}
-            </small>
-          </div>
-
-          <SettingToggle checked={form.autoStartLive ?? true} onChange={(autoStartLive) => savePatch({ autoStartLive })}>
-            Start tracking automatically whenever Ponder opens.
-          </SettingToggle>
-        </div>
-
-        <div className="settings-action-row">
-          <button
-            type="button"
-            className={`control-button${
-              data.liveRunning ? " control-button--quiet" : " control-button--primary"
-            }`}
-            onClick={() => void handleLiveToggle()}
-            disabled={liveMutationPending || (!data.liveRunning && settingsPending)}
-          >
-            {liveMutationPending
-              ? data.liveRunning
-                ? "Stopping…"
-                : "Starting…"
-              : data.liveRunning
-                ? "Stop Tracking"
-                : "Start Tracking"}
-          </button>
-
-        </div>
-
-        <details className="settings-advanced" open={!data.activeLogPathExists}>
-          <summary>
-            <span>Advanced tracking</span>
-            <small>Custom log source, scan interval, and manual checks</small>
-          </summary>
-
-          <div className="settings-advanced-body">
-            <div className="settings-groups">
-              <div className="settings-group">
-                <h4 className="settings-group-title">Log Source</h4>
-
-                <label className="settings-field">
-                  <span>
-                    Custom Log Path
-                    {form.logPath.trim() ? (
-                      <button
-                        type="button"
-                        className="settings-text-button"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          commitLogPath("");
-                        }}
-                      >
+              <details className="settings-expander" open={!data.activeLogPathExists}>
+                <summary>
+                  <Chevron />
+                  <span>Advanced</span>
+                  <small>Log file, scan interval, manual check</small>
+                </summary>
+                <div className="settings-expander-body">
+                  <SettingRow
+                    label="Log file"
+                    help={
+                      <code className="settings-path" title={effectiveActivePath}>
+                        {shortenHomePath(effectiveActivePath)}
+                      </code>
+                    }
+                  >
+                    <span className="settings-tag">{customLogPath ? "Custom" : "Default"}</span>
+                    {customLogPath ? (
+                      <button type="button" className="settings-text-button" onClick={() => commitLogPath("")}>
                         Use default
                       </button>
                     ) : null}
-                  </span>
-                  <span className="settings-input-row">
-                    <input
-                      className="settings-input"
-                      type="text"
-                      value={form.logPath}
-                      onChange={(event) => {
-                        logDraft.current = event.target.value;
-                        setPathDirty(true);
-                        setForm((current) => ({ ...current, logPath: event.target.value }));
-                      }}
-                      onBlur={(event) => commitLogPath(event.currentTarget.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          commitLogPath(event.currentTarget.value);
-                        }
-                      }}
-                      aria-invalid={Boolean(pathError)}
-                      placeholder={data.defaultLogPath}
-                      spellCheck={false}
-                    />
-                    {canPickFile ? (
-                      <button
-                        type="button"
-                        className="settings-browse-button"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          pickLogMutation.mutate();
+                    <button
+                      type="button"
+                      className="settings-button"
+                      aria-expanded={showPathEditor}
+                      onClick={() => setPathEditing((open) => !open)}
+                    >
+                      {showPathEditor ? "Done" : "Change…"}
+                    </button>
+                  </SettingRow>
+                  {showPathEditor ? (
+                    <div className="settings-row settings-row--editor">
+                      <input
+                        className="settings-input"
+                        type="text"
+                        aria-label="Custom log file path"
+                        value={form.logPath}
+                        onChange={(event) => {
+                          logDraft.current = event.target.value;
+                          setPathDirty(true);
+                          setForm((current) => ({ ...current, logPath: event.target.value }));
                         }}
-                        disabled={pickLogMutation.isPending}
-                      >
-                        {pickLogMutation.isPending ? "Choosing…" : "Browse…"}
-                      </button>
-                    ) : null}
-                  </span>
-                  <small className="settings-meta">
-                    Effective path
-                    <PathValue path={effectiveActivePath} copyLabel="log path" canReveal={canReveal} />
-                  </small>
-                </label>
-
-                {pathError ? <StatusMessage tone="error">{pathError}</StatusMessage> : null}
-                <div className="settings-option">
-                  <SettingToggle checked={form.includePrev} onChange={(includePrev) => savePatch({ includePrev })}
-                    disabled={form.logPath.trim().length > 0}>
-                    Include <code>Player-prev.log</code> when checking retained logs.
-                  </SettingToggle>
-                  {form.logPath.trim().length > 0 ? (
-                    <p className="settings-checkbox-hint">Disabled while a custom log path is set.</p>
-                  ) : (
-                    <p className="settings-checkbox-hint settings-meta">
-                      <PathValue
-                        path={data.previousLogPath || data.defaultPrevLogPath}
-                        copyLabel="previous log path"
-                        canReveal={canReveal}
+                        onBlur={(event) => commitLogPath(event.currentTarget.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            commitLogPath(event.currentTarget.value);
+                          }
+                        }}
+                        aria-invalid={Boolean(pathError)}
+                        placeholder={data.defaultLogPath}
+                        spellCheck={false}
                       />
-                      <StatusPill tone={data.previousLogPathExists ? "positive" : "negative"} compact>
-                        {data.previousLogPathExists ? "Found" : "Missing"}
-                      </StatusPill>
-                    </p>
+                      {canPickFile ? (
+                        <button
+                          type="button"
+                          className="settings-button"
+                          onClick={() => pickLogMutation.mutate()}
+                          disabled={pickLogMutation.isPending}
+                        >
+                          {pickLogMutation.isPending ? "Choosing…" : "Browse…"}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {pathError ? <StatusMessage tone="error">{pathError}</StatusMessage> : null}
+                  {pickLogMutation.error ? (
+                    <StatusMessage tone="error">File picker: {(pickLogMutation.error as Error).message}</StatusMessage>
+                  ) : null}
+
+                  <ToggleRow
+                    label="Include the previous session's log"
+                    help={
+                      customLogPath ? (
+                        "Off while a custom log file is set."
+                      ) : (
+                        <span title={previousLogPath}>
+                          Player-prev.log · {data.previousLogPathExists ? "found" : "not found"}
+                        </span>
+                      )
+                    }
+                    checked={form.includePrev}
+                    onChange={(includePrev) => savePatch({ includePrev })}
+                    disabled={customLogPath}
+                  />
+
+                  <SettingRow
+                    label="Check for missed updates every"
+                    help="A safety net. Log changes are normally picked up straight away."
+                    htmlFor="settings-poll"
+                  >
+                    <select
+                      id="settings-poll"
+                      className="settings-select"
+                      value={String(form.pollIntervalSeconds)}
+                      onChange={(event) => {
+                        savePatch({ pollIntervalSeconds: normalizePollInterval(event.target.value) });
+                      }}
+                    >
+                      {pollOptions.map((seconds) => (
+                        <option key={seconds} value={String(seconds)}>
+                          {seconds === 1 ? "1 second" : `${seconds} seconds`}
+                        </option>
+                      ))}
+                    </select>
+                  </SettingRow>
+
+                  <SettingRow
+                    label="Check logs once without tracking"
+                    help={
+                      <>
+                        {data.lastImport?.completedAt
+                          ? `Last checked ${formatShortDateTime(data.lastImport.completedAt)} · ${summarizeOperation(data.lastImport)}.`
+                          : "No manual checks yet."}
+                        {data.liveRunning ? " Stop tracking to use this." : ""}
+                      </>
+                    }
+                  >
+                    <button
+                      type="button"
+                      className="settings-button"
+                      onClick={() => importMutation.mutate()}
+                      disabled={importDisabled}
+                      title={
+                        settingsPending
+                          ? "Wait for settings to save before checking the logs."
+                          : data.liveRunning
+                            ? "Stop tracking before running a manual check."
+                            : undefined
+                      }
+                    >
+                      {importMutation.isPending ? "Checking…" : "Check now"}
+                    </button>
+                  </SettingRow>
+                  {importMutation.error ? (
+                    <StatusMessage tone="error">Log check failed: {(importMutation.error as Error).message}</StatusMessage>
+                  ) : null}
+                </div>
+              </details>
+            </div>
+            {liveError ? <StatusMessage tone="error">Tracking: {liveError.message}</StatusMessage> : null}
+          </section>
+
+          <OverlaySettingsPanel id="settings-overlay" onStatusChange={setOverlayStatus} />
+
+          <section id="settings-ratings" className="settings-section" aria-labelledby="settings-ratings-title">
+            <div className="settings-section-head">
+              <h3 id="settings-ratings-title">Draft ratings</h3>
+              <p>Which 17Lands ratings appear in pick logs, pack replays and deck lists.</p>
+            </div>
+            <div className="panel settings-card">
+              <SettingRow
+                label="Player group"
+                help="Narrower groups have fewer games, so more cards show no rating. Quick Draft always covers all players."
+                htmlFor="settings-17l-group"
+              >
+                <select
+                  id="settings-17l-group"
+                  className="settings-select"
+                  value={form.seventeenLandsUserGroup}
+                  onChange={(event) => {
+                    savePatch({ seventeenLandsUserGroup: event.target.value as SeventeenLandsUserGroup });
+                  }}
+                >
+                  {Object.entries(SEVENTEEN_LANDS_USER_GROUP_LABELS).map(([group, label]) => (
+                    <option key={group} value={group}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </SettingRow>
+              <SettingRow
+                label="Event type"
+                help="Applies to Premier, Traditional, Quick and Pick Two drafts. Other events have no ratings."
+                htmlFor="settings-17l-format"
+              >
+                <select
+                  id="settings-17l-format"
+                  className="settings-select"
+                  value={form.seventeenLandsFormat}
+                  onChange={(event) => {
+                    savePatch({ seventeenLandsFormat: event.target.value as SeventeenLandsFormat });
+                  }}
+                >
+                  <option value="">Match each draft</option>
+                  {Object.entries(SEVENTEEN_LANDS_FORMAT_LABELS).map(([format, label]) => (
+                    <option key={format} value={format}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </SettingRow>
+            </div>
+          </section>
+
+          <section id="settings-ai" className="settings-section" aria-labelledby="settings-ai-title">
+            <div className="settings-section-head">
+              <h3 id="settings-ai-title">AI</h3>
+              <p>
+                Deck primers and game reviews, run through a CLI you are already signed in to. {APP_NAME} stores no
+                credentials.
+              </p>
+            </div>
+            <div className="panel settings-card">
+              <div className="settings-block">
+                <div className="settings-block-head">
+                  <span className="settings-row-label" id="settings-ai-provider-label">
+                    Provider
+                  </span>
+                  <button
+                    type="button"
+                    className="settings-text-button"
+                    onClick={() => void aiStatusQuery.refetch()}
+                    disabled={aiStatusQuery.isFetching}
+                  >
+                    {aiStatusQuery.isFetching ? "Checking…" : "Recheck sign-in"}
+                  </button>
+                </div>
+                <div className="settings-choice-grid" role="radiogroup" aria-labelledby="settings-ai-provider-label">
+                  {aiProviders.map((provider) => {
+                    const selected = provider.id === form.aiProvider;
+                    const state = aiStatusQuery.data ? providerState(provider) : { label: "Checking…", tone: "neutral" as const };
+                    const facts = [provider.authMethod, provider.version].filter(Boolean).join(" · ");
+                    return (
+                      <button
+                        key={provider.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        className={`settings-choice${selected ? " is-active" : ""}`}
+                        title={provider.cliPath ? `CLI: ${provider.cliPath}` : undefined}
+                        onClick={() => {
+                          if (selected) return;
+                          savePatch({
+                            aiProvider: provider.id,
+                            aiModel: provider.models[0]?.id ?? (provider.id === "openai" ? "default" : "opus"),
+                          });
+                        }}
+                      >
+                        <span className="settings-choice-mark" aria-hidden="true" />
+                        <span className="settings-choice-text">
+                          <span className="settings-choice-title">
+                            {provider.name}
+                            <span className={`settings-tag is-${state.tone}`}>{state.label}</span>
+                          </span>
+                          <span className="settings-row-help">
+                            {provider.available ? facts || provider.detail : provider.detail || facts || "Checking installation and sign-in…"}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {aiStatusQuery.data && !selectedAIProvider.available ? (
+                  <p className="settings-row-help">
+                    {form.aiProvider === "openai"
+                      ? "Install the Codex CLI, run `codex login` and choose Sign in with ChatGPT."
+                      : "Install the Claude Code CLI and sign in with your Claude subscription."}{" "}
+                    AI generation stays off until the selected provider is ready.
+                  </p>
+                ) : null}
+                {aiStatusQuery.error ? (
+                  <StatusMessage tone="error">AI status: {(aiStatusQuery.error as Error).message}</StatusMessage>
+                ) : null}
+              </div>
+
+              <SettingRow
+                label="Model"
+                help={selectedAIModel?.description ?? "Model passed to the selected CLI."}
+                htmlFor="settings-ai-model"
+              >
+                <select
+                  id="settings-ai-model"
+                  className="settings-select"
+                  value={form.aiModel}
+                  onChange={(event) => {
+                    savePatch({ aiModel: event.target.value });
+                  }}
+                >
+                  {aiModels.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.name}
+                    </option>
+                  ))}
+                </select>
+              </SettingRow>
+
+              <details className="settings-expander settings-expander--row">
+                <summary>
+                  <Chevron />
+                  <span>Usage</span>
+                  <small className="settings-expander-value">{usageSummary}</small>
+                </summary>
+                <div className="settings-expander-body">
+                  {aiStatusQuery.data?.usageError ? (
+                    <StatusMessage tone="error">Token usage: {aiStatusQuery.data.usageError}</StatusMessage>
+                  ) : null}
+                  {aiUsage ? (
+                    <>
+                      <div className="settings-table-scroll">
+                        <table className="settings-usage-table">
+                          <thead>
+                            <tr>
+                              <th scope="col">Provider</th>
+                              <th scope="col">Runs</th>
+                              <th scope="col">Input</th>
+                              <th scope="col">Cached</th>
+                              <th scope="col">Cache written</th>
+                              <th scope="col">Output</th>
+                              <th scope="col">Reasoning</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[
+                              ...aiUsage.providers.map((usage) => ({
+                                key: usage.provider as string,
+                                name: aiProviders.find((provider) => provider.id === usage.provider)?.name ?? usage.provider,
+                                usage,
+                              })),
+                              ...(aiUsage.providers.length === 1 ? [] : [{ key: "total", name: "Total", usage: aiUsage }]),
+                            ].map(({ key, name, usage }) => (
+                              <tr key={key} className={key === "total" ? "is-total" : undefined}>
+                                <th scope="row">{name}</th>
+                                <td>
+                                  {aiUsageNumberFormatter.format(usage.runs)}
+                                  {usage.runs > usage.successfulRuns ? (
+                                    <span className="is-negative"> ({usage.runs - usage.successfulRuns} failed)</span>
+                                  ) : null}
+                                </td>
+                                <td>{aiUsageNumberFormatter.format(usage.inputTokens)}</td>
+                                <td className="is-subset">{aiUsageNumberFormatter.format(usage.cachedInputTokens)}</td>
+                                <td className="is-subset">{aiUsageNumberFormatter.format(usage.cacheWriteInputTokens)}</td>
+                                <td>{aiUsageNumberFormatter.format(usage.outputTokens)}</td>
+                                <td className="is-subset">{aiUsageNumberFormatter.format(usage.reasoningOutputTokens)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="settings-row-help">
+                        {aiUsage.lastRun
+                          ? `Last run ${formatShortDateTime(aiUsage.lastRun.createdAt)}: ${aiUsage.lastRun.provider}/${aiUsage.lastRun.model}, ${formatTokenCount(aiUsage.lastRun.outputTokens)} out, ${aiUsage.lastRun.succeeded ? "completed" : "failed"}. `
+                          : "No provider has reported token usage yet. "}
+                        Cached and reasoning tokens are provider-reported subsets and are not added to the input and
+                        output totals.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="settings-row-help">Loading token usage…</p>
                   )}
                 </div>
-              </div>
-
-              <div className="settings-group">
-                <h4 className="settings-group-title">Processing</h4>
-
-                <label className="settings-field settings-field--narrow">
-                  <span>Fallback Scan Interval</span>
-                  <select
-                    className="settings-input"
-                    value={String(form.pollIntervalSeconds)}
-                    onChange={(event) => {
-                      savePatch({ pollIntervalSeconds: normalizePollInterval(event.target.value) });
-                    }}
-                  >
-                    {pollOptions.map((seconds) => (
-                      <option key={seconds} value={String(seconds)}>
-                        {seconds === 1 ? "1 second" : `${seconds} seconds`}
-                      </option>
-                    ))}
-                  </select>
-                  <small>Log changes are processed automatically. This controls how often Ponder checks for missed updates.</small>
-                </label>
-              </div>
+              </details>
             </div>
+          </section>
 
-            <div className="settings-advanced-import">
-              <h4 className="settings-group-title">Manual Check</h4>
-              <p>
-                Process the configured logs without enabling tracking. Starting tracking already performs the same
-                retained-log check, and resume mode skips lines processed earlier.
-              </p>
-              <div className="settings-action-row">
-                <button
-                  type="button"
-                  className="control-button control-button--quiet"
-                  onClick={() => importMutation.mutate()}
-                  disabled={importDisabled}
-                  title={
-                    settingsPending
-                      ? "Wait for settings to save before checking the configured logs."
-                      : data.liveRunning
-                        ? "Stop tracking before running a manual check."
-                        : undefined
-                  }
-                >
-                  {importMutation.isPending ? "Checking…" : "Check Configured Logs"}
-                </button>
-              </div>
-              <p className="settings-meta">
-                {data.lastImport?.completedAt
-                  ? `Last checked ${formatDateTime(data.lastImport.completedAt)} · ${summarizeOperation(data.lastImport)}`
-                  : "No manual checks yet."}
-              </p>
-              {importMutation.error ? (
-                <StatusMessage tone="error">Log check failed: {(importMutation.error as Error).message}</StatusMessage>
+          <section id="settings-appearance" className="settings-section" aria-labelledby="settings-appearance-title">
+            <div className="settings-section-head">
+              <h3 id="settings-appearance-title">Appearance</h3>
+            </div>
+            <div className="panel settings-card">
+              <SettingRow label={<span id="settings-mode-label">Mode</span>}>
+                <div className="settings-segmented" role="radiogroup" aria-labelledby="settings-mode-label">
+                  {modeOptions.map((option) => {
+                    const Icon = option.icon;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={modePreference === option.value}
+                        className={`settings-segment${modePreference === option.value ? " is-active" : ""}`}
+                        onClick={() => setModePreference(option.value)}
+                      >
+                        <Icon />
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </SettingRow>
+              <SettingRow label={<span id="settings-scheme-label">Colour scheme</span>}>
+                <div className="settings-swatches" role="radiogroup" aria-labelledby="settings-scheme-label">
+                  {schemeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={scheme === option.value}
+                      className={`settings-swatch${scheme === option.value ? " is-active" : ""}`}
+                      onClick={() => setScheme(option.value)}
+                    >
+                      <span className="settings-swatch-chip" aria-hidden="true">
+                        <span style={{ background: option.swatch[0] }} />
+                        <span style={{ background: option.swatch[1] }} />
+                      </span>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </SettingRow>
+              {data.capabilities?.appIcon ? (
+                <AppIconPicker value={form.appIcon} onChange={(appIcon) => savePatch({ appIcon })} />
               ) : null}
             </div>
-          </div>
-        </details>
+          </section>
 
-
-        {liveError ? <StatusMessage tone="error">Tracking: {liveError.message}</StatusMessage> : null}
-        {pickLogMutation.error ? (
-          <StatusMessage tone="error">File picker: {(pickLogMutation.error as Error).message}</StatusMessage>
-        ) : null}
-      </section>
-
-      <section className="panel">
-        <div className="panel-head panel-head--stacked">
-          <h3>AI</h3>
-          <p>
-
-            Generate deck primers and replay game reviews through a local CLI and your existing subscription.
-            Credentials remain managed by Claude Code or Codex and are never stored by {APP_NAME}.
-          </p>
-        </div>
-
-        <div className="settings-groups">
-          <div className="settings-group">
-            <h4 className="settings-group-title">AI Generation</h4>
-
-            <label className="settings-field">
-              <span>Provider</span>
-              <select
-                className="settings-input"
-                value={form.aiProvider}
-                onChange={(event) => {
-                  const aiProvider = event.target.value as AiProvider;
-                  const provider =
-                    aiProviders.find((candidate) => candidate.id === aiProvider) ??
-                    fallbackAIProviders.find((candidate) => candidate.id === aiProvider);
-                  savePatch({ aiProvider,
-                    aiModel: provider?.models[0]?.id ?? (aiProvider === "openai" ? "default" : "opus") });
-                }}
-              >
-                {aiProviders.map((provider) => (
-                  <option key={provider.id} value={provider.id}>
-                    {provider.name}
-                  </option>
-                ))}
-              </select>
-              <small>
-                {form.aiProvider === "openai"
-                  ? "Uses Codex CLI. Run `codex login` and choose Sign in with ChatGPT to use your OpenAI plan."
-                  : "Uses Claude Code CLI and your Claude subscription login."}
-              </small>
-            </label>
-
-            <label className="settings-field">
-              <span>Model</span>
-              <select
-                className="settings-input"
-                value={form.aiModel}
-                onChange={(event) => {
-                  savePatch({ aiModel: event.target.value });
-                }}
-              >
-                {aiModels.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name}
-                  </option>
-                ))}
-              </select>
-              <small>{selectedAIModel?.description ?? "Model passed to the selected CLI."}</small>
-            </label>
-          </div>
-
-          <div className="settings-group">
-            <h4 className="settings-group-title">Subscription Status</h4>
-            <div className="settings-status-grid">
-              {aiProviders.map((provider) => (
-                <article className="settings-status-card" key={provider.id}>
-                  <span>{provider.name}</span>
-                  <strong>
-                    <StatusPill
-                      tone={provider.available ? "positive" : provider.installed ? "negative" : "neutral"}
-                      compact
-                    >
-                      {provider.available
-                        ? "Ready"
-                        : provider.installed && provider.version
-                          ? "Sign-in needed"
-                          : provider.installed
-                            ? "CLI error"
-                            : "Not installed"}
-                    </StatusPill>
-                  </strong>
-                  {provider.version ? (
-                    <small>
-                      {provider.version}
-                      {provider.authMethod ? ` • ${provider.authMethod}` : ""}
-                    </small>
-                  ) : null}
-                  {provider.cliPath ? <PathValue path={provider.cliPath} copyLabel={`${provider.name} CLI path`} /> : null}
-                  <small className="settings-ai-detail">
-                    {provider.detail || "Checking installation and login…"}
-                  </small>
-                </article>
-              ))}
+          <section id="settings-app" className="settings-section" aria-labelledby="settings-app-title">
+            <div className="settings-section-head">
+              <h3 id="settings-app-title">App and data</h3>
             </div>
-          </div>
-
-          <div className="settings-group">
-            <h4 className="settings-group-title">Token Usage</h4>
-            {aiUsage ? (
-              <>
-                <div className="settings-status-grid settings-ai-usage-grid">
-                  <article className="settings-status-card">
-                    <span>Metered Runs</span>
-                    <strong>{aiUsageNumberFormatter.format(aiUsage.runs)}</strong>
-                    <small>
-                      {aiUsageNumberFormatter.format(aiUsage.successfulRuns)} succeeded
-                      {aiUsage.runs > aiUsage.successfulRuns
-                        ? ` • ${aiUsageNumberFormatter.format(aiUsage.runs - aiUsage.successfulRuns)} failed`
-                        : ""}
-                    </small>
-                  </article>
-                  <article className="settings-status-card">
-                    <span>Input</span>
-                    <strong>{aiUsageNumberFormatter.format(aiUsage.inputTokens)}</strong>
-                    <small>Provider-reported input tokens</small>
-                  </article>
-                  <article className="settings-status-card">
-                    <span>Output</span>
-                    <strong>{aiUsageNumberFormatter.format(aiUsage.outputTokens)}</strong>
-                    <small>
-                      {aiUsage.reasoningOutputTokens > 0
-                        ? `${formatTokenCount(aiUsage.reasoningOutputTokens)} reasoning`
-                        : "Generated response tokens"}
-                    </small>
-                  </article>
-                  <article className="settings-status-card">
-                    <span>Cache</span>
-                    <strong>{aiUsageNumberFormatter.format(aiUsage.cachedInputTokens)}</strong>
-                    <small>
-                      Cached input
-                      {aiUsage.cacheWriteInputTokens > 0
-                        ? ` • ${formatTokenCount(aiUsage.cacheWriteInputTokens)} written`
-                        : ""}
-                    </small>
-                  </article>
-                </div>
-                {aiUsage.providers.map((usage) => (
-                  <p className="settings-note" key={usage.provider}>
-                    {aiProviders.find((provider) => provider.id === usage.provider)?.name ?? usage.provider}:{" "}
-                    {formatTokenCount(usage.inputTokens)} input • {formatTokenCount(usage.outputTokens)} output across{" "}
-                    {usage.runs} {usage.runs === 1 ? "run" : "runs"}
-                  </p>
-                ))}
-                {aiUsage.lastRun ? (
-                  <p className="settings-note">
-                    Last recorded {formatDateTime(aiUsage.lastRun.createdAt)}: {aiUsage.lastRun.provider}/
-                    {aiUsage.lastRun.model} • {formatTokenCount(aiUsage.lastRun.outputTokens)} output •{" "}
-                    {aiUsage.lastRun.succeeded ? "completed" : "failed"}
-                  </p>
-                ) : (
-                  <p className="settings-note">No provider has reported token usage yet.</p>
-                )}
-                <p className="settings-note">
-                  Cached and reasoning tokens are provider-reported subsets and are not added to the input/output totals.
-                </p>
-              </>
-            ) : (
-              <p className="settings-note">Loading token usage…</p>
-            )}
-          </div>
-        </div>
-
-        <div className="settings-action-row">
-
-          <button
-            type="button"
-            className="control-button control-button--quiet"
-            onClick={() => void aiStatusQuery.refetch()}
-            disabled={aiStatusQuery.isFetching}
-          >
-            {aiStatusQuery.isFetching ? "Checking Logins…" : "Recheck Login Status"}
-          </button>
-        </div>
-
-
-        {aiStatusQuery.error ? (
-          <StatusMessage tone="error">AI status: {(aiStatusQuery.error as Error).message}</StatusMessage>
-        ) : null}
-        {aiStatusQuery.data?.usageError ? (
-          <StatusMessage tone="error">Token usage: {aiStatusQuery.data.usageError}</StatusMessage>
-        ) : null}
-        {!selectedAIProvider.available ? (
-          <p className="settings-note">
-            The selected provider must be installed and signed in before AI generation is enabled.
-          </p>
-        ) : null}
-      </section>
-
-      <section className="panel">
-        <div className="panel-head panel-head--stacked">
-          <h3>Draft Ratings</h3>
-          <p>Choose which 17Lands card ratings appear in draft pick logs, pack replays, and deck lists.</p>
-        </div>
-
-        <div className="settings-groups">
-          <div className="settings-group">
-            <label className="settings-field">
-              <span>Player group</span>
-              <select
-                className="settings-input"
-                value={form.seventeenLandsUserGroup}
-                onChange={(event) => {
-                  savePatch({ seventeenLandsUserGroup: event.target.value as SeventeenLandsUserGroup });
-                }}
-              >
-                {Object.entries(SEVENTEEN_LANDS_USER_GROUP_LABELS).map(([group, label]) => (
-                  <option key={group} value={group}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <small>
-                Narrower groups have smaller samples, so more cards show too few games for a GIH WR. 17Lands
-                doesn't split Quick Draft by group, so Quick Draft ratings always cover all players.
-              </small>
-            </label>
-
-            <label className="settings-field">
-              <span>Event type</span>
-              <select
-                className="settings-input"
-                value={form.seventeenLandsFormat}
-                onChange={(event) => {
-                  savePatch({ seventeenLandsFormat: event.target.value as SeventeenLandsFormat });
-                }}
-              >
-                <option value="">Match each draft</option>
-                {Object.entries(SEVENTEEN_LANDS_FORMAT_LABELS).map(([format, label]) => (
-                  <option key={format} value={format}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <small>Applies to Premier, Traditional, Quick, and Pick Two drafts; other events have no ratings.</small>
-            </label>
-          </div>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-head panel-head--stacked">
-          <h3>Data</h3>
-          <p>Local database and configuration files used by Ponder.</p>
-        </div>
-
-        <div className="settings-status-grid">
-          <article className="settings-status-card">
-            <span>Database</span>
-            <PathValue path={data.dbPath} copyLabel="database path" canReveal={canReveal} />
-            <small>{data.dbSizeBytes > 0 ? `${formatBytes(data.dbSizeBytes)} on disk` : "Not created yet"}</small>
-          </article>
-          <article className="settings-status-card">
-            <span>Config File</span>
-            <PathValue path={data.configPath} copyLabel="config path" canReveal={canReveal} />
-            <small title={data.supportDir}>{shortenHomePath(data.supportDir)}</small>
-          </article>
-        </div>
-      </section>
-
-      <OverlaySettingsPanel />
-
-      <section className="panel">
-        <div className="panel-head panel-head--stacked">
-          <h3>Application</h3>
-          <p>Appearance, startup behavior, and updates.</p>
-        </div>
-
-        <p className="settings-note settings-version">Version {data.version || "unknown"}</p>
-
-        <div className="settings-field settings-theme-field">
-          <span id="settings-mode-label">Appearance</span>
-          <div className="settings-segmented" role="radiogroup" aria-labelledby="settings-mode-label">
-            {modeOptions.map((option) => {
-              const Icon = option.icon;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={modePreference === option.value}
-                  className={`settings-segment${modePreference === option.value ? " is-active" : ""}`}
-                  onClick={() => setModePreference(option.value)}
-                >
-                  <Icon />
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="settings-field settings-theme-field">
-          <span id="settings-scheme-label">Color Scheme</span>
-          <div className="settings-segmented" role="radiogroup" aria-labelledby="settings-scheme-label">
-            {schemeOptions.map((option) => {
-              const Icon = option.icon;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={scheme === option.value}
-                  className={`settings-segment${scheme === option.value ? " is-active" : ""}`}
-                  onClick={() => setScheme(option.value)}
-                >
-                  <Icon />
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {data.capabilities?.appIcon && (
-          <AppIconPicker value={form.appIcon} onChange={(appIcon) => savePatch({ appIcon })} />
-        )}
-
-        {autostartMutation.error ? (
-          <StatusMessage tone="error">
-            Launch at login could not be saved: {(autostartMutation.error as Error).message}{" "}
-            <button type="button" className="settings-text-button" disabled={autostartMutation.isPending}
-              onClick={() => autostartDraft !== null && autostartMutation.mutate(autostartDraft)}>Retry</button>
-          </StatusMessage>
-        ) : null}
-
-        {autostartQuery.data?.supported ? (
-          <SettingToggle checked={autostartDraft ?? autostartQuery.data.enabled}
-            onChange={(enabled) => { setAutostartDraft(enabled); autostartMutation.mutate(enabled); }} disabled={autostartMutation.isPending}>
-            Launch {APP_NAME} at login.
-          </SettingToggle>
-        ) : (
-          <p className="settings-note">{autostartQuery.data?.note || "Launch at login is unavailable."}</p>
-        )}
-        {autostartQuery.data?.supported && autostartQuery.data.note ? (
-          <p className="settings-note">{autostartQuery.data.note}</p>
-        ) : null}
-
-        <SettingToggle checked={form.autoCheckUpdates ?? false} onChange={(autoCheckUpdates) => {
-          savePatch({ autoCheckUpdates });
-        }}>
-          Check for updates automatically once a day.
-        </SettingToggle>
-
-        <div className="settings-action-row">
-          <button
-            type="button"
-            className="control-button"
-            onClick={() => updateCheckMutation.mutate()}
-            disabled={updateCheckMutation.isPending}
-          >
-            {updateCheckMutation.isPending ? "Checking…" : "Check for Updates"}
-          </button>
-        </div>
-        {updateCheckMutation.error ? (
-          <StatusMessage tone="error">{(updateCheckMutation.error as Error).message}</StatusMessage>
-        ) : null}
-        {updateResult ? (
-          <p className="settings-note">
-            {summarizeUpdateCheck(updateResult)}
-            {updateResult.updateAvailable && updateResult.releaseUrl ? (
-              <>
-                {" "}
-                <a href={updateResult.releaseUrl} target="_blank" rel="noreferrer">
-                  View release
-                </a>
-              </>
+            {autostartMutation.error ? (
+              <StatusMessage tone="error">
+                Open at login could not be saved: {(autostartMutation.error as Error).message}{" "}
+                <button type="button" className="settings-text-button" disabled={autostartMutation.isPending}
+                  onClick={() => autostartDraft !== null && autostartMutation.mutate(autostartDraft)}>Retry</button>
+              </StatusMessage>
             ) : null}
-            {updateResult.checkedAt ? ` · Checked ${formatRelativeTime(updateResult.checkedAt)}` : null}
-          </p>
-        ) : null}
-        <p className="settings-note">
-          Closing the window keeps {APP_NAME} running in the background so live tracking continues; quit fully with
-          Cmd+Q.
-        </p>
-      </section>
+            <div className="panel settings-card">
+              <ToggleRow
+                label={`Open ${APP_NAME} at login`}
+                help={
+                  autostartUnavailable ? (
+                    <span title={autostart?.note || undefined}>
+                      {autostartQuery.isPending ? "Checking…" : "Not available in this build. It works in the installed app."}
+                    </span>
+                  ) : (
+                    autostart?.note || undefined
+                  )
+                }
+                checked={autostartEnabled}
+                onChange={(enabled) => {
+                  setAutostartDraft(enabled);
+                  autostartMutation.mutate(enabled);
+                }}
+                disabled={autostartUnavailable || autostartMutation.isPending}
+              />
+              <ToggleRow
+                label="Check for updates daily"
+                help={
+                  <>
+                    Version {data.version || "unknown"}
+                    {updateResult ? ` · ${summarizeUpdateCheck(updateResult)}` : ""}
+                    {updateResult?.checkedAt ? ` · checked ${formatRelativeTime(updateResult.checkedAt)}` : ""}
+                    {updateResult?.updateAvailable && updateResult.releaseUrl ? (
+                      <>
+                        {" · "}
+                        <a href={updateResult.releaseUrl} target="_blank" rel="noreferrer">
+                          View release
+                        </a>
+                      </>
+                    ) : null}
+                  </>
+                }
+                checked={form.autoCheckUpdates ?? false}
+                onChange={(autoCheckUpdates) => savePatch({ autoCheckUpdates })}
+                before={
+                  <button
+                    type="button"
+                    className="settings-button"
+                    onClick={() => updateCheckMutation.mutate()}
+                    disabled={updateCheckMutation.isPending}
+                  >
+                    {updateCheckMutation.isPending ? "Checking…" : "Check now"}
+                  </button>
+                }
+              />
+              {updateCheckMutation.error ? (
+                <StatusMessage tone="error">{(updateCheckMutation.error as Error).message}</StatusMessage>
+              ) : null}
+              <PathRow
+                label="Database"
+                detail={data.dbSizeBytes > 0 ? formatBytes(data.dbSizeBytes) : "Not created yet"}
+                path={data.dbPath}
+                canReveal={canReveal}
+              />
+              <PathRow label="Config file" path={data.configPath} canReveal={canReveal} />
+            </div>
+            <p className="settings-footnote">
+              Closing the window keeps {APP_NAME} tracking in the background. Quit fully with Cmd+Q.
+            </p>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

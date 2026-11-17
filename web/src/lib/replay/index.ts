@@ -1598,7 +1598,8 @@ export function summarizeReplayGame(
       concedingPlayerSide === "unknown"
         ? "A player conceded."
         : `${timelinePlayerLabel(concedingPlayerSide)} conceded.`;
-  } else if (normalizedReason) {
+  } else if (normalizedReason && normalizedReason !== "Game") {
+    // "Game" is Arena's generic reason; "Ended by game." says nothing.
     detail = `Ended by ${formatReplayWinReason(normalizedReason)}.`;
   } else if (result === "win") {
     detail = "You won this game.";

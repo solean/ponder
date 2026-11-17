@@ -7,7 +7,7 @@ import { DEFAULT_OVERLAY_SETTINGS, overlayPanelWidth, overlayShortcutLabel, type
 import { StatusMessage } from "./StatusMessage";
 import { CardPreviewName } from "./CardPreviewName";
 import { ManaSymbol } from "./ManaSymbol";
-import { SettingToggle } from "./SettingToggle";
+import { SettingRow, ToggleRow } from "./SettingRow";
 import "./OverlaySettingsPanel.css";
 
 const badgeCalibrationFields = [
@@ -20,7 +20,7 @@ const badgeCalibrationFields = [
   { key: "draftBadgeColumns", label: "Columns", min: 1, max: 15 },
 ] as const;
 
-export function OverlaySettingsPanel() {
+export function OverlaySettingsPanel({ id, onStatusChange }: { id?: string; onStatusChange?: (status: "idle" | "saving" | "error") => void }) {
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: ["overlay-settings"], queryFn: api.overlaySettings });
   const [draft, setDraft] = useState<OverlaySettings | null>(null);
@@ -39,6 +39,9 @@ export function OverlaySettingsPanel() {
     if (status !== "saved") return;
     const timer = window.setTimeout(() => setStatus("idle"), 2000);
     return () => window.clearTimeout(timer);
+  }, [status]);
+  useEffect(() => {
+    onStatusChange?.(status === "saved" ? "idle" : status);
   }, [status]);
   if (!queue.current) queue.current = new OverlaySaveQueue(async (request) => {
     const value = { ...request.settings, shortcut: request.shortcut ? request.settings.shortcut : (persisted.current ?? queryData.current ?? DEFAULT_OVERLAY_SETTINGS).shortcut };
@@ -72,78 +75,160 @@ export function OverlaySettingsPanel() {
     enqueue(value, true);
   };
   const shortcut = shortcutDraft ?? settings.shortcut;
-  const shortcutDirty = shortcut !== (persisted.current ?? query.data ?? DEFAULT_OVERLAY_SETTINGS).shortcut;
   const savedSettings = persisted.current ?? query.data;
   const unsaved = Boolean(savedSettings && JSON.stringify({ ...settings, shortcut: savedSettings.shortcut }) !== JSON.stringify(savedSettings));
   const previewStyle = { "--sample-opacity": settings.opacity, "--sample-width": `${overlayPanelWidth(settings.panelSize)}rem`, "--sample-font-size": `${{ compact: .6875, default: .75, large: .875 }[settings.panelSize]}rem`, "--sample-row-height": `${{ compact: 1.75, default: 2, large: 2.3 }[settings.panelSize]}rem` } as CSSProperties;
 
+  const patch = (values: Partial<OverlaySettings>) => {
+    const next = { ...(latest.current ?? settings), ...values };
+    latest.current = next;
+    setDraft(next);
+    enqueue(next);
+  };
+  const saveShortcut = (value: string) => {
+    setShortcutDraft(value);
+    enqueue({ ...(latest.current ?? settings), shortcut: value }, true);
+  };
+  const delayOptions = [0, 250, 500, 1000];
+  if (!delayOptions.includes(settings.hoverDelayMs)) delayOptions.push(settings.hoverDelayMs);
+  delayOptions.sort((a, b) => a - b);
+  const sliderEvents = { onPointerUp: commitSlider, onPointerCancel: commitSlider, onKeyUp: commitSlider, onBlur: commitSlider };
+  const statusText = status === "saving" ? "Saving…" : status === "error" ? "" : unsaved ? "Release slider to save" : "";
+
   return (
-    <section className="panel overlay-settings" aria-labelledby="overlay-settings-title">
-      <div className="panel-head panel-head--stacked">
+    <section id={id} className="settings-section overlay-settings" aria-labelledby="overlay-settings-title">
+      <div className="settings-section-head">
         <h3 id="overlay-settings-title">Overlay</h3>
-        <p>Adjust the deck tracker shown during gameplay and the pack ratings shown while drafting. Changes save automatically. Apply shortcut changes separately.</p>
+        <p>The in-game deck tracker and draft ratings.</p>
+        {query.data ? (
+          <div className="settings-section-actions">
+            <span className="settings-save-status" role="status" aria-live="polite">{statusText}</span>
+            {undo ? <button type="button" className="settings-text-button" disabled={status === "saving"} onClick={() => { undoPending.current = true; replaceSettings(undo); }}>Undo reset</button> : null}
+            <button type="button" className="settings-text-button" disabled={status === "saving"} onClick={() => { undoPending.current = false; setUndo({ ...(persisted.current ?? query.data ?? DEFAULT_OVERLAY_SETTINGS) }); replaceSettings(DEFAULT_OVERLAY_SETTINGS); }}>Reset to defaults</button>
+          </div>
+        ) : null}
       </div>
       {query.isPending ? <StatusMessage>Loading overlay settings…</StatusMessage> : query.isError ? (
-        <><StatusMessage tone="error">{(query.error as Error).message}</StatusMessage><button className="control-button" type="button" onClick={() => void query.refetch()}>Try again</button></>
+        <><StatusMessage tone="error">{(query.error as Error).message}</StatusMessage><button className="settings-button" type="button" onClick={() => void query.refetch()}>Try again</button></>
       ) : (
-        <form onSubmit={(event) => { event.preventDefault(); if (shortcutDirty && !queue.current!.running) enqueue({ ...(latest.current ?? settings), shortcut }, true); }}>
-          <fieldset className="overlay-settings-fields">
-            <div className="overlay-settings-controls">
-              <div>
-                <SettingToggle checked={settings.showMana} onChange={(value) => change("showMana", value)}>Show mana summary</SettingToggle>
-                <SettingToggle checked={settings.showDeck} onChange={(value) => change("showDeck", value)}>Show your deck</SettingToggle>
-                <SettingToggle checked={settings.showOpponent} onChange={(value) => change("showOpponent", value)}>Show opponent cards</SettingToggle>
-                <SettingToggle checked={settings.showDraft} onChange={(value) => change("showDraft", value)}>Show 17Lands ratings while drafting</SettingToggle>
-              </div>
-              <div>
-                <SettingToggle checked={settings.draftCardBadges} onChange={(value) => change("draftCardBadges", value)}>On-card draft ratings · Experimental</SettingToggle>
-                <p className="settings-note overlay-badge-help">Uses Arena’s default rarity order and 16:9 draft layout. Adjust if badges do not line up; disable when using a different draft layout. Requires local Arena card data.</p>
-                <details className="overlay-badge-calibration">
-                  <summary>Calibrate card positions</summary>
-                  <p className="settings-note">Positions and sizes use a percentage of the game window.</p>
+        <>
+          {status === "error" ? (
+            <StatusMessage tone="error">
+              Overlay settings could not be saved: {error}{" "}
+              <button type="button" className="settings-text-button" onClick={() => void queue.current!.drain()}>Retry</button>
+            </StatusMessage>
+          ) : null}
+          <div className="overlay-settings-fields">
+            <div className="panel settings-card">
+              <h4 className="settings-group-label">Show during a match</h4>
+              <ToggleRow compact label="Mana summary" checked={settings.showMana} onChange={(value) => change("showMana", value)} />
+              <ToggleRow compact label="Your deck" checked={settings.showDeck} onChange={(value) => change("showDeck", value)} />
+              <ToggleRow compact label="Opponent cards" checked={settings.showOpponent} onChange={(value) => change("showOpponent", value)} />
+
+              <h4 className="settings-group-label has-rule">Show while drafting</h4>
+              <ToggleRow compact label="17Lands ratings" checked={settings.showDraft} onChange={(value) => change("showDraft", value)} />
+              <ToggleRow compact label="Ratings on the cards" help="Experimental. Assumes Arena’s default rarity order and 16:9 draft layout, and needs local Arena card data."
+                checked={settings.draftCardBadges} onChange={(value) => change("draftCardBadges", value)} />
+              <details className="settings-expander overlay-badge-calibration">
+                <summary>
+                  <span>Adjust card positions</span>
+                  <small>If the ratings do not line up with the cards</small>
+                </summary>
+                <div className="settings-expander-body">
                   {badgeCalibrationFields.map(({ key, label, min, max }) => (
-                    <label className="settings-field" key={key}>
-                      <span>{label} · {settings[key]}{key === "draftBadgeColumns" ? "" : "%"}</span>
-                      <input type="range" min={min} max={max} step={key === "draftBadgeColumns" ? 1 : 0.05} value={settings[key]} disabled={!settings.draftCardBadges} onChange={(event) => change(key, Number(event.target.value), false)} onPointerUp={commitSlider} onPointerCancel={commitSlider} onKeyUp={commitSlider} onBlur={commitSlider} />
-                    </label>
+                    <SettingRow compact key={key} label={label} htmlFor={`overlay-${key}`}>
+                      <input id={`overlay-${key}`} type="range" min={min} max={max} step={key === "draftBadgeColumns" ? 1 : 0.05} value={settings[key]} disabled={!settings.draftCardBadges} onChange={(event) => change(key, Number(event.target.value), false)} {...sliderEvents} />
+                      <span className="settings-range-value">{settings[key]}{key === "draftBadgeColumns" ? "" : "%"}</span>
+                    </SettingRow>
                   ))}
-                  <button type="button" className="control-button" disabled={status === "saving"} onClick={() => {
-                    const next = { ...(latest.current ?? settings) };
-                    for (const { key } of badgeCalibrationFields) next[key] = DEFAULT_OVERLAY_SETTINGS[key];
-                    latest.current = next;
-                    setDraft(next);
-                    enqueue(next);
-                  }}>Reset card positions</button>
-                </details>
-              </div>
-              <label className="settings-field"><span>Panel size</span><select className="settings-input" value={settings.panelSize} onChange={(event) => change("panelSize", event.target.value as OverlaySettings["panelSize"])}><option value="compact">Compact</option><option value="default">Default</option><option value="large">Large</option></select></label>
-              <label className="settings-field"><span>Background opacity · {Math.round(settings.opacity * 100)}%</span><input type="range" min="30" max="100" step="5" value={Math.round(settings.opacity * 100)} onChange={(event) => change("opacity", Number(event.target.value) / 100, false)} onPointerUp={commitSlider} onPointerCancel={commitSlider} onKeyUp={commitSlider} onBlur={commitSlider} /></label>
-              <div>
-                <SettingToggle checked={settings.cardPreviews} onChange={(value) => change("cardPreviews", value)}>Show card previews on hover</SettingToggle>
-                <label className="settings-field overlay-settings-delay"><span>Preview delay · {settings.hoverDelayMs} ms</span><input type="range" min="0" max="1500" step="50" disabled={!settings.cardPreviews} value={settings.hoverDelayMs} onChange={(event) => change("hoverDelayMs", Number(event.target.value), false)} onPointerUp={commitSlider} onPointerCancel={commitSlider} onKeyUp={commitSlider} onBlur={commitSlider} /><small>A longer delay helps avoid accidental previews.</small></label>
-              </div>
-              <div className="settings-field"><label htmlFor="overlay-shortcut">Show / hide shortcut</label><input id="overlay-shortcut" className="settings-input" value={shortcut} maxLength={80} required autoComplete="off" spellCheck={false} onChange={(event) => setShortcutDraft(event.target.value.replace(/\+[a-z]$/, (key) => key.toUpperCase()))} aria-describedby="overlay-shortcut-help" /><small id="overlay-shortcut-help">Use CmdOrCtrl, Cmd, Ctrl, Alt, Shift, or Super with a letter or digit, such as CmdOrCtrl+Shift+O. Preview: {overlayShortcutLabel(shortcut)}</small><button type="submit" className="control-button" disabled={!shortcutDirty || status === "saving"}>Apply shortcut</button></div>
+                  <SettingRow compact label={<span className="settings-row-help">Positions and sizes are a percentage of the game window.</span>}>
+                    <button type="button" className="settings-button" disabled={status === "saving"} onClick={() => {
+                      const next = { ...(latest.current ?? settings) };
+                      for (const { key } of badgeCalibrationFields) next[key] = DEFAULT_OVERLAY_SETTINGS[key];
+                      latest.current = next;
+                      setDraft(next);
+                      enqueue(next);
+                    }}>Reset positions</button>
+                  </SettingRow>
+                </div>
+              </details>
+
+              <SettingRow label={<span id="overlay-size-label">Panel size</span>}>
+                <div className="settings-segmented" role="radiogroup" aria-labelledby="overlay-size-label">
+                  {(["compact", "default", "large"] as const).map((size) => (
+                    <button key={size} type="button" role="radio" aria-checked={settings.panelSize === size}
+                      className={`settings-segment${settings.panelSize === size ? " is-active" : ""}`}
+                      onClick={() => change("panelSize", size)}>
+                      {size[0].toUpperCase() + size.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </SettingRow>
+              <SettingRow label="Background opacity" htmlFor="overlay-opacity">
+                <input id="overlay-opacity" type="range" min="30" max="100" step="5" value={Math.round(settings.opacity * 100)} onChange={(event) => change("opacity", Number(event.target.value) / 100, false)} {...sliderEvents} />
+                <span className="settings-range-value">{Math.round(settings.opacity * 100)}%</span>
+              </SettingRow>
+              <SettingRow label="Card preview on hover" htmlFor="overlay-preview">
+                <select id="overlay-preview" className="settings-select" value={settings.cardPreviews ? String(settings.hoverDelayMs) : "off"}
+                  onChange={(event) => patch(event.target.value === "off" ? { cardPreviews: false } : { cardPreviews: true, hoverDelayMs: Number(event.target.value) })}>
+                  {delayOptions.map((ms) => <option key={ms} value={String(ms)}>{ms === 0 ? "Instantly" : `After ${ms} ms`}</option>)}
+                  <option value="off">Off</option>
+                </select>
+              </SettingRow>
+              <SettingRow label="Show or hide shortcut" help="Click the keys, then press a modifier with a letter or digit.">
+                <ShortcutField value={shortcut} disabled={status === "saving"} onChange={saveShortcut} />
+              </SettingRow>
             </div>
             <div className="overlay-settings-preview" style={previewStyle}>
-              <span className="overlay-settings-preview-label">Preview</span>
+              <span className="settings-group-label">Live preview</span>
               <div className="overlay-settings-samples">
                 {settings.showDeck ? <SamplePanel title="Your deck" opponent={false} previews={settings.cardPreviews} delay={settings.hoverDelayMs} /> : null}
                 {settings.showOpponent ? <SamplePanel title="Opponent cards" opponent previews={settings.cardPreviews} delay={settings.hoverDelayMs} /> : null}
                 {settings.showMana && <OverlayManaPanel mana={{ landsKnown: true, lands: 5, available: 4, byColor: { U: 3, B: 2 }, floating: 0, poolKnown: true, unresolved: 0 }} />}
-                {!settings.showDeck && !settings.showOpponent && !settings.showMana ? <p className="settings-note">All match panels are hidden.</p> : null}
+                {!settings.showDeck && !settings.showOpponent && !settings.showMana ? <p className="settings-row-help">All match panels are hidden.</p> : null}
               </div>
-              <small className="overlay-settings-preview-note">Sample cards · Hover a card to try the preview.</small>
+              <small className="overlay-settings-preview-note">Sample cards. Hover one to try the preview.</small>
             </div>
-          </fieldset>
-          <div className="settings-action-row">
-            <button type="button" className="control-button" disabled={status === "saving"} onClick={() => { undoPending.current = false; setUndo({ ...(persisted.current ?? query.data ?? DEFAULT_OVERLAY_SETTINGS) }); replaceSettings(DEFAULT_OVERLAY_SETTINGS); }}>Reset to defaults</button>
-            {undo ? <button type="button" className="control-button" disabled={status === "saving"} onClick={() => { undoPending.current = true; replaceSettings(undo); }}>Undo reset</button> : null}
-            <span className="settings-note" role="status" aria-live="polite">{status === "saving" ? "Saving…" : status === "error" ? "" : unsaved ? "Release slider to save" : status === "saved" ? "Saved" : ""}</span>
           </div>
-          {status === "error" ? <div><StatusMessage tone="error">{error}</StatusMessage><button type="button" className="control-button" onClick={() => void queue.current!.drain()}>Retry</button></div> : null}
-        </form>
+        </>
       )}
     </section>
+  );
+}
+
+/** A button that records the next key combination as the overlay shortcut. */
+function ShortcutField({ value, disabled, onChange }: { value: string; disabled?: boolean; onChange: (value: string) => void }) {
+  const [recording, setRecording] = useState(false);
+  const [needsModifier, setNeedsModifier] = useState(false);
+  const mac = typeof navigator !== "undefined" && navigator.platform.startsWith("Mac");
+  const stop = () => { setRecording(false); setNeedsModifier(false); };
+  return (
+    <button type="button" className={`settings-shortcut${recording ? " is-recording" : ""}`} disabled={disabled}
+      aria-label={recording ? "Press a new shortcut, or Escape to cancel" : `Change shortcut, currently ${value.split("+").join(" ")}`}
+      onClick={() => (recording ? stop() : setRecording(true))}
+      onBlur={stop}
+      onKeyDown={(event) => {
+        if (!recording || event.key === "Tab") return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.key === "Escape") { stop(); return; }
+        const key = /^(?:Key([A-Z])|Digit([0-9]))$/.exec(event.code);
+        if (!key) return;
+        const modifiers: string[] = [];
+        if (mac ? event.metaKey : event.ctrlKey) modifiers.push("CmdOrCtrl");
+        if (mac && event.ctrlKey) modifiers.push("Ctrl");
+        if (!mac && event.metaKey) modifiers.push("Super");
+        if (event.altKey) modifiers.push("Alt");
+        if (event.shiftKey) modifiers.push("Shift");
+        if (!modifiers.length) { setNeedsModifier(true); return; }
+        stop();
+        const next = [...modifiers, key[1] ?? key[2]].join("+");
+        if (next !== value) onChange(next);
+      }}>
+      {recording
+        ? <span>{needsModifier ? "Add a modifier key…" : "Press keys…"}</span>
+        : value.split("+").map((part) => <kbd key={part}>{overlayShortcutLabel(part, mac)}</kbd>)}
+    </button>
   );
 }
 

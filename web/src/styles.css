@@ -4844,22 +4844,25 @@ small.settings-meta,
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+/* The opponent rail always spans the full row. The stack floats over the top
+   of the opponent battlefield instead of sharing the row, so a spell going on
+   or off the stack never resizes the rail or shifts the board down. */
 .match-replay-arena-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.6rem 1rem;
-}
-
-.match-replay-arena-top > .match-replay-zonerail {
-  flex: 1 1 auto;
+  position: relative;
+  z-index: 3;
 }
 
 .match-replay-arena-stack {
-  flex: 0 0 auto;
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0.4rem;
   width: max-content;
   max-width: min(26rem, 100%);
+  padding: 0.4rem 0.5rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-md);
 }
 
 .match-replay-arena-stack:empty {

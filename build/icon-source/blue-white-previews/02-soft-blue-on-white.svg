@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs>
+    <linearGradient id="02-soft-blue-on-white-bg" x2="0.25" y2="1"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#F0F5FC"/></linearGradient>
+    <linearGradient id="02-soft-blue-on-white-ink" x2="0.15" y2="1"><stop stop-color="#91C2FF"/><stop offset="1" stop-color="#4685DD"/></linearGradient>
+    <linearGradient id="02-soft-blue-on-white-edge" x2="0" y2="1"><stop stop-color="white" stop-opacity=".75"/><stop offset=".5" stop-color="white" stop-opacity=".06"/><stop offset="1" stop-color="white" stop-opacity=".3"/></linearGradient>
+    <filter id="02-soft-blue-on-white-shadow" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#09234B" flood-opacity=".17"/></filter>
+    <path id="02-soft-blue-on-white-orb" fill-rule="evenodd" d="M 0,-174 A 174,174 0 1,1 0,174 A 174,174 0 1,1 0,-174 Z M 0,-148 C -184,-138 -184,138 0,148 C -128,89 -128,-89 0,-148 Z"/>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="220" fill="url(#02-soft-blue-on-white-bg)"/>
+  <rect x="102" y="102" width="820" height="820" rx="218" fill="none" stroke="url(#02-soft-blue-on-white-edge)" stroke-width="4"/>
+  <g transform="translate(100 100) scale(.8046875)"><g fill="url(#02-soft-blue-on-white-ink)" stroke="url(#02-soft-blue-on-white-edge)" stroke-width="2.5" filter="url(#02-soft-blue-on-white-shadow)">
+    <use href="#02-soft-blue-on-white-orb" transform="translate(512 328)"/>
+    <use href="#02-soft-blue-on-white-orb" transform="translate(316 667.5)"/>
+    <use href="#02-soft-blue-on-white-orb" transform="translate(708 667.5)"/>
+  </g></g></svg>

@@ -2,5 +2,6 @@
 
 package main
 
-// Packaged macOS apps use the bundle's layered Icon Composer artwork.
+// Packaged macOS apps launch with the bundle's layered artwork. Startup then
+// restores the user's selected Dock icon after loading their preferences.
 var developmentAppIcon []byte

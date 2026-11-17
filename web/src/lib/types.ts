@@ -854,7 +854,10 @@ export type DraftPickCard = {
   cardName?: string;
 };
 
+export type AppIconAppearance = "white" | "blue" | "charcoal";
+
 export type RuntimeConfig = {
+  appIcon: AppIconAppearance;
   logPath: string;
   pollIntervalSeconds: number;
   includePrev: boolean;
@@ -909,6 +912,7 @@ export type RuntimeStatus = {
 export type RuntimeCapabilities = {
   pickFile: boolean;
   reveal: boolean;
+  appIcon?: boolean;
 };
 
 export type AutostartStatus = {

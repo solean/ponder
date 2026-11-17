@@ -5,6 +5,7 @@ import { SettingRow, ToggleRow } from "../components/SettingRow";
 import { PageHeader } from "../components/PageHeader";
 import { StatusMessage } from "../components/StatusMessage";
 import { OverlaySettingsPanel } from "../components/OverlaySettingsPanel";
+import { AppIconPicker } from "../components/AppIconPicker";
 import { api } from "../lib/api";
 import { RuntimeConfigSaveQueue } from "../lib/runtimeConfigSaveQueue";
 import { copyTextToClipboard } from "../lib/clipboard";
@@ -331,6 +332,7 @@ function normalizePollInterval(value: string): number {
 
 function syncForm(status: RuntimeStatus): RuntimeConfig {
   return {
+    appIcon: status.config.appIcon ?? "white",
     logPath: status.config.logPath ?? "",
     pollIntervalSeconds: status.config.pollIntervalSeconds,
     includePrev: status.config.includePrev,
@@ -358,6 +360,7 @@ export function SettingsPage() {
   });
 
   const [form, setForm] = useState<RuntimeConfig>({
+    appIcon: "white",
     logPath: "",
     pollIntervalSeconds: 2,
     includePrev: true,
@@ -1058,6 +1061,9 @@ export function SettingsPage() {
                   ))}
                 </div>
               </SettingRow>
+              {data.capabilities?.appIcon ? (
+                <AppIconPicker value={form.appIcon} onChange={(appIcon) => savePatch({ appIcon })} />
+              ) : null}
             </div>
           </section>
 

@@ -240,12 +240,14 @@ func (a *App) startup() {
 		DBPath:                 dbPath,
 		SupportDir:             supportDir,
 		OverlayShortcutChanged: a.updateOverlayShortcut,
+		AppIconChanged:         setAppIcon,
 		LiveDataChanged:        a.wakeOverlayMonitor,
 		DefaultLogPath:         currentLogPath,
 		DefaultPrevLogPath:     prevLogPath,
 		Capabilities: appstate.Capabilities{
 			PickFile: true,
 			Reveal:   true,
+			AppIcon:  appIconSupported,
 		},
 	})
 	if err != nil {
@@ -254,6 +256,11 @@ func (a *App) startup() {
 		return
 	}
 
+	if appIconSupported {
+		if err := setAppIcon(runtimeService.Config().AppIcon); err != nil {
+			log.Printf("restore app icon: %v", err)
+		}
+	}
 	if err := a.updateOverlayShortcut(runtimeService.OverlaySettings().Shortcut); err != nil {
 		log.Printf("overlay shortcut unavailable: %v; use the Overlay menu", err)
 	}

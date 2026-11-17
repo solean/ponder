@@ -1,11 +1,7 @@
-.overlay-settings-fields { margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: minmax(15rem, 1fr) minmax(16rem, 1fr); gap: 2rem; min-width: 0; }
-.overlay-settings-controls { display: grid; gap: 1.25rem; }
-.overlay-settings-controls .settings-checkbox:first-child { margin-top: 0; }
-.overlay-settings input[type="range"] { width: 100%; accent-color: var(--accent); min-height: 1.75rem; }
-.overlay-settings-delay { margin-top: 1rem; }
-.overlay-settings-preview { min-width: 0; padding: 1rem; background: repeating-linear-gradient(135deg, var(--panel-inner-a), var(--panel-inner-a) 16px, var(--panel-inner-b) 16px, var(--panel-inner-b) 32px); border: 1px solid var(--line); border-radius: 4px; align-self: start; }
-.overlay-settings-preview-label { color: var(--muted); font-size: var(--text-sm); }
-.overlay-settings-samples { display: grid; gap: 1rem; margin: 1rem 0; }
+.overlay-settings-fields { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1rem; min-width: 0; }
+.overlay-settings-fields > .settings-card { flex: 999 1 24rem; min-width: 0; }
+.overlay-settings-preview { flex: 1 1 15rem; min-width: 0; display: grid; gap: 0.5rem; align-content: start; }
+.overlay-settings-samples { display: grid; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--line); border-radius: 3px; background: repeating-linear-gradient(135deg, var(--panel-inner-a), var(--panel-inner-a) 16px, var(--panel-inner-b) 16px, var(--panel-inner-b) 32px); }
 .overlay-settings-sample { width: min(100%, var(--sample-width)); padding: .65rem; border: 1px solid #ffffff24; border-radius: 6px; background: rgb(17 22 25 / var(--sample-opacity)); color: #edf1f0; font-size: var(--sample-font-size); }
 .overlay-settings-sample > strong { display: block; font-size: .85rem; }
 .overlay-settings-sample > small { display: block; color: #b3beb9; margin: .3rem 0 .65rem; }
@@ -18,13 +14,7 @@
 .overlay-settings-mana .mana-symbol-icon { width: .85rem; height: .85rem; }
 .overlay-settings-sample-menus { display: grid; gap: .4rem; margin-top: .6rem; color: #b3beb9; }
 .overlay-settings-sample-menus > span { display: flex; justify-content: space-between; }
-.overlay-settings-preview-note { color: var(--muted-strong); font-size: var(--text-sm); }
-@media (max-width: 760px) { .overlay-settings-fields { grid-template-columns: 1fr; gap: 1.5rem; } }
-
-.overlay-badge-help { margin: .5rem 0 .75rem; }
-.overlay-badge-calibration summary { cursor: pointer; font-size: var(--text-sm); }
-.overlay-badge-calibration > .settings-note { margin: .75rem 0; }
-.overlay-badge-calibration .settings-field { margin-top: .65rem; }
+.overlay-settings-preview-note { color: var(--muted); font-size: var(--text-sm); }
 
 .overlay-settings-samples .overlay-panel-mana {
   position: static;

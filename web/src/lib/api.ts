@@ -1,3 +1,4 @@
+import { ApiError, BACKEND_UNREACHABLE_MESSAGE, apiErrorFromResponse, requestJSON } from "./apiError";
 import type { OverlaySettings } from "./overlaySettings";
 import { waitForBackend } from "./startup";
 import type {
@@ -40,28 +41,28 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
-async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { signal });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Request failed (${res.status}): ${text}`);
-  }
-  return (await res.json()) as T;
+function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return requestJSON<T>(`${API_BASE}${path}`, { signal });
 }
 
-async function postJSON<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+function postJSON<T>(path: string, body?: unknown): Promise<T> {
+  return requestJSON<T>(`${API_BASE}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: body == null ? undefined : JSON.stringify(body),
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Request failed (${res.status}): ${text}`);
+}
+
+/** Like getJSON, but resolves to null when the resource doesn't exist yet. */
+async function getJSONOrNull<T>(path: string): Promise<T | null> {
+  try {
+    return await getJSON<T>(path);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
   }
-  return (await res.json()) as T;
 }
 
 function analyticsGamesSearch(params: DeckAnalyticsGamesParams): URLSearchParams {
@@ -93,17 +94,8 @@ export const api = {
     getJSON<MatchReplayFrame[]>(`/api/matches/${matchId}/replay`, signal),
   matchReplayStatus: (matchId: number, signal?: AbortSignal) =>
     getJSON<MatchReplayStatus>(`/api/matches/${matchId}/replay-status`, signal),
-  gameReview: async (matchId: number, gameNumber: number): Promise<GameReview | null> => {
-    const res = await fetch(`${API_BASE}/api/matches/${matchId}/review?game=${gameNumber}`);
-    if (res.status === 404) {
-      return null;
-    }
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Request failed (${res.status}): ${text}`);
-    }
-    return (await res.json()) as GameReview;
-  },
+  gameReview: (matchId: number, gameNumber: number) =>
+    getJSONOrNull<GameReview>(`/api/matches/${matchId}/review?game=${gameNumber}`),
   decks: (scope: "constructed" | "draft" | "all" = "constructed") =>
     getJSON<DeckSummary[]>(scope === "constructed" ? "/api/decks" : `/api/decks?scope=${scope}`),
   deckDetail: (deckId: number) => getJSON<DeckDetail>(`/api/decks/${deckId}`),
@@ -176,17 +168,7 @@ export const api = {
   revealPath: (path: string) => postJSON<{ status: string }>("/api/runtime/reveal", { path }),
   openExternalURL: (url: string) => postJSON<{ status: string }>("/api/runtime/open-url", { url }),
   aiStatus: () => getJSON<AiStatus>("/api/ai/status"),
-  deckPrimer: async (deckId: number): Promise<DeckPrimer | null> => {
-    const res = await fetch(`${API_BASE}/api/decks/${deckId}/primer`);
-    if (res.status === 404) {
-      return null;
-    }
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Request failed (${res.status}): ${text}`);
-    }
-    return (await res.json()) as DeckPrimer;
-  },
+  deckPrimer: (deckId: number) => getJSONOrNull<DeckPrimer>(`/api/decks/${deckId}/primer`),
 };
 
 export type AIStreamHandlers<T> = {
@@ -214,20 +196,14 @@ async function generateAIContent<T>(
       headers: { Accept: "text/event-stream" },
       signal,
     });
-  } catch (err) {
+  } catch {
     if (signal?.aborted) return;
-    handlers.onError(err instanceof Error ? err.message : String(err));
+    handlers.onError(BACKEND_UNREACHABLE_MESSAGE);
     return;
   }
 
   if (!res.ok || !res.body) {
-    const text = await res.text().catch(() => "");
-    try {
-      const parsed = JSON.parse(text) as { error?: string };
-      handlers.onError(parsed.error ?? `Request failed (${res.status})`);
-    } catch {
-      handlers.onError(`Request failed (${res.status}): ${text}`);
-    }
+    handlers.onError((await apiErrorFromResponse(res)).message);
     return;
   }
 

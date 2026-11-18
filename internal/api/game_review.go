@@ -37,7 +37,7 @@ func (s *Server) handleGameReview(w http.ResponseWriter, r *http.Request, matchI
 func (s *Server) handleGameReviewGet(w http.ResponseWriter, r *http.Request, matchID, gameNumber int64) {
 	review, err := s.store.GetGameReview(r.Context(), matchID, gameNumber)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load the game review", err)
 		return
 	}
 	if review == nil {
@@ -51,7 +51,7 @@ func (s *Server) handleGameReviewGet(w http.ResponseWriter, r *http.Request, mat
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load this game", err)
 		return
 	}
 	review.Stale = ai.GameReviewSourceHash(input) != review.SourceHash
@@ -77,7 +77,7 @@ func (s *Server) handleGameReviewGenerate(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load this game", err)
 		return
 	}
 	if len(input.Frames) == 0 {

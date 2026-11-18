@@ -43,7 +43,7 @@ func (s *Server) handleRuntimePickLog(w http.ResponseWriter, r *http.Request) {
 
 	path, err := s.desktop.PickLogFile()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "open the file picker", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"path": path})
@@ -77,7 +77,7 @@ func (s *Server) handleRuntimeReveal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.desktop.RevealPath(payload.Path); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "show the file in Finder", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -111,7 +111,7 @@ func (s *Server) handleRuntimeOpenURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.desktop.OpenURL(parsed.String()); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "open the link", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

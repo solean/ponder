@@ -266,6 +266,21 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	})
 }
 
+// writeInternalError reports an unexpected failure. Users see a short message
+// built from action, such as "Couldn't load this deck." for "load this deck".
+// The underlying error can carry SQL and file details, so it only goes to the
+// log.
+func writeInternalError(w http.ResponseWriter, action string, err error) {
+	log.Printf("http 500: %s: %v", action, err)
+	writeJSON(w, http.StatusInternalServerError, map[string]any{
+		"error": internalErrorMessage(action),
+	})
+}
+
+func internalErrorMessage(action string) string {
+	return "Couldn't " + action + "."
+}
+
 func decodeJSONBody(r *http.Request, dst any) error {
 	if err := requireJSONContentType(r); err != nil {
 		return err
@@ -321,8 +336,12 @@ func (s *Server) handleRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status, err := s.appState.UpdateConfig(input)
+	if errors.Is(err, appstate.ErrInvalidAppIcon) {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "save settings", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, status)
@@ -388,7 +407,7 @@ func (s *Server) handleRuntimeLiveStop(w http.ResponseWriter, r *http.Request) {
 
 	status, err := s.appState.StopLive()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "stop live tracking", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, status)
@@ -555,7 +574,7 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := s.store.Overview(r.Context(), limit)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load the overview", err)
 		return
 	}
 	s.enrichMatchDeckColors(r.Context(), out.Recent)
@@ -565,7 +584,7 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRankHistory(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.store.ListRankHistory(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load rank history", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, rows)
@@ -578,17 +597,17 @@ func (s *Server) handleEconomy(w http.ResponseWriter, r *http.Request) {
 	}
 	history, err := s.store.ListEconomyHistory(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load economy history", err)
 		return
 	}
 	transactions, err := s.store.ListEconomyLedger(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load economy history", err)
 		return
 	}
 	eventRuns, err := s.store.ListEventRunEconomies(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load economy history", err)
 		return
 	}
 	for index := range eventRuns {
@@ -625,12 +644,12 @@ func (s *Server) handleMatches(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := s.store.ListMatches(r.Context(), limit, event, result)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load matches", err)
 		return
 	}
 	total, err := s.store.CountMatches(r.Context(), event, result)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load matches", err)
 		return
 	}
 	s.enrichMatchDeckColors(r.Context(), rows)
@@ -672,7 +691,7 @@ func (s *Server) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
 		case "timeline":
 			rows, err := s.store.ListMatchCardPlays(r.Context(), id)
 			if err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
+				writeInternalError(w, "load the match timeline", err)
 				return
 			}
 			s.enrichMatchCardPlayNames(r.Context(), rows)
@@ -688,7 +707,7 @@ func (s *Server) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
+				writeInternalError(w, "load the replay status", err)
 				return
 			}
 			writeJSON(w, http.StatusOK, status)
@@ -696,7 +715,7 @@ func (s *Server) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
 		case "replay":
 			frames, err := s.store.ListMatchReplayFrames(r.Context(), id)
 			if err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
+				writeInternalError(w, "load the replay", err)
 				return
 			}
 			s.enrichMatchReplayNames(r.Context(), frames)
@@ -715,7 +734,7 @@ func (s *Server) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
 		s.ensureCardTypeLines(r.Context(), cardIDs)
 	}
 	if err := s.store.EnsureMatchAnalytics(r.Context(), id); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load this match", err)
 		return
 	}
 	out, err := s.store.GetMatchDetail(r.Context(), id)
@@ -724,7 +743,7 @@ func (s *Server) handleMatchDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load this match", err)
 		return
 	}
 
@@ -752,7 +771,7 @@ func (s *Server) handleDecks(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := s.store.ListDecksByScope(r.Context(), scope)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load decks", err)
 		return
 	}
 	s.enrichDeckSummaryColors(r.Context(), rows)
@@ -801,8 +820,12 @@ func (s *Server) handleDeckDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out, err := s.store.GetDeckDetail(r.Context(), id, 50)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "deck not found")
+		return
+	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load this deck", err)
 		return
 	}
 	s.enrichDeckCardNames(r.Context(), out.Cards)
@@ -820,7 +843,7 @@ func (s *Server) handleDrafts(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.store.ListDraftSessions(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load drafts", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, rows)
@@ -844,7 +867,7 @@ func (s *Server) handleDraftPicks(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.store.ListDraftPicks(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load draft picks", err)
 		return
 	}
 	s.enrichDraftPickCardNames(r.Context(), rows)

@@ -458,7 +458,7 @@ func (s *Server) handleDeckMatchups(w http.ResponseWriter, r *http.Request, deck
 	}
 	inputs, err := s.loadMatchupInputs(r.Context(), deckID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load matchups", err)
 		return
 	}
 	full := buildMatchupsResponse(inputs.matchRows, inputs.observedByMatch, inputs.facts,
@@ -480,7 +480,7 @@ func (s *Server) handleDeckMatchupRefs(w http.ResponseWriter, r *http.Request, d
 	}
 	inputs, err := s.loadMatchupInputs(r.Context(), deckID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load matchups", err)
 		return
 	}
 	// Rebuilding through the same builder is what guarantees the rows here
@@ -569,7 +569,7 @@ func (s *Server) handleLimitedMatchups(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := s.buildLimitedMatchups(r.Context(), r.URL.Query().Get("format"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load matchups", err)
 		return
 	}
 	for setIndex := range out.Sets {
@@ -594,7 +594,7 @@ func (s *Server) handleLimitedMatchupRefs(w http.ResponseWriter, r *http.Request
 	query := r.URL.Query()
 	out, err := s.buildLimitedMatchups(r.Context(), query.Get("format"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load matchups", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, limitedMatchupRefs(out, query.Get("set"),
@@ -1080,7 +1080,7 @@ func (s *Server) handleMatchOpponentArchetype(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if err := s.store.SetMatchOpponentArchetypeOverride(r.Context(), matchID, archetype); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "save the opponent archetype", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "archetype": archetype})

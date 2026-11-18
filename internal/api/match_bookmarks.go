@@ -29,7 +29,7 @@ func (s *Server) handleMatchBookmark(w http.ResponseWriter, r *http.Request, mat
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "save the bookmark", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"saved": *payload.Saved})

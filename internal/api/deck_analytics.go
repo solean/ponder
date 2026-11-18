@@ -83,7 +83,7 @@ func (s *Server) handleDeckAnalytics(w http.ResponseWriter, r *http.Request, dec
 
 	out, err := s.store.GetDeckAnalytics(ctx, deckID, queryInt64(r, "version"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load deck analytics", err)
 		return
 	}
 	s.finalizeAnalyticsCards(ctx, &out)
@@ -147,7 +147,7 @@ func writeAnalyticsGames(w http.ResponseWriter, rows []model.DeckAnalyticsGameRe
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load these games", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, rows)

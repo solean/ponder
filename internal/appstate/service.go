@@ -3,6 +3,7 @@ package appstate
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -329,6 +330,10 @@ func (s Status) RevealablePaths() []string {
 	}
 }
 
+// ErrInvalidAppIcon means UpdateConfig was asked for an app icon that doesn't
+// exist. It's the caller's mistake, so the API reports it as a bad request.
+var ErrInvalidAppIcon = errors.New("app icon must be white, blue, or charcoal")
+
 func (s *Service) UpdateConfig(next Config) (Status, error) {
 	s.updateMu.Lock()
 	defer s.updateMu.Unlock()
@@ -338,7 +343,7 @@ func (s *Service) UpdateConfig(next Config) (Status, error) {
 	if next.AppIcon == "" {
 		next.AppIcon = previous.AppIcon
 	} else if !validAppIcon(next.AppIcon) {
-		return s.Status(), fmt.Errorf("app icon must be white, blue, or charcoal")
+		return s.Status(), ErrInvalidAppIcon
 	}
 	cfg := normalizeConfig(next, s.defaultPoll)
 	iconChanged := cfg.AppIcon != previous.AppIcon

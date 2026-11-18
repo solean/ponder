@@ -172,13 +172,13 @@ parses Arena logs into SQLite and serves a JSON API, and the React frontend
 
 ### Prerequisites
 
-- Go 1.25+
+- Go 1.26+
 - [Bun](https://bun.sh) 1.3+
 - Xcode Command Line Tools (`xcode-select --install`)
 - The Wails CLI:
 
   ```bash
-  go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
+  go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
   ```
 
 Install frontend dependencies once:

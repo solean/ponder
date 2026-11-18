@@ -264,10 +264,10 @@ cd web && bun test && bun run typecheck
 | `internal/ai` | Claude Code and Codex CLI integration |
 | `internal/appstate` | Runtime config, live tracking, launch at login |
 | `web` | React frontend |
-| `build` | Wails build config, app icon, platform packaging |
+| `build` | Wails build config, app icon, macOS packaging |
 
-Windows and Linux build targets come from the Wails template, but Ponder is
-developed and tested on macOS only.
+Ponder is built and tested on macOS only, so the repo carries no Windows,
+Linux, or iOS build files.
 
 ## Disclaimer
 

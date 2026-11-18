@@ -64,7 +64,7 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id, ok, err := s.store.GetLiveMatchID(ctx)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load the live match", err)
 		return
 	}
 	if !ok {
@@ -78,7 +78,7 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load the live match", err)
 		return
 	}
 
@@ -93,7 +93,7 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 
 	game, arenaTurn, err := s.store.GetLiveProgress(ctx, id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load the live match", err)
 		return
 	}
 	gameForState := game
@@ -103,7 +103,7 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 
 	deckCards, submitted, err := s.store.ListMatchGameDeckCards(ctx, id, gameForState)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load the live match", err)
 		return
 	}
 	deckSource := "submitted"
@@ -112,7 +112,7 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 		if detail.Match.DeckID != nil && *detail.Match.DeckID > 0 {
 			deckCards, err = s.store.ListDeckCards(ctx, *detail.Match.DeckID)
 			if err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
+				writeInternalError(w, "load the live match", err)
 				return
 			}
 			deckSource = "linked"
@@ -125,14 +125,14 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 
 	knownOutsideLibrary, stateAvailable, err := s.store.GetLiveKnownSelfCardCounts(ctx, id, gameForState)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load the live match", err)
 		return
 	}
 	deck, deckTotal, libraryCount := projectLiveDeck(deckCards, knownOutsideLibrary, stateAvailable)
 
 	objects, pool, manaAvailable, poolKnown, err := s.store.GetLiveManaState(ctx, id, gameForState)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load the live match", err)
 		return
 	}
 	var mana *model.LiveMana
@@ -164,7 +164,7 @@ func (s *Server) handleLiveDraft(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	draft, err := s.store.GetLiveDraft(ctx, time.Now())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load the live draft", err)
 		return
 	}
 	if draft == nil {

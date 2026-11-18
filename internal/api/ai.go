@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -69,7 +71,7 @@ func (s *Server) handleDeckPrimer(w http.ResponseWriter, r *http.Request, deckID
 func (s *Server) handleDeckPrimerGet(w http.ResponseWriter, r *http.Request, deckID int64) {
 	primer, err := s.store.GetDeckPrimer(r.Context(), deckID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load the deck primer", err)
 		return
 	}
 	if primer == nil {
@@ -179,8 +181,12 @@ func (s *Server) handleDeckPrimerGenerate(w http.ResponseWriter, r *http.Request
 	}
 
 	detail, err := s.store.GetDeckDetail(r.Context(), deckID, 50)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "deck not found")
+		return
+	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load this deck", err)
 		return
 	}
 	if len(detail.Cards) == 0 {

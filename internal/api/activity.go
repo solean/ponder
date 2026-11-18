@@ -63,7 +63,7 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
 	}
 	activity, err := s.store.DailyActivity(r.Context(), request.Days)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load activity", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, activity)

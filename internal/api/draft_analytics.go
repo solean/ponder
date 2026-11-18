@@ -22,7 +22,7 @@ func (s *Server) handleDraftAnalytics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	scope, err := s.store.LoadDraftAnalyticsScope(ctx, draftAnalyticsSet(r), r.URL.Query().Get("format"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load draft analytics", err)
 		return
 	}
 	if cards, err := s.store.ListDraftKeptHandCardIDs(ctx, scope); err == nil {
@@ -30,7 +30,7 @@ func (s *Server) handleDraftAnalytics(w http.ResponseWriter, r *http.Request) {
 	}
 	analytics, err := s.store.GetDraftAnalytics(ctx, scope)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load draft analytics", err)
 		return
 	}
 	s.finalizeAnalyticsCards(ctx, &analytics)
@@ -44,7 +44,7 @@ func (s *Server) handleDraftAnalyticsGames(w http.ResponseWriter, r *http.Reques
 	}
 	scope, err := s.store.LoadDraftAnalyticsScope(r.Context(), draftAnalyticsSet(r), r.URL.Query().Get("format"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load draft analytics", err)
 		return
 	}
 	rows, err := s.store.ListDraftAnalyticsGames(r.Context(), scope, analyticsGamesQuery(r))

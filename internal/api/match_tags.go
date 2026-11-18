@@ -37,7 +37,7 @@ func (s *Server) handleMatchTags(w http.ResponseWriter, r *http.Request, matchID
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "save the tags", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string][]string{"tags": tags})
@@ -51,7 +51,7 @@ func (s *Server) handleMatchTagUsage(w http.ResponseWriter, r *http.Request) {
 	}
 	usage, err := s.store.ListMatchTagUsage(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeInternalError(w, "load tags", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, usage)

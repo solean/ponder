@@ -14,6 +14,7 @@ import (
 
 	"github.com/solean/ponder/internal/db"
 	"github.com/solean/ponder/internal/model"
+	"github.com/solean/ponder/internal/version"
 )
 
 const (
@@ -342,7 +343,7 @@ func (s *Server) fetchCardMetadataBatch(ctx context.Context, cardIDs []int64) (m
 			return out, fmt.Errorf("build scryfall metadata request: %w", err)
 		}
 		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", "ponder/0.1 (local tracker)")
+		req.Header.Set("User-Agent", version.UserAgent("local tracker"))
 
 		res, err := s.doScryfallRequest(req)
 		if err != nil {

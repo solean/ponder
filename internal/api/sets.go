@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/solean/ponder/internal/model"
+	"github.com/solean/ponder/internal/version"
 )
 
 const scryfallSetURL = "https://api.scryfall.com/sets"
@@ -93,7 +94,7 @@ func (s *Server) fetchSetFromScryfall(ctx context.Context, code string) (*model.
 		return nil, fmt.Errorf("build scryfall set request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "ponder/0.1 (local tracker)")
+	req.Header.Set("User-Agent", version.UserAgent("local tracker"))
 
 	res, err := s.doScryfallRequest(req)
 	if err != nil {

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/solean/ponder/internal/model"
+	"github.com/solean/ponder/internal/version"
 )
 
 const rawCardLookupBatchMax = 900
@@ -303,7 +304,7 @@ func (s *Server) fetchCardColorBatch(ctx context.Context, cardIDs []int64) (map[
 		return nil, fmt.Errorf("build scryfall color request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "ponder/0.1 (local tracker)")
+	req.Header.Set("User-Agent", version.UserAgent("local tracker"))
 
 	res, err := s.doScryfallRequest(req)
 	if err != nil {
@@ -341,7 +342,7 @@ func (s *Server) fetchCardColorBatch(ctx context.Context, cardIDs []int64) (map[
 			return out, fmt.Errorf("build scryfall color next page request: %w", err)
 		}
 		nextReq.Header.Set("Accept", "application/json")
-		nextReq.Header.Set("User-Agent", "ponder/0.1 (local tracker)")
+		nextReq.Header.Set("User-Agent", version.UserAgent("local tracker"))
 
 		nextRes, err := s.doScryfallRequest(nextReq)
 		if err != nil {

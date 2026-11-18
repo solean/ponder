@@ -2,12 +2,14 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/solean/ponder/internal/api"
+	"github.com/solean/ponder/internal/version"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -19,6 +21,13 @@ var embeddedAssets embed.FS
 const appDisplayName = "Ponder"
 
 func main() {
+	// `Ponder --version` prints the stamped version without opening a window.
+	// The bundle step uses it to check the binary against the Info.plist.
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		fmt.Println(version.Version)
+		return
+	}
+
 	assets, err := fs.Sub(embeddedAssets, "web/dist")
 	if err != nil {
 		log.Fatalf("prepare embedded web assets: %v", err)

@@ -47,7 +47,8 @@ tasks:
       - wails3 tool prepare-macos-output --dir "{{.BIN_DIR}}"
       - '{{if eq .OBFUSCATED "true"}}garble {{.GARBLE_ARGS}} build{{else}}go build{{end}} {{.BUILD_FLAGS}} -o "{{.OUTPUT}}"'
     vars:
-      BUILD_FLAGS: '{{if eq .DEV "true"}}{{if or .EXTRA_TAGS (eq .OBFUSCATED "true")}}-tags {{if eq .OBFUSCATED "true"}}wails_obfuscated{{if .EXTRA_TAGS}},{{end}}{{end}}{{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s"{{end}}'
+      VERSION_LDFLAG: '-X github.com/solean/ponder/internal/version.Version={{.VERSION}}'
+      BUILD_FLAGS: '{{if eq .DEV "true"}}{{if or .EXTRA_TAGS (eq .OBFUSCATED "true")}}-tags {{if eq .OBFUSCATED "true"}}wails_obfuscated{{if .EXTRA_TAGS}},{{end}}{{end}}{{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l" -ldflags="{{.VERSION_LDFLAG}}"{{else}}-tags production{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s {{.VERSION_LDFLAG}}"{{end}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'
       OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
     env:
@@ -175,9 +176,20 @@ tasks:
         fi
       - cp "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS"
       - cp build/darwin/Info.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents"
+      - task: stamp:plist:version
+        vars:
+          PLIST: "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Info.plist"
+      - bash scripts/check-app-version.sh "{{.BIN_DIR}}/{{.APP_NAME}}.app" "{{.APP_NAME}}" "{{.VERSION}}"
       - cmd: bash scripts/configure-macos-icon.sh "{{.BIN_DIR}}/{{.APP_NAME}}.app"
         platforms: [darwin]
       - task: '{{if eq OS "darwin"}}codesign:adhoc{{else}}codesign:skip{{end}}'
+
+  stamp:plist:version:
+    summary: Writes the app version into a bundle's Info.plist
+    internal: true
+    cmds:
+      - plutil -replace CFBundleShortVersionString -string "{{.VERSION}}" "{{.PLIST}}"
+      - plutil -replace CFBundleVersion -string "{{.VERSION}}" "{{.PLIST}}"
 
   codesign:adhoc:
     summary: Ad-hoc signs the app bundle (macOS only)
@@ -207,6 +219,9 @@ tasks:
         fi
       - cp "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/MacOS"
       - cp "build/darwin/Info.dev.plist" "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/Info.plist"
+      - task: stamp:plist:version
+        vars:
+          PLIST: "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/Info.plist"
       - cmd: bash scripts/configure-macos-icon.sh "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app"
         platforms: [darwin]
       - xattr -cr "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app"

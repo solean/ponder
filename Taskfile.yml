@@ -6,6 +6,10 @@ vars:
   PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "bun"}}'
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
   GOOS: '{{.GOOS | default OS}}'
+  # The app version, read from `info.version` in build/config.yml. The build
+  # stamps it into the binary, the Info.plist, and the User-Agent.
+  VERSION:
+    sh: bash scripts/app-version.sh
 
 includes:
   common: ./build/Taskfile.yml

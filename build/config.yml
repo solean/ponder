@@ -11,6 +11,8 @@ info:
   description: "Private, local-first MTG Arena match tracking and analytics"
   copyright: "© 2026, Ixian Labs LLC"
   comments: "Ponder desktop application"
+  # The app version, and its only copy. The Taskfile build stamps it into the
+  # binary, the bundle's Info.plist, and the HTTP User-Agent. Use x.y.z.
   version: "0.1.0"
   cfBundleIconName: "Ponder"
 

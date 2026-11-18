@@ -220,9 +220,11 @@ wails3 task darwin:package:universal    # bin/Ponder.app for Apple Silicon + Int
 ```
 
 Builds are ad-hoc signed. Product metadata (name, bundle ID, version) lives in
-`build/config.yml`, and the in-app version comes from `internal/version`.
-Override it at build time with
-`-ldflags "-X github.com/solean/ponder/internal/version.Version=x.y.z"`.
+`build/config.yml`. To release a new version, change `info.version` there and
+nowhere else. The build stamps it into the binary, the bundle's `Info.plist`,
+and the User-Agent for Scryfall and 17Lands requests. Then it checks that the
+binary and the plist agree before signing. Builds that skip the Taskfile
+(`go run`, the air dev server) report version `0.0.0-dev`.
 
 ### Command-line tool
 

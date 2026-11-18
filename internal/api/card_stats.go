@@ -13,6 +13,7 @@ import (
 
 	"github.com/solean/ponder/internal/db"
 	"github.com/solean/ponder/internal/model"
+	"github.com/solean/ponder/internal/version"
 )
 
 const (
@@ -226,7 +227,7 @@ func (s *Server) fetchSeventeenLandsCardStats(ctx context.Context, expansion, ev
 		return nil, fmt.Errorf("build 17Lands request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "ponder/0.1 (personal MTGA tracker; daily cached card ratings)")
+	req.Header.Set("User-Agent", version.UserAgent("personal MTGA tracker; daily cached card ratings"))
 
 	res, err := s.httpClient.Do(req)
 	if err != nil {

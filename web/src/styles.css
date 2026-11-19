@@ -1069,38 +1069,6 @@ body.has-wide-deck-curve .app-shell {
   width: min(var(--deck-curve-shell-width, 1520px), calc(100vw - 1rem));
 }
 
-.app-shell::before {
-  content: "";
-  position: absolute;
-  top: -0.6rem;
-  left: 0;
-  right: 0;
-  height: 8rem;
-  border: 1px solid var(--shell-frame);
-  border-bottom: 0;
-  border-radius: 2px 2px 0 0;
-  opacity: 0.6;
-  pointer-events: none;
-  mask: linear-gradient(180deg, #000 0%, transparent 100%);
-}
-
-.app-shell::after {
-  content: "";
-  position: absolute;
-  top: -0.6rem;
-  left: 0;
-  right: 0;
-  height: 1px;
-  pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--accent-glow),
-    var(--accent-glow),
-    transparent
-  );
-}
-
 /* ══════════════════════════════════════════
    TITLEBAR
    ══════════════════════════════════════════ */

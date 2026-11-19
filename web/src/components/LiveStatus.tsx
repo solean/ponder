@@ -7,8 +7,9 @@ import { formatRelativeTime } from "../lib/format";
 import { parseEventName } from "../lib/events";
 import type { RuntimeStatus } from "../lib/types";
 
-function trackerSummary(status: RuntimeStatus | undefined): { state: string; detail: string; live: boolean } {
-  if (!status) return { state: "checking status", detail: "", live: false };
+function trackerSummary(status: RuntimeStatus | undefined, isError: boolean) {
+  if (isError) return { state: "live tracker unknown", detail: "", dotClass: "sync-dot is-unknown" };
+  if (!status) return { state: "checking status", detail: "", dotClass: "sync-dot" };
 
   const lastSyncedAt = [status.lastImport?.completedAt ?? "", status.liveLastTickAt ?? ""]
     .filter(Boolean)
@@ -19,13 +20,13 @@ function trackerSummary(status: RuntimeStatus | undefined): { state: string; det
     return {
       state: "live tracker on",
       detail: lastSyncedAt ? formatRelativeTime(lastSyncedAt) : "waiting for activity",
-      live: true,
+      dotClass: "sync-dot is-live",
     };
   }
   return {
     state: "live tracker off",
     detail: lastSyncedAt ? `synced ${formatRelativeTime(lastSyncedAt)}` : "never synced",
-    live: false,
+    dotClass: "sync-dot",
   };
 }
 
@@ -87,11 +88,11 @@ export function LiveStatus() {
     );
   }
 
-  const tracker = trackerSummary(statusQuery.data);
+  const tracker = trackerSummary(statusQuery.data, statusQuery.isError);
   const playerName = overviewQuery.data?.playerName;
   return (
     <Link className="live-status" to="/settings" title="Open tracking settings">
-      <span className={`sync-dot ${tracker.live ? "is-live" : ""}`} aria-hidden="true" />
+      <span className={tracker.dotClass} aria-hidden="true" />
       {playerName ? <span className="live-status-name">{playerName}</span> : null}
       <span className="live-status-main">{tracker.state}</span>
       {tracker.detail ? <span className="live-status-detail">{tracker.detail}</span> : null}

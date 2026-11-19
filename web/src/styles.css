@@ -9956,6 +9956,12 @@ select option {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--muted) 18%, transparent);
 }
 
+.sync-dot.is-unknown {
+  border: 1px solid var(--muted);
+  background: transparent;
+  box-shadow: none;
+}
+
 .sync-dot.is-live {
   background: var(--win);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--win) 22%, transparent);

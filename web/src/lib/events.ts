@@ -33,6 +33,7 @@ export interface ParsedEvent {
  */
 function classify(normalized: string): string | null {
   if (!normalized) return null;
+  if (normalized.includes("picktwo")) return "Pick Two Draft";
   if (normalized.includes("traddraft") || normalized.includes("traditionaldraft")) return "Traditional Draft";
   if (normalized.includes("quickdraft")) return "Quick Draft";
   if (normalized.includes("premierdraft")) return "Premier Draft";

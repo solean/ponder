@@ -46,6 +46,8 @@ func EventCategory(eventName string) string {
 func classifyEvent(normalized string) string {
 	has := func(part string) bool { return strings.Contains(normalized, part) }
 	switch {
+	case has("picktwo"):
+		return "Pick Two Draft"
 	case has("traddraft") || has("traditionaldraft"):
 		return "Traditional Draft"
 	case has("quickdraft"):

@@ -11,6 +11,7 @@ func TestEventCategory(t *testing.T) {
 		"FIN_Quick_Draft":            "Quick Draft",
 		"TradDraft_FRA_20260929":     "Traditional Draft",
 		"BotDraft_FIN":               "Bot Draft",
+		"PickTwoDraft_FRA_20261001":  "Pick Two Draft",
 		"Draft":                      "Other Draft",
 		"Sealed_TMT_20260313":        "Sealed",
 		"PremierSealed_TMT_20260313": "Premier Sealed",

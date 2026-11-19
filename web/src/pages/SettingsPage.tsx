@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { LoadingLabel, LoadingMessage } from "../components/LoadingMessage";
 import { SettingRow, ToggleRow } from "../components/SettingRow";
 import { PageHeader } from "../components/PageHeader";
 import { StatusMessage } from "../components/StatusMessage";
@@ -501,7 +502,7 @@ export function SettingsPage() {
     return base.sort((a, b) => a - b);
   }, [form.pollIntervalSeconds]);
 
-  if (isLoading) return <StatusMessage>Loading runtime settings…</StatusMessage>;
+  if (isLoading) return <LoadingMessage page>Loading runtime settings…</LoadingMessage>;
   if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
   if (!data) return <StatusMessage>No runtime status available.</StatusMessage>;
 
@@ -566,7 +567,7 @@ export function SettingsPage() {
       ]
         .filter(Boolean)
         .join(" · ")
-    : "Loading…";
+    : aiStatusQuery.isLoading ? <LoadingLabel>Loading…</LoadingLabel> : "Usage unavailable";
 
   return (
     <div className="stack-lg">
@@ -1001,8 +1002,10 @@ export function SettingsPage() {
                         output totals.
                       </p>
                     </>
+                  ) : aiStatusQuery.isLoading ? (
+                    <LoadingMessage className="settings-row-help">Loading token usage…</LoadingMessage>
                   ) : (
-                    <p className="settings-row-help">Loading token usage…</p>
+                    <p className="settings-row-help">Token usage is unavailable.</p>
                   )}
                 </div>
               </details>

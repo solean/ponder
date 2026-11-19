@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
+import { LoadingMessage } from "../components/LoadingMessage";
 import { EventLabel } from "../components/EventLabel";
 import { PageHeader } from "../components/PageHeader";
 import { StatusMessage } from "../components/StatusMessage";
@@ -295,7 +296,7 @@ export function EconomyPage() {
     };
   }, [chartPoints, mode]);
 
-  if (isLoading) return <StatusMessage>Loading economy data…</StatusMessage>;
+  if (isLoading) return <LoadingMessage page>Loading economy data…</LoadingMessage>;
   if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
 
   const latest = data?.latest;

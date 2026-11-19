@@ -2,6 +2,7 @@ import { useId } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
+import { LoadingMessage } from "../components/LoadingMessage";
 import { ContextualLink } from "../components/Breadcrumbs";
 import { DraftAnalyticsPanel } from "../components/DraftAnalyticsPanel";
 import { DraftPerformancePanel } from "../components/DraftPerformancePanel";
@@ -302,7 +303,7 @@ function DraftsOverview({
   setLookup: SetLookup;
   filter: DraftPerformanceFilter;
 }) {
-  if (draftsQuery.isLoading) return <StatusMessage>Loading drafts…</StatusMessage>;
+  if (draftsQuery.isLoading) return <LoadingMessage page>Loading drafts…</LoadingMessage>;
   if (draftsQuery.error) return <StatusMessage tone="error">{(draftsQuery.error as Error).message}</StatusMessage>;
 
   const drafts = sortDraftsNewestFirst(draftsQuery.data ?? []);

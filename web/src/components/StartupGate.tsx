@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { LoadingMark } from "./LoadingMessage";
 import { api } from "../lib/api";
 
 export function StartupGate({ children }: { children: ReactNode }) {
@@ -35,7 +36,7 @@ export function StartupGate({ children }: { children: ReactNode }) {
           </>
         ) : (
           <div role="status" aria-live="polite">
-            <span className="startup-spinner" aria-hidden="true" />
+            <LoadingMark />
             <h1>Starting Ponder…</h1>
             <p>Getting things ready.</p>
           </div>

@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 
 import { createPortal } from "react-dom";
 import { useQueries } from "@tanstack/react-query";
 
+import { LoadingLabel } from "./LoadingMessage";
 import { CardStatLine, CardStatsSource, type DraftCardStats } from "./CardStats";
 import { draftAlternativeCards, sortPackByRarity, type DraftPickLogPick } from "../lib/draftReport";
 import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
@@ -34,7 +35,7 @@ function DraftPackCard({ card, picked, preview, isPending, cardStats }: {
         {!imageLoaded || imageFailed ? (
           <span className="draft-pack-card-placeholder">
             <span>{name}</span>
-            <span className="draft-pack-card-status">{loading ? "Loading image…" : "Image unavailable"}</span>
+            <span className="draft-pack-card-status">{loading ? <LoadingLabel>Loading image…</LoadingLabel> : "Image unavailable"}</span>
           </span>
         ) : null}
         {imageURL && !imageFailed ? (

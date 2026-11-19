@@ -1,6 +1,7 @@
 import { useMemo, type MouseEvent } from "react";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
+import { LoadingMessage } from "./LoadingMessage";
 import { api } from "../lib/api";
 import { formatRelativeTime, pct } from "../lib/format";
 import { SEVENTEEN_LANDS_FORMAT_LABELS, SEVENTEEN_LANDS_USER_GROUP_LABELS } from "../lib/seventeenLands";
@@ -108,7 +109,8 @@ function openExternal(event: MouseEvent<HTMLAnchorElement>) {
 export function CardStatsSource({ stats }: { stats: DraftCardStats }) {
   const { query } = stats;
   if (query.isPending) {
-    return <p className="card-stats-source">Loading 17Lands card ratings…</p>;
+    if (query.fetchStatus === "idle") return null;
+    return <LoadingMessage className="card-stats-source">Loading 17Lands card ratings…</LoadingMessage>;
   }
   if (query.isError) {
     return <p className="card-stats-source">17Lands card ratings are unavailable right now.</p>;

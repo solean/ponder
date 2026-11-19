@@ -1,3 +1,4 @@
+import { LoadingMessage } from "../LoadingMessage";
 import type { useMatchReplay } from "../../lib/replay/useMatchReplay";
 import type { MatchReplayView } from "../../lib/replay/useMatchReplayView";
 import { GameReviewPanel } from "../GameReviewPanel";
@@ -33,7 +34,7 @@ export function MatchReviewSection({
         <StatusMessage tone="error">{replayQuery.error.message}</StatusMessage>
       ) : null}
       {replayQuery.isPending ? (
-        <StatusMessage>Loading replay frames for review…</StatusMessage>
+        <LoadingMessage>Loading replay frames for review…</LoadingMessage>
       ) : activeTimelineGameNumber !== null ? (
         <>
           {showTimelineGameTabs ? (

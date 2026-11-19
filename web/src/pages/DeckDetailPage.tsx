@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
+import { LoadingMessage } from "../components/LoadingMessage";
 import { CardPreviewName } from "../components/CardPreviewName";
 import { CardStatLine, CardStatsSource, useDraftCardStats } from "../components/CardStats";
 import { floatingCardPreviewPosition as floatingPopoverPosition } from "../lib/cardPreviewPosition";
@@ -1721,7 +1722,7 @@ export function DeckDetailPage() {
         (cardStats.query.data?.status === "ok" || cardStats.query.isError) ? (
           <CardStatsSource stats={cardStats} />
         ) : null}
-        {isCardMetadataLoading ? <StatusMessage>Loading deck card details…</StatusMessage> : null}
+        {isCardMetadataLoading ? <LoadingMessage>Loading deck card details…</LoadingMessage> : null}
         </section>
       ) : null}
 
@@ -1751,7 +1752,7 @@ export function DeckDetailPage() {
             <DeckPrimerPanel deckId={deckId} cards={cards} />
           ) : (
             <section className="panel">
-              <StatusMessage>Loading guide…</StatusMessage>
+              <LoadingMessage>Loading guide…</LoadingMessage>
             </section>
           )}
         </div>

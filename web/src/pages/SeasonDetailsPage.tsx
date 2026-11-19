@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, type KeyboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { LoadingMessage } from "../components/LoadingMessage";
 import { PageHeader } from "../components/PageHeader";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
@@ -256,7 +257,7 @@ export function SeasonDetailsPage() {
     return [...bySeason.values()].sort((left, right) => right.season - left.season);
   }, [allMatches]);
 
-  if (isLoading) return <StatusMessage>Loading season details…</StatusMessage>;
+  if (isLoading) return <LoadingMessage page>Loading season details…</LoadingMessage>;
   if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
 
   const seasonScopeLabel =

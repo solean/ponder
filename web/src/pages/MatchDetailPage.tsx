@@ -1,3 +1,4 @@
+import { LoadingMessage } from "../components/LoadingMessage";
 import { readReplayGame, saveReplayGame } from "../lib/replay/position";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useState, type KeyboardEvent } from "react";
@@ -159,7 +160,7 @@ function MatchDetailContent() {
 
   if (!isValidMatchID)
     return <StatusMessage tone="error">Invalid match id.</StatusMessage>;
-  if (query.isLoading) return <StatusMessage>Loading match…</StatusMessage>;
+  if (query.isLoading) return <LoadingMessage page>Loading match…</LoadingMessage>;
   if (query.error)
     return (
       <StatusMessage tone="error">

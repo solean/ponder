@@ -1,3 +1,4 @@
+import { LoadingMessage } from "./LoadingMessage";
 import { OverlayManaPanel } from "./OverlayManaPanel";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -108,7 +109,7 @@ export function OverlaySettingsPanel({ id, onStatusChange }: { id?: string; onSt
           </div>
         ) : null}
       </div>
-      {query.isPending ? <StatusMessage>Loading overlay settings…</StatusMessage> : query.isError ? (
+      {query.isPending ? <LoadingMessage>Loading overlay settings…</LoadingMessage> : query.isError ? (
         <><StatusMessage tone="error">{(query.error as Error).message}</StatusMessage><button className="settings-button" type="button" onClick={() => void query.refetch()}>Try again</button></>
       ) : (
         <>

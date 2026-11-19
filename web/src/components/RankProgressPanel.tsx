@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useId, useMemo, type KeyboardEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
+import { LoadingMessage } from "./LoadingMessage";
 import { api } from "../lib/api";
 import { eventDisplayName, parseEventName } from "../lib/events";
 import { formatDateTime } from "../lib/format";
@@ -466,7 +467,7 @@ export function RankProgressPanel() {
         role="region"
         aria-labelledby={headingId}
       >
-        {isLoading ? <p className="state">Loading ladder data…</p> : null}
+        {isLoading ? <LoadingMessage>Loading ladder data…</LoadingMessage> : null}
         {error ? <p className="state error">{(error as Error).message}</p> : null}
         {!isLoading && !error && !readyState ? (
           <p className="state">{emptyStateMessage(seasonView)}</p>

@@ -1,5 +1,6 @@
 import { useQueries } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { LoadingMessage } from "../LoadingMessage";
 import { cardPreviewQueryKey } from "../../lib/replay/cardPreviewQuery";
 import type { CardRarity } from "../../lib/scryfall";
 import { fetchCardPreview } from "../../lib/scryfall";
@@ -213,7 +214,7 @@ export function OpponentCardsPanel({
         </div>
       )}
       {isOpponentCardMetadataLoading ? (
-        <StatusMessage>Loading card previews and mana details…</StatusMessage>
+        <LoadingMessage>Loading card previews and mana details…</LoadingMessage>
       ) : null}
       <p className="analytics-method-note">
         Copies show the most seen at once during the match — a lower bound on

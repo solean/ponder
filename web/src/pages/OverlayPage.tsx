@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Reac
 import { createPortal } from "react-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
+import { LoadingLabel } from "../components/LoadingMessage";
 import { OverlayManaPanel } from "../components/OverlayManaPanel";
 import { ManaSymbol } from "../components/ManaSymbol";
 import { CardPreviewName } from "../components/CardPreviewName";
@@ -265,10 +266,10 @@ function OpponentPanel({ live, hoveredCard }: { live: LiveMatch; hoveredCard: st
   );
 }
 
-function draftRatingsSource(eventName: string, stats: DraftCardStats): string {
+function draftRatingsSource(eventName: string, stats: DraftCardStats) {
   const { query } = stats;
   if (!eventName) return "Event not logged yet · no ratings";
-  if (query.isPending) return "Loading 17Lands ratings…";
+  if (query.isPending) return <LoadingLabel>Loading 17Lands ratings…</LoadingLabel>;
   if (query.isError) return "17Lands ratings unavailable";
   const data = query.data;
   if (data.status !== "ok") return "No 17Lands ratings for this event";

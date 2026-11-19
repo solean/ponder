@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { LoadingMessage } from "./LoadingMessage";
 import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
 
 import { floatingCardPreviewPosition } from "../lib/cardPreviewPosition";
@@ -82,7 +83,7 @@ function CardPreviewPopover({
   return createPortal(
     <div className="card-preview-popover card-preview-popover-floating" role="tooltip" style={position}>
       {previewQuery.isLoading ? (
-        <p className="card-preview-status">Loading preview…</p>
+        <LoadingMessage className="card-preview-status">Loading preview…</LoadingMessage>
       ) : previewQuery.data ? (
         <img src={previewQuery.data.imageUrl} alt={previewQuery.data.name} loading="lazy" />
       ) : (

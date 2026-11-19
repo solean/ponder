@@ -1,3 +1,4 @@
+import { LoadingMessage } from "../LoadingMessage";
 import { clearReplayKind, readReplayKind, saveReplayGame } from "../../lib/replay/position";
 import { Link } from "react-router-dom";
 import type { useMatchReplay } from "../../lib/replay/useMatchReplay";
@@ -116,7 +117,7 @@ export function MatchReplayPanel({
         ) : null}
         {showsFrameBoard ? null : recordingNode}
         {positionError ? <StatusMessage tone="error">{positionError} <Link to={`/matches/${matchId}`} onClick={() => { const game = timelineGameNumbers[0]; if (game !== undefined) { clearReplayKind(matchId, game); saveReplayGame(matchId, game); setSelectedTimelineGameNumber(game); } }}>Start from the first game</Link></StatusMessage> : replayQuery.isPending && !hasPlayableReplay ? (
-          <StatusMessage>Checking replay recording…</StatusMessage>
+          <LoadingMessage>Checking replay recording…</LoadingMessage>
         ) : (
           <div
             id={showTimelineGameTabs ? activeTimelineGamePanelID : undefined}
@@ -152,7 +153,7 @@ export function MatchReplayPanel({
           </div>
         )}
         {isBoardCardPreviewLoading ? (
-          <StatusMessage>Loading replay card art…</StatusMessage>
+          <LoadingMessage>Loading replay card art…</LoadingMessage>
         ) : null}
       </div>
     </section>

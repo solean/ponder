@@ -12,7 +12,8 @@ import { copyTextToClipboard } from "../lib/clipboard";
 import { APP_NAME } from "../lib/branding";
 import { SEVENTEEN_LANDS_FORMAT_LABELS, SEVENTEEN_LANDS_USER_GROUP_LABELS } from "../lib/seventeenLands";
 import { formatBytes, formatRelativeTime, formatShortDateTime, shortenHomePath } from "../lib/format";
-import { useThemeControls, type ColorScheme, type ModePreference } from "../lib/theme";
+import { CHART_THEME_TOKENS } from "../lib/chartTheme";
+import { COLOR_SCHEMES, SCHEME_LABELS, THEME_COLORS, useThemeControls, type ModePreference } from "../lib/theme";
 import type {
   AiModelOption,
   AiProvider,
@@ -128,14 +129,6 @@ const modeOptions: Array<{ value: ModePreference; label: string; icon: () => JSX
   { value: "dark", label: "Dark", icon: MoonIcon },
   { value: "light", label: "Light", icon: SunIcon },
   { value: "system", label: "System", icon: MonitorIcon },
-];
-
-/** Each scheme's dark background and accent, for its swatch. */
-const schemeOptions: Array<{ value: ColorScheme; label: string; swatch: [string, string] }> = [
-  { value: "bamboo", label: "Bamboo", swatch: ["#1c1e1b", "#8fb573"] },
-  { value: "ember", label: "Ember", swatch: ["#020101", "#ff8a24"] },
-  { value: "dimir", label: "Dimir Ink", swatch: ["#020507", "#37b7e0"] },
-  { value: "steel", label: "Cold Steel", swatch: ["#040507", "#8ab2dd"] },
 ];
 
 const sections = [
@@ -347,7 +340,7 @@ function syncForm(status: RuntimeStatus): RuntimeConfig {
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
-  const { modePreference, setModePreference, scheme, setScheme } = useThemeControls();
+  const { mode, modePreference, setModePreference, scheme, setScheme } = useThemeControls();
   const { data, isLoading, error } = useQuery({
     queryKey: runtimeStatusKey,
     queryFn: api.runtimeStatus,
@@ -1043,20 +1036,20 @@ export function SettingsPage() {
               </SettingRow>
               <SettingRow label={<span id="settings-scheme-label">Colour scheme</span>}>
                 <div className="settings-swatches" role="radiogroup" aria-labelledby="settings-scheme-label">
-                  {schemeOptions.map((option) => (
+                  {COLOR_SCHEMES.map((option) => (
                     <button
-                      key={option.value}
+                      key={option}
                       type="button"
                       role="radio"
-                      aria-checked={scheme === option.value}
-                      className={`settings-swatch${scheme === option.value ? " is-active" : ""}`}
-                      onClick={() => setScheme(option.value)}
+                      aria-checked={scheme === option}
+                      className={`settings-swatch${scheme === option ? " is-active" : ""}`}
+                      onClick={() => setScheme(option)}
                     >
                       <span className="settings-swatch-chip" aria-hidden="true">
-                        <span style={{ background: option.swatch[0] }} />
-                        <span style={{ background: option.swatch[1] }} />
+                        <span style={{ background: THEME_COLORS[option][mode] }} />
+                        <span style={{ background: CHART_THEME_TOKENS[`${option}-${mode}`].accent }} />
                       </span>
-                      {option.label}
+                      {SCHEME_LABELS[option]}
                     </button>
                   ))}
                 </div>

@@ -20,6 +20,25 @@ export type ChartThemeTokens = {
   tooltipText: string;
 };
 
+// Six-digit palette colors can carry an alpha byte for canvas fills and strokes.
+function iconChartTheme(palette: Pick<ChartThemeTokens,
+  "accent" | "contrast" | "axisText" | "tooltipBackground" | "tooltipText"
+>): ChartThemeTokens {
+  return {
+    ...palette,
+    accentFaint: palette.accent + "05",
+    accentGlow: palette.accent + "33",
+    accentSoft: palette.accent + "1a",
+    axisLine: palette.axisText + "42",
+    hoverBorder: palette.tooltipText,
+    pointBorder: palette.tooltipBackground,
+    promotion: palette.contrast,
+    promotionGlow: palette.contrast + "5c",
+    splitLine: palette.axisText + "14",
+    tooltipBorder: palette.axisText + "66",
+  };
+}
+
 export const CHART_THEME_TOKENS: Record<`${ColorScheme}-${ThemeMode}`, ChartThemeTokens> = {
   "ember-dark": {
     accent: "#ff8a24",
@@ -157,4 +176,20 @@ export const CHART_THEME_TOKENS: Record<`${ColorScheme}-${ThemeMode}`, ChartThem
     tooltipBorder: "rgba(122, 124, 96, 0.4)",
     tooltipText: "#3a4238",
   },
+  "white-dark": iconChartTheme({
+    accent: "#88aaff", contrast: "#f9be72", axisText: "#c1cad9",
+    tooltipBackground: "#242a36", tooltipText: "#f5f7ff",
+  }),
+  "white-light": iconChartTheme({
+    accent: "#245cdb", contrast: "#99500c", axisText: "#414f65",
+    tooltipBackground: "#ffffff", tooltipText: "#172238",
+  }),
+  "charcoal-dark": iconChartTheme({
+    accent: "#f3f3ef", contrast: "#90bbff", axisText: "#ccccc7",
+    tooltipBackground: "#30302f", tooltipText: "#f6f6f3",
+  }),
+  "charcoal-light": iconChartTheme({
+    accent: "#363635", contrast: "#235cad", axisText: "#3b3b39",
+    tooltipBackground: "#ffffff", tooltipText: "#20201f",
+  }),
 };

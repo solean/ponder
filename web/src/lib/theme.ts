@@ -5,9 +5,17 @@ export type ThemeMode = "dark" | "light";
 export type ModePreference = ThemeMode | "system";
 
 /** Palette identity applied on top of the mode. */
-export type ColorScheme = "ember" | "dimir" | "steel" | "bamboo";
+export const COLOR_SCHEMES = ["bamboo", "ember", "dimir", "steel", "white", "charcoal"] as const;
+export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 
-export const COLOR_SCHEMES: readonly ColorScheme[] = ["ember", "dimir", "steel", "bamboo"];
+export const SCHEME_LABELS: Record<ColorScheme, string> = {
+  bamboo: "Bamboo",
+  ember: "Ember",
+  dimir: "Dimir Ink",
+  steel: "Cold Steel",
+  white: "Ponder White",
+  charcoal: "Ponder Charcoal",
+};
 
 export type ThemeContextValue = {
   /** Resolved appearance actually applied to the document. */
@@ -55,6 +63,7 @@ export function readStoredScheme(): ColorScheme {
   if (typeof window === "undefined") return "bamboo";
   try {
     const stored = window.localStorage.getItem(SCHEME_STORAGE_KEY);
+    if (stored === "blue") return "white";
     if ((COLOR_SCHEMES as readonly string[]).includes(stored ?? "")) {
       return stored as ColorScheme;
     }
@@ -71,11 +80,13 @@ export function readSystemTheme(): ThemeMode {
   return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
 
-const THEME_COLORS: Record<ColorScheme, Record<ThemeMode, string>> = {
+export const THEME_COLORS: Record<ColorScheme, Record<ThemeMode, string>> = {
   ember: { dark: "#020101", light: "#f4ece1" },
   dimir: { dark: "#020507", light: "#f7f9fa" },
   steel: { dark: "#040608", light: "#eef0f3" },
   bamboo: { dark: "#1c1e1b", light: "#fafaf0" },
+  white: { dark: "#191e29", light: "#fafbff" },
+  charcoal: { dark: "#191919", light: "#fcfcfb" },
 };
 
 export function applyTheme(mode: ThemeMode, scheme: ColorScheme) {

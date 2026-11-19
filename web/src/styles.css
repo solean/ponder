@@ -753,6 +753,117 @@
   --scan-sweep: rgba(39, 133, 11, 0.02);
 }
 
+/* Palettes from the White and Charcoal Ponder icons. */
+:root[data-theme="dark"][data-scheme="white"] {
+  --bg: #191e29;
+  --surface-strong: #242a36;
+  --surface-faint: #202530;
+  --text: #f5f7ff;
+  --muted: #a3aebf;
+  --muted-strong: #c1cad9;
+  --accent: #88aaff;
+  --accent-strong: #7199fa;
+  --accent-contrast: #101a32;
+}
+
+:root[data-theme="light"][data-scheme="white"] {
+  --bg: #fafbff;
+  --surface-strong: #ffffff;
+  --surface-faint: #f0f3fa;
+  --text: #172238;
+  --muted: #59667c;
+  --muted-strong: #414f65;
+  --accent: #245cdb;
+  --accent-strong: #1746b9;
+  --accent-contrast: #ffffff;
+}
+
+:root[data-theme="dark"][data-scheme="charcoal"] {
+  --bg: #191919;
+  --surface-strong: #30302f;
+  --surface-faint: #242423;
+  --text: #f6f6f3;
+  --muted: #adadaa;
+  --muted-strong: #ccccc7;
+  --accent: #f3f3ef;
+  --accent-strong: #cececb;
+  --accent-contrast: #242423;
+}
+
+:root[data-theme="light"][data-scheme="charcoal"] {
+  --bg: #fcfcfb;
+  --surface-strong: #ffffff;
+  --surface-faint: #f6f6f4;
+  --text: #20201f;
+  --muted: #545451;
+  --muted-strong: #3b3b39;
+  --accent: #363635;
+  --accent-strong: #232322;
+  --accent-contrast: #fafaf8;
+}
+
+:root:is([data-scheme="white"], [data-scheme="charcoal"]) {
+  --bg-mid: color-mix(in srgb, var(--bg) 80%, var(--surface-strong));
+  --bg-end: var(--surface-faint);
+  --bg-orb-a: color-mix(in srgb, var(--accent) 7%, transparent);
+  --bg-orb-b: color-mix(in srgb, var(--accent) 4%, transparent);
+  --veil-orb: var(--bg-orb-b);
+  --veil-line: color-mix(in srgb, var(--accent) 2%, transparent);
+  --grid-line: color-mix(in srgb, var(--muted) 4%, transparent);
+
+  --surface: color-mix(in srgb, var(--surface-strong) 90%, transparent);
+  --line: color-mix(in srgb, var(--muted) 22%, transparent);
+  --line-strong: color-mix(in srgb, var(--muted) 44%, transparent);
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 20%, transparent);
+  --link: var(--accent);
+  --link-hover: var(--accent-strong);
+  --link-hover-border: var(--tab-active-border);
+  --text-soft: var(--text);
+  --kicker: var(--muted-strong);
+
+  --tabs-bg: var(--surface);
+  --tab-hover-border: var(--line-strong);
+  --tab-active-border: color-mix(in srgb, var(--accent) 60%, transparent);
+  --tab-active-bg-a: var(--accent-soft);
+  --tab-active-bg-b: var(--bg-orb-b);
+  --tab-active-shine: var(--accent-soft);
+  --shell-frame: var(--line);
+  --corner-mark: var(--line-strong);
+  --card-accent-glow: var(--accent-soft);
+  --metric-neutral-corner: var(--line-strong);
+  --metric-neutral-border: var(--line-strong);
+  --metric-neutral-text: var(--muted-strong);
+
+  --panel-inner-a: var(--surface-strong);
+  --panel-inner-b: var(--surface-faint);
+  --list-bg-a: var(--surface);
+  --list-bg-b: var(--surface-faint);
+  --list-hover-border: var(--tab-active-border);
+  --list-hover-bg-a: color-mix(in srgb, var(--accent) 5%, var(--surface-strong));
+  --list-hover-bg-b: color-mix(in srgb, var(--accent) 6%, var(--surface-faint));
+  --pill-bg: var(--surface-faint);
+  --table-wrap-border: var(--line);
+  --table-row-border: var(--line);
+  --table-head-text: var(--muted-strong);
+  --table-head-bg-a: var(--surface-strong);
+  --table-head-bg-b: var(--surface-faint);
+  --table-head-solid: var(--surface-faint);
+  --table-row-hover: var(--bg-orb-a);
+  --deck-card-bg-a: var(--surface);
+  --deck-card-bg-b: var(--surface-faint);
+  --skeleton-base: var(--accent-soft);
+  --skeleton-highlight: var(--accent-glow);
+  --card-trigger-hover: var(--link-hover);
+  --popover-bg: var(--surface-strong);
+  --popover-card-bg: var(--surface-faint);
+  --focus-ring: var(--accent);
+  --tap-highlight: var(--accent-glow);
+  --shadow-lg: 0 24px 60px color-mix(in srgb, #101318 22%, transparent);
+  --shadow-md: 0 12px 30px color-mix(in srgb, #101318 14%, transparent);
+  --scan-sweep: var(--veil-line);
+}
+
 :root {
   --page-base-background:
     radial-gradient(
@@ -9044,6 +9155,7 @@ select option {
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2393b2c4' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 
+:root:is([data-scheme="white"], [data-scheme="charcoal"]),
 :root[data-scheme="steel"] {
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a9b4c1' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
 }
@@ -9056,6 +9168,7 @@ select option {
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2333495a' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 
+:root[data-theme="light"]:is([data-scheme="white"], [data-scheme="charcoal"]),
 :root[data-theme="light"][data-scheme="steel"] {
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23414b58' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
 }

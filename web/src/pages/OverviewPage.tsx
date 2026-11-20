@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
+import { LoadingMessage } from "../components/LoadingMessage";
 import { EventLabel } from "../components/EventLabel";
 import { MatchDeckColors } from "../components/MatchDeckColors";
 import { RankProgressPanel } from "../components/RankProgressPanel";
@@ -550,7 +551,7 @@ export function OverviewPage() {
   const weekdays = useMemo(() => weekdayPerformance(allMatches), [allMatches]);
   const timeSlots = useMemo(() => timeOfDayPerformance(allMatches), [allMatches]);
 
-  if (isLoading) return <StatusMessage>Loading overview…</StatusMessage>;
+  if (isLoading) return <LoadingMessage page>Loading overview…</LoadingMessage>;
   if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
   if (!data) return <StatusMessage>No data.</StatusMessage>;
 
@@ -704,7 +705,7 @@ export function OverviewPage() {
           </div>
         </div>
         {activityQuery.isPending ? (
-          <StatusMessage>Loading activity…</StatusMessage>
+          <LoadingMessage>Loading activity…</LoadingMessage>
         ) : activityQuery.error ? (
           <StatusMessage tone="error">Unable to load activity: {(activityQuery.error as Error).message}</StatusMessage>
         ) : (

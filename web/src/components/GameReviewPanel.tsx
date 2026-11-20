@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown, { type Components } from "react-markdown";
 
+import { LoadingLabel } from "./LoadingMessage";
 import { CardPreviewName } from "./CardPreviewName";
 import { api, generateGameReview } from "../lib/api";
 import { primerCardIdFromHref, remarkPrimerCardNames, type PrimerCard } from "../lib/primerCards";
@@ -161,7 +162,7 @@ export function GameReviewPanel({
             Reviewing game {gameNumber} with {statusQuery.data?.providerName ?? "AI"}
             {modelName ? ` (${modelName})` : ""}…
           </div>
-          {streamText ? <pre>{streamText}</pre> : <div className="ai-content-stream-note">Waiting for response…</div>}
+          {streamText ? <pre>{streamText}</pre> : <div className="ai-content-stream-note"><LoadingLabel>Waiting for response…</LoadingLabel></div>}
           <div ref={streamEndRef} />
         </div>
       ) : review ? (

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
+import { LoadingMessage } from "./LoadingMessage";
 import { ContextualLink } from "./Breadcrumbs";
 import { DeckCurve } from "./DeckCurve";
 import { StatusMessage } from "./StatusMessage";
@@ -148,7 +149,7 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
       </div>
 
       {decksQuery.isLoading || candidateQueries.some((query) => query.isPending) ? (
-        <StatusMessage>Loading submitted deck…</StatusMessage>
+        <LoadingMessage>Loading submitted deck…</LoadingMessage>
       ) : !deckSummary ? (
         <StatusMessage>
           Arena has not reported a submitted deck for this draft yet.
@@ -156,7 +157,7 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
       ) : (
         <>
           <DeckCurve title="Main deck curve" cards={curveCards} />
-          {isMetadataLoading ? <StatusMessage>Loading card metadata…</StatusMessage> : null}
+          {isMetadataLoading ? <LoadingMessage>Loading card metadata…</LoadingMessage> : null}
           <p className="analytics-method-note">
             Compared against the deck's current list; later edits update this summary too.
           </p>

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
+import { LoadingMessage } from "../components/LoadingMessage";
 import { ManaSymbol } from "../components/ManaSymbol";
 import { DeckColorIdentity } from "../components/MatchDeckColors";
 import { PageHeader } from "../components/PageHeader";
@@ -303,7 +304,7 @@ export function DecksPage() {
     setSearchParams(deckListParams(filters, next), { replace: true });
   }
 
-  if (isLoading) return <StatusMessage>Loading decks…</StatusMessage>;
+  if (isLoading) return <LoadingMessage page>Loading decks…</LoadingMessage>;
   if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
 
   const filtersActive = hasActiveDeckFilters(filters);

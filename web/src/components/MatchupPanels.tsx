@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { LoadingMessage } from "./LoadingMessage";
 import { ContextualLink } from "./Breadcrumbs";
 import { CardPreviewName } from "./CardPreviewName";
 import { DeckColorIdentity } from "./MatchDeckColors";
@@ -204,7 +205,7 @@ function MatchupRowDetail({
       </div>
 
       {refsQuery.isLoading ? (
-        <StatusMessage>Loading matches…</StatusMessage>
+        <LoadingMessage>Loading matches…</LoadingMessage>
       ) : refsQuery.error ? (
         <StatusMessage tone="error">{(refsQuery.error as Error).message}</StatusMessage>
       ) : matchRefs.length === 0 ? (
@@ -433,7 +434,7 @@ export function LimitedMatchupsPanel({
   };
 
   if (query.isLoading) {
-    return null;
+    return emptyMessage ? <LoadingMessage page>Loading set matchups…</LoadingMessage> : null;
   }
   if (query.error) {
     return (

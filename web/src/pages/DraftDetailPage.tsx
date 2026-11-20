@@ -1,6 +1,7 @@
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
+import { LoadingMessage } from "../components/LoadingMessage";
 import { useBreadcrumbLabel } from "../components/Breadcrumbs";
 import { useDraftCardStats } from "../components/CardStats";
 import { DraftPickLog } from "../components/DraftPickLog";
@@ -36,7 +37,7 @@ export function DraftDetailPage() {
     return <StatusMessage tone="error">Invalid draft id.</StatusMessage>;
   }
   if (sessionsQuery.isLoading || picksQuery.isLoading) {
-    return <StatusMessage>Loading draft report…</StatusMessage>;
+    return <LoadingMessage page>Loading draft report…</LoadingMessage>;
   }
   if (sessionsQuery.error) {
     return <StatusMessage tone="error">{(sessionsQuery.error as Error).message}</StatusMessage>;

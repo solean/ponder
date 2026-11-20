@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { LoadingMessage } from "../LoadingMessage";
 import { formatDateTime } from "../../lib/format";
 import {
   boardPlayMeta,
@@ -232,7 +233,7 @@ export function CardPreviewName({ card }: { card: PreviewCard }) {
               role="tooltip"
             >
               {previewQuery.isLoading ? (
-                <p className="card-preview-status">Loading preview…</p>
+                <LoadingMessage className="card-preview-status">Loading preview…</LoadingMessage>
               ) : previewQuery.data ? (
                 <img
                   src={previewQuery.data.imageUrl}

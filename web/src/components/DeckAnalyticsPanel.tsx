@@ -1,6 +1,7 @@
 import { useId, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { LoadingMessage } from "./LoadingMessage";
 import { ContextualLink } from "./Breadcrumbs";
 import { CardPreviewName } from "./CardPreviewName";
 import { EventLabel } from "./EventLabel";
@@ -554,7 +555,7 @@ function DrillDownSection({
         </button>
       </div>
       {query.isLoading ? (
-        <StatusMessage>Loading games…</StatusMessage>
+        <LoadingMessage>Loading games…</LoadingMessage>
       ) : query.error ? (
         <StatusMessage tone="error">{(query.error as Error).message}</StatusMessage>
       ) : rows.length === 0 ? (
@@ -725,7 +726,7 @@ export function PerformanceAnalyticsPanel({
         {error ? (
           <StatusMessage tone="error">{error.message}</StatusMessage>
         ) : (
-          <StatusMessage>Deriving performance analytics…</StatusMessage>
+          <LoadingMessage>Deriving performance analytics…</LoadingMessage>
         )}
       </section>
     );

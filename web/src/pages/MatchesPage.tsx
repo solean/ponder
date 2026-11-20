@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable, type Row } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
+import { LoadingMessage } from "../components/LoadingMessage";
 import { ContextualLink } from "../components/Breadcrumbs";
 import { EventLabel } from "../components/EventLabel";
 import { DeckColorIdentity, MatchDeckColors } from "../components/MatchDeckColors";
@@ -438,7 +439,7 @@ export function MatchesPage() {
     openMatchDetails(matchId);
   }
 
-  if (isLoading) return <StatusMessage>Loading matches…</StatusMessage>;
+  if (isLoading) return <LoadingMessage page>Loading matches…</LoadingMessage>;
   if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
 
   const filtersActive = hasActiveFilters(filters);

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown, { type Components } from "react-markdown";
 
+import { LoadingMessage } from "./LoadingMessage";
 import { CardPreviewName } from "./CardPreviewName";
 import { api, generateDeckPrimer } from "../lib/api";
 import { primerCardIdFromHref, remarkPrimerCardNames, type PrimerCard } from "../lib/primerCards";
@@ -152,7 +153,7 @@ export function DeckPrimerPanel({ deckId, cards }: { deckId: number; cards: read
             Generating with {statusQuery.data?.providerName ?? "AI"}
             {modelName ? ` (${modelName})` : ""}…
           </div>
-          {streamText ? <pre>{streamText}</pre> : <div className="ai-content-stream-note">Waiting for response…</div>}
+          {streamText ? <pre>{streamText}</pre> : <LoadingMessage className="ai-content-stream-note">Waiting for response…</LoadingMessage>}
           <div ref={streamEndRef} />
         </div>
       ) : primer ? (

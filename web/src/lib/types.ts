@@ -900,6 +900,8 @@ export type RuntimeStatus = {
   previousLogPath?: string;
   activeLogPathExists: boolean;
   previousLogPathExists: boolean;
+  /** From the active log's header; absent until Arena has written it. */
+  detailedLogs?: "enabled" | "disabled";
   liveRunning: boolean;
   liveStartedAt?: string;
   liveLastTickAt?: string;

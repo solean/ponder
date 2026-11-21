@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
 import { LoadingMessage } from "../components/LoadingMessage";
+import { DetailedLogsHelpLink } from "../components/DetailedLogsNotice";
 import { EventLabel } from "../components/EventLabel";
 import { MatchDeckColors } from "../components/MatchDeckColors";
 import { RankProgressPanel } from "../components/RankProgressPanel";
@@ -47,8 +48,6 @@ const ACTIVITY_DAYS = 365;
 const ACTIVITY_WIN_RATE_KEY = "ponder.activityColorByWinRate";
 const currentActivityCalendar = () =>
   `${new Date().toDateString()}|${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
-const MTGA_DETAILED_LOGS_HELP_URL =
-  "https://mtgarena-support.wizards.com/hc/en-us/articles/360000726823-Creating-Log-Files-on-PC-Mac-Steam";
 
 // A split bar grows from the 50% mark; SPLIT_BAR_RANGE points either way fills
 // its half, so a 51% and a 62% split no longer look alike.
@@ -572,23 +571,7 @@ export function OverviewPage() {
             Start playing games while Ponder is tracking. Your matches, decks, drafts, and rank history will appear
             here automatically.
           </p>
-          <a
-            className="text-link"
-            href={MTGA_DETAILED_LOGS_HELP_URL}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(event) => {
-              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-                return;
-              }
-              event.preventDefault();
-              void api.openExternalURL(MTGA_DETAILED_LOGS_HELP_URL).catch(() => {
-                window.open(MTGA_DETAILED_LOGS_HELP_URL, "_blank", "noopener,noreferrer");
-              });
-            }}
-          >
-            How to enable Detailed Logs in MTGA
-          </a>
+          <DetailedLogsHelpLink />
         </section>
       </div>
     );

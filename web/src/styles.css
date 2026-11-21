@@ -2412,6 +2412,110 @@ body.has-wide-deck-curve .app-shell {
   color: var(--text);
 }
 
+.detailed-logs-notice {
+  display: grid;
+  gap: 1.1rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  border-radius: 3px;
+  padding: 1.35rem 1.5rem;
+  background: linear-gradient(155deg, var(--accent-soft), var(--surface-strong) 60%);
+}
+
+.detailed-logs-notice-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+}
+
+.detailed-logs-notice-intro {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 45rem;
+}
+
+.detailed-logs-notice-kicker {
+  color: var(--link);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--track-lg);
+  text-transform: uppercase;
+}
+
+.detailed-logs-notice h2 {
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: var(--track-display);
+}
+
+.detailed-logs-notice p {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+.detailed-logs-notice strong {
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.detailed-logs-notice-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.detailed-logs-notice-steps li {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.85rem 1rem;
+  background: var(--panel-inner-a);
+}
+
+.detailed-logs-notice-steps span {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--track-md);
+}
+
+.detailed-logs-notice .detailed-logs-notice-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: var(--track-sm);
+}
+
+.detailed-logs-notice-footer svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .control-button.is-flash:disabled {
   opacity: 1;
   border-color: var(--pill-win-border);
@@ -9960,6 +10064,11 @@ select option {
   border: 1px solid var(--muted);
   background: transparent;
   box-shadow: none;
+}
+
+.sync-dot.is-warning {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .sync-dot.is-live {

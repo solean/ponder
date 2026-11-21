@@ -627,6 +627,12 @@ export function SettingsPage() {
                     </div>
                     <div className="settings-row-help">
                       {data.activeLogPathExists ? "Arena log found" : <strong className="is-negative">Arena log not found</strong>}
+                      {data.detailedLogs === "disabled" ? (
+                        <>
+                          {" · "}
+                          <strong className="is-negative">Detailed Logs off</strong>
+                        </>
+                      ) : null}
                       {" · "}
                       {activityText}
                       {lastActivity?.completedAt ? ` · ${summarizeOperation(lastActivity)}` : ""}

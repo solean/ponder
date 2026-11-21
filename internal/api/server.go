@@ -133,6 +133,7 @@ func (s *Server) routes() http.Handler {
 		mux.HandleFunc("/api/overlay/settings", s.handleOverlaySettings)
 		mux.HandleFunc("/api/runtime/status", s.handleRuntimeStatus)
 		mux.HandleFunc("/api/runtime/config", s.handleRuntimeConfig)
+		mux.HandleFunc("/api/runtime/config-reset/dismiss", s.handleRuntimeConfigResetDismiss)
 		mux.HandleFunc("/api/runtime/import", s.handleRuntimeImport)
 		mux.HandleFunc("/api/runtime/live/start", s.handleRuntimeLiveStart)
 		mux.HandleFunc("/api/runtime/live/stop", s.handleRuntimeLiveStop)
@@ -411,6 +412,18 @@ func (s *Server) handleRuntimeLiveStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, status)
+}
+
+func (s *Server) handleRuntimeConfigResetDismiss(w http.ResponseWriter, r *http.Request) {
+	if s.appState == nil {
+		writeError(w, http.StatusNotFound, "runtime controls unavailable")
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	writeJSON(w, http.StatusOK, s.appState.DismissConfigReset())
 }
 
 func (s *Server) handleRuntimeAutostart(w http.ResponseWriter, r *http.Request) {

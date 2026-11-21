@@ -17,7 +17,7 @@ function trackerSummary(status: RuntimeStatus | undefined, isError: boolean) {
     .pop();
 
   if (status.detailedLogs === "disabled") {
-    return { state: "detailed logs off", detail: "turn on in Arena", dotClass: "sync-dot is-warning" };
+    return { state: "detailed logs off", detail: "setup needed", dotClass: "sync-dot is-warning" };
   }
   if (status.liveRunning) {
     return {

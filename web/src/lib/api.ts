@@ -157,6 +157,7 @@ export const api = {
   saveOverlaySettings: (settings: OverlaySettings) => postJSON<OverlaySettings>("/api/overlay/settings", settings),
   runtimeStatus: () => getJSON<RuntimeStatus>("/api/runtime/status"),
   saveRuntimeConfig: (config: RuntimeConfig) => postJSON<RuntimeStatus>("/api/runtime/config", config),
+  dismissConfigReset: () => postJSON<RuntimeStatus>("/api/runtime/config-reset/dismiss"),
   runImport: (resume = true) => postJSON<RuntimeOperation>("/api/runtime/import", { resume }),
   startLive: () => postJSON<RuntimeStatus>("/api/runtime/live/start"),
   stopLive: () => postJSON<RuntimeStatus>("/api/runtime/live/stop"),

@@ -904,6 +904,15 @@ export type RuntimeStatus = {
   lastError?: string;
   capabilities?: RuntimeCapabilities;
   updateCheck?: UpdateCheck;
+  /** Set when config.json couldn't be read at startup and settings fell back to defaults. */
+  configReset?: ConfigReset;
+};
+
+export type ConfigReset = {
+  /** Where the unreadable file was moved; absent only if the backup itself failed. */
+  backupPath?: string;
+  reason: string;
+  at: string;
 };
 
 export type RuntimeCapabilities = {

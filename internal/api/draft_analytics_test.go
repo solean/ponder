@@ -103,7 +103,7 @@ func TestDraftAnalyticsEndpoints(t *testing.T) {
 			}
 		})
 	}
-	for _, query := range []string{"?facet=played", "?card=101&facet=invalid", "?game=invalid", "?playDraw=invalid", "?landDrops=invalid"} {
+	for _, query := range []string{"?facet=played", "?card=101&facet=invalid", "?game=invalid", "?playDraw=invalid"} {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, localRequest(http.MethodGet, "/api/drafts/analytics/games"+query, nil))
 		if rec.Code != http.StatusBadRequest {

@@ -348,7 +348,7 @@ func TestRefreshMatchAnalyticsStoresTurnStatsAndMinLife(t *testing.T) {
 	}
 }
 
-func TestDeckAnalyticsShapeAggregatesMissedDropsAndCurves(t *testing.T) {
+func TestDeckAnalyticsShapeAggregatesLengthsAndCurves(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -381,7 +381,7 @@ func TestDeckAnalyticsShapeAggregatesMissedDropsAndCurves(t *testing.T) {
 
 	// Both games run four Arena player-turns (two full turns) with the player on the play (own turns 1 and
 	// 3). Match 1 (win) drops a land on both own turns; match 2 (loss) skips
-	// the turn-3 drop while holding a land, which is a non-final turn.
+	// the turn-3 drop, so the land curves differ by result.
 	type matchSeed struct {
 		arenaID   string
 		result    string
@@ -444,14 +444,8 @@ func TestDeckAnalyticsShapeAggregatesMissedDropsAndCurves(t *testing.T) {
 		t.Fatalf("GetDeckAnalytics: %v", err)
 	}
 	shape := analytics.Shape
-	if shape.CleanDropGames.Wins != 1 || shape.CleanDropGames.Games != 1 {
-		t.Fatalf("clean drop games = %#v, want the winning game only", shape.CleanDropGames)
-	}
-	if shape.MissedDropGames.Losses != 1 || shape.MissedDropGames.Games != 1 {
-		t.Fatalf("missed drop games = %#v, want the losing game only", shape.MissedDropGames)
-	}
-	if analytics.Coverage.GamesWithTurnStats != 2 || analytics.Coverage.GamesWithLandJudged != 2 {
-		t.Fatalf("coverage = %#v, want 2 games with turn stats and 2 judged", analytics.Coverage)
+	if analytics.Coverage.GamesWithTurnStats != 2 {
+		t.Fatalf("coverage = %#v, want 2 games with turn stats", analytics.Coverage)
 	}
 	if len(shape.GameLengths) == 0 || shape.GameLengths[0].Key != 2 {
 		t.Fatalf("game lengths = %#v, want a bucket at 2 full turns", shape.GameLengths)
@@ -480,18 +474,4 @@ func TestDeckAnalyticsShapeAggregatesMissedDropsAndCurves(t *testing.T) {
 			last.AvgSpellsWins, last.AvgSpellsLosses)
 	}
 
-	missed, err := store.ListDeckAnalyticsGames(ctx, DeckAnalyticsGamesQuery{DeckID: deckID, LandDrops: "missed"})
-	if err != nil {
-		t.Fatalf("ListDeckAnalyticsGames(missed): %v", err)
-	}
-	if len(missed) != 1 || missed[0].Result != "loss" {
-		t.Fatalf("missed drill-down = %#v, want the losing game", missed)
-	}
-	clean, err := store.ListDeckAnalyticsGames(ctx, DeckAnalyticsGamesQuery{DeckID: deckID, LandDrops: "clean"})
-	if err != nil {
-		t.Fatalf("ListDeckAnalyticsGames(clean): %v", err)
-	}
-	if len(clean) != 1 || clean[0].Result != "win" {
-		t.Fatalf("clean drill-down = %#v, want the winning game", clean)
-	}
 }

@@ -569,7 +569,6 @@ export type DeckAnalyticsCoverage = {
   gamesWithPlayDraw: number;
   gamesWithCardStats: number;
   gamesWithTurnStats: number;
-  gamesWithLandJudged: number;
 };
 
 // Per-turn shape aggregated across a deck's games with a known result. Lands
@@ -589,10 +588,6 @@ export type DeckGameShape = {
   gameLengths: AnalyticsBucket[];
   avgWinningTurn?: number;
   avgLosingTurn?: number;
-  lowestWinLife?: number;
-  missedDropGames: RecordAgg;
-  cleanDropGames: RecordAgg;
-  missedDropUnknownGames: number;
   turnCurve: DeckTurnCurvePoint[];
 };
 
@@ -653,7 +648,6 @@ export type DeckAnalyticsGamesParams = {
   minTurns?: number;
   game?: "one" | "post";
   playDraw?: "play" | "draw";
-  landDrops?: "missed" | "clean";
 };
 
 export type DraftAnalyticsResponse = {

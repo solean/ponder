@@ -15,7 +15,6 @@ const complete: DeckAnalyticsCoverage = {
   gamesWithPlayDraw: 12,
   gamesWithCardStats: 12,
   gamesWithTurnStats: 12,
-  gamesWithLandJudged: 12,
 };
 
 function coverage(overrides: Partial<DeckAnalyticsCoverage> = {}): DeckAnalyticsCoverage {
@@ -39,7 +38,6 @@ describe("deck analytics coverage presentation", () => {
     "gamesWithPlayDraw",
     "gamesWithCardStats",
     "gamesWithTurnStats",
-    "gamesWithLandJudged",
   ] as const)("treats incomplete %s as partial coverage", (field) => {
     const result = buildDeckAnalyticsCoveragePresentation(coverage({ [field]: 11 }));
     expect(result.state).toBe("partial");
@@ -51,17 +49,17 @@ describe("deck analytics coverage presentation", () => {
     const result = buildDeckAnalyticsCoveragePresentation(
       coverage({
         gamesWithOpeningHand: 9,
+        gamesWithCardStats: 8,
         gamesWithTurnStats: 10,
-        gamesWithLandJudged: 8,
       }),
     );
 
     expect(result.issues.map(({ label, available, total }) => `${label} — ${available} of ${total} games`)).toEqual([
       "Opening-hand analysis — 9 of 12 games",
+      "Card performance — 8 of 12 games",
       "Turn analysis — 10 of 12 games",
-      "Land-drop analysis — 8 of 12 games",
     ]);
-    expect(result.issueSummary).toBe("Opening hands 9/12 · Turn data 10/12 · +1 more");
+    expect(result.issueSummary).toBe("Opening hands 9/12 · Card data 8/12 · +1 more");
   });
 
   test("reports unversioned matches independently in the all-versions view", () => {
@@ -85,7 +83,6 @@ describe("deck analytics coverage presentation", () => {
         gamesWithPlayDraw: 0,
         gamesWithCardStats: 0,
         gamesWithTurnStats: 0,
-        gamesWithLandJudged: 0,
       }),
     );
     expect(result.state).toBe("empty");

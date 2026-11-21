@@ -138,6 +138,17 @@ func (a *App) failStartup(stage string, err error) {
 	a.mu.Unlock()
 }
 
+// startHiddenAtLogin reports whether a login launch should keep the main
+// window closed. A failed startup always shows the window so the error is
+// visible.
+func (a *App) startHiddenAtLogin() bool {
+	a.mu.RLock()
+	runtimeService := a.runtimeService
+	failed := a.startupErr != ""
+	a.mu.RUnlock()
+	return !failed && runtimeService != nil && runtimeService.Config().StartHiddenAtLogin
+}
+
 func (a *App) showStartupError() {
 	a.mu.RLock()
 	message := a.startupErr
@@ -256,6 +267,10 @@ func (a *App) startup() {
 		return
 	}
 
+	// Agents written by older builds lack the login launch flag.
+	if err := appstate.RefreshAutostart(); err != nil {
+		log.Printf("refresh launch at login agent: %v", err)
+	}
 	if appIconSupported {
 		if err := setAppIcon(runtimeService.Config().AppIcon); err != nil {
 			log.Printf("restore app icon: %v", err)

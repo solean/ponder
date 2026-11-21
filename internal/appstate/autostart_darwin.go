@@ -83,7 +83,14 @@ func SetAutostart(enabled bool) (AutostartStatus, error) {
 		return GetAutostartStatus(), err
 	}
 
-	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+	if err := writeLaunchAgent(agentPath, exe); err != nil {
+		return GetAutostartStatus(), err
+	}
+	return GetAutostartStatus(), nil
+}
+
+func launchAgentPlist(exe string) string {
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -92,6 +99,7 @@ func SetAutostart(enabled bool) (AutostartStatus, error) {
 	<key>ProgramArguments</key>
 	<array>
 		<string>%s</string>
+		<string>%s</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
@@ -99,13 +107,46 @@ func SetAutostart(enabled bool) (AutostartStatus, error) {
 	<string>Interactive</string>
 </dict>
 </plist>
-`, launchAgentLabel, xmlEscape(exe))
+`, launchAgentLabel, xmlEscape(exe), LoginLaunchFlag)
+}
 
+func writeLaunchAgent(agentPath, exe string) error {
 	if err := os.MkdirAll(filepath.Dir(agentPath), 0o755); err != nil {
-		return GetAutostartStatus(), fmt.Errorf("create LaunchAgents dir: %w", err)
+		return fmt.Errorf("create LaunchAgents dir: %w", err)
 	}
-	if err := os.WriteFile(agentPath, []byte(plist), 0o644); err != nil {
-		return GetAutostartStatus(), fmt.Errorf("write launch agent: %w", err)
+	if err := os.WriteFile(agentPath, []byte(launchAgentPlist(exe)), 0o644); err != nil {
+		return fmt.Errorf("write launch agent: %w", err)
 	}
-	return GetAutostartStatus(), nil
+	return nil
+}
+
+// RefreshAutostart rewrites an existing launch agent that points at this
+// binary but predates the current agent format (agents written before the
+// login launch flag existed). Agents that point at another copy of the app
+// are left alone, so a dev build never takes over the installed app's agent.
+func RefreshAutostart() error {
+	agentPath, err := launchAgentPath()
+	if err != nil {
+		return err
+	}
+	exe, err := autostartExecutable()
+	if err != nil {
+		return nil
+	}
+	return refreshLaunchAgent(agentPath, exe)
+}
+
+func refreshLaunchAgent(agentPath, exe string) error {
+	raw, err := os.ReadFile(agentPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read launch agent: %w", err)
+	}
+	current := string(raw)
+	if current == launchAgentPlist(exe) || !strings.Contains(current, "<string>"+xmlEscape(exe)+"</string>") {
+		return nil
+	}
+	return writeLaunchAgent(agentPath, exe)
 }

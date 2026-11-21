@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/solean/ponder/internal/api"
+	"github.com/solean/ponder/internal/appstate"
 	"github.com/solean/ponder/internal/version"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -32,6 +33,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("prepare embedded web assets: %v", err)
 	}
+
+	// The launch-at-login agent passes a flag so the app can start in the menu
+	// bar only, when the user asked for that. Manual launches always show the
+	// window.
+	launchedAtLogin := appstate.LaunchedAtLogin(os.Args[1:])
 
 	desktop := NewApp(assets)
 	windowState := newMainWindowState()
@@ -128,9 +134,16 @@ func main() {
 	})
 	wailsApp.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		windowState.restore(wailsApp, mainWindow)
-		mainWindow.Show()
+		// A manual launch shows the window before the backend starts so the
+		// loading state is visible. A login launch waits for the saved config.
+		if !launchedAtLogin {
+			mainWindow.Show()
+		}
 		desktop.startMenuBar()
 		desktop.startup()
+		if launchedAtLogin && !desktop.startHiddenAtLogin() {
+			mainWindow.Show()
+		}
 		desktop.showStartupError()
 		application.InvokeSync(func() {
 			menu := wailsApp.Menu.GetApplicationMenu()

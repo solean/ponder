@@ -332,6 +332,7 @@ function syncForm(status: RuntimeStatus): RuntimeConfig {
     includePrev: status.config.includePrev,
     autoStartLive: status.config.autoStartLive ?? true,
     autoCheckUpdates: status.config.autoCheckUpdates ?? false,
+    startHiddenAtLogin: status.config.startHiddenAtLogin ?? false,
     aiProvider: status.config.aiProvider ?? "claude",
     aiModel: status.config.aiModel ?? "opus",
     seventeenLandsUserGroup: status.config.seventeenLandsUserGroup ?? "",
@@ -360,6 +361,7 @@ export function SettingsPage() {
     includePrev: true,
     autoStartLive: true,
     autoCheckUpdates: false,
+    startHiddenAtLogin: false,
     aiProvider: "claude",
     aiModel: "opus",
     seventeenLandsUserGroup: "",
@@ -1092,6 +1094,13 @@ export function SettingsPage() {
                   autostartMutation.mutate(enabled);
                 }}
                 disabled={autostartUnavailable || autostartMutation.isPending}
+              />
+              <ToggleRow
+                label="Start hidden in the menu bar"
+                help={`When ${APP_NAME} opens at login, only the menu bar item appears. Tracking still starts.`}
+                checked={form.startHiddenAtLogin ?? false}
+                onChange={(startHiddenAtLogin) => savePatch({ startHiddenAtLogin })}
+                disabled={autostartUnavailable || !autostartEnabled}
               />
               <ToggleRow
                 label="Check for updates daily"

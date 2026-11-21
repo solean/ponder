@@ -57,8 +57,11 @@ type Config struct {
 	IncludePrev         bool             `json:"includePrev"`
 	AutoStartLive       bool             `json:"autoStartLive"`
 	AutoCheckUpdates    bool             `json:"autoCheckUpdates"`
-	AIProvider          string           `json:"aiProvider"`
-	AIModel             string           `json:"aiModel"`
+	// StartHiddenAtLogin keeps the main window closed when the launch-at-login
+	// agent starts the app; only the menu bar item appears.
+	StartHiddenAtLogin bool   `json:"startHiddenAtLogin"`
+	AIProvider         string `json:"aiProvider"`
+	AIModel            string `json:"aiModel"`
 	// SeventeenLandsUserGroup limits draft card ratings to one 17Lands player
 	// group ("top", "middle", "bottom"); empty rates across all players.
 	SeventeenLandsUserGroup string `json:"seventeenLandsUserGroup"`

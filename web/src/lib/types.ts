@@ -863,6 +863,7 @@ export type RuntimeConfig = {
   includePrev: boolean;
   autoStartLive: boolean;
   autoCheckUpdates: boolean;
+  startHiddenAtLogin: boolean;
   aiProvider: AiProvider;
   aiModel: string;
   seventeenLandsUserGroup: SeventeenLandsUserGroup;

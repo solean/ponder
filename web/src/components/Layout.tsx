@@ -15,6 +15,7 @@ import {
 } from "../lib/theme";
 import { APP_NAME } from "../lib/branding";
 import { BreadcrumbProvider, Breadcrumbs } from "./Breadcrumbs";
+import { DetailedLogsNotice } from "./DetailedLogsNotice";
 import { AppErrorFallback, ErrorBoundary } from "./ErrorBoundary";
 import { LiveStatus } from "./LiveStatus";
 import { Plasma } from "./Plasma";
@@ -132,6 +133,9 @@ export function Layout() {
                 <div className="page-context-bar">
                   <Breadcrumbs />
                 </div>
+                <ErrorBoundary label="DetailedLogsNotice" fallback={() => null}>
+                  <DetailedLogsNotice />
+                </ErrorBoundary>
                 <ErrorBoundary
                   key={location.pathname}
                   label="page"

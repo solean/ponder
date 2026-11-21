@@ -30,3 +30,16 @@ test("a failed status poll hides cached tracker activity until the next successf
   expect(recovered).toContain("never synced");
   expect(recovered).not.toContain("is-unknown");
 });
+
+test("titlebar flags Detailed Logs being off ahead of the tracker state", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  await client.fetchQuery({ queryKey: ["runtime-status"], queryFn: () => ({ liveRunning: true, detailedLogs: "disabled" }) });
+  const html = renderToStaticMarkup(
+    <QueryClientProvider client={client}>
+      <StaticRouter location="/"><LiveStatus /></StaticRouter>
+    </QueryClientProvider>,
+  );
+  expect(html).toContain("detailed logs off");
+  expect(html).toContain("sync-dot is-warning");
+  expect(html).not.toContain("is-live");
+});

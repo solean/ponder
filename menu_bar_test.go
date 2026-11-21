@@ -33,6 +33,9 @@ func TestTrackingMenuBarStatus(t *testing.T) {
 		{name: "live match before first game state", status: watching(nil), live: &menuBarLiveMatch{}, want: menuBarStatus{status: "In a match", on: true, canToggle: true}},
 		{name: "missing log", status: &appstate.Status{LiveRunning: true}, live: match, want: menuBarStatus{status: "Waiting for MTGA log", on: true, canToggle: true, indicator: "!"}},
 		{name: "parser error during match", status: &appstate.Status{LiveRunning: true, ActiveLogPathExists: true, LastError: "parse failed"}, live: match, want: menuBarStatus{status: "Needs attention", activity: "parse failed", on: true, canToggle: true, indicator: "!"}},
+		{name: "detailed logs off", status: &appstate.Status{LiveRunning: true, ActiveLogPathExists: true, DetailedLogs: appstate.DetailedLogsDisabled}, want: menuBarStatus{status: "Detailed Logs off", activity: "Turn on in Arena settings", on: true, canToggle: true, indicator: "!"}},
+		{name: "detailed logs off while stopped", status: &appstate.Status{ActiveLogPathExists: true, DetailedLogs: appstate.DetailedLogsDisabled}, want: menuBarStatus{status: "Detailed Logs off", activity: "Turn on in Arena settings", canToggle: true, indicator: "!"}},
+		{name: "detailed logs on", status: &appstate.Status{LiveRunning: true, ActiveLogPathExists: true, DetailedLogs: appstate.DetailedLogsEnabled}, want: menuBarStatus{status: "On", activity: "No MTGA activity yet", on: true, canToggle: true}},
 		{name: "failed start", status: &appstate.Status{LastError: "invalid log path"}, want: menuBarStatus{status: "Needs attention", activity: "invalid log path", canToggle: true, indicator: "!"}},
 	}
 	for _, tt := range tests {

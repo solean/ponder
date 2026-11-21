@@ -120,6 +120,7 @@ type Status struct {
 	PreviousLogPath       string           `json:"previousLogPath"`
 	ActiveLogPathExists   bool             `json:"activeLogPathExists"`
 	PreviousLogPathExists bool             `json:"previousLogPathExists"`
+	DetailedLogs          string           `json:"detailedLogs,omitempty"` // DetailedLogsEnabled, DetailedLogsDisabled, or "" if unknown.
 	LiveRunning           bool             `json:"liveRunning"`
 	LiveStartedAt         string           `json:"liveStartedAt,omitempty"`
 	LiveLastTickAt        string           `json:"liveLastTickAt,omitempty"`
@@ -268,6 +269,7 @@ func (s *Service) Status() Status {
 		PreviousLogPath:       prevLogPath,
 		ActiveLogPathExists:   fileExists(activeLogPath),
 		PreviousLogPathExists: fileExists(prevLogPath),
+		DetailedLogs:          detectDetailedLogs(activeLogPath),
 		LiveRunning:           liveRunning,
 		LiveStartedAt:         formatTime(liveStartedAt),
 		LiveLastTickAt:        formatTime(liveLastTickAt),

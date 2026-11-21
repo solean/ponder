@@ -58,6 +58,8 @@ type menuBarLiveMatch struct {
 	turn     int64 // Full turn, not Arena's per-player turn.
 }
 
+const detailedLogsSteps = "In Arena, open Options → Account, check Detailed Logs (Plugin Support), then restart Arena"
+
 func trackingMenuBarStatus(status *appstate.Status, startupErr string, live *menuBarLiveMatch, now time.Time) menuBarStatus {
 	if startupErr != "" {
 		return menuBarStatus{status: "Unavailable", activity: startupErr, indicator: "!", detail: startupErr}
@@ -65,17 +67,26 @@ func trackingMenuBarStatus(status *appstate.Status, startupErr string, live *men
 	if status == nil {
 		return menuBarStatus{status: "Starting…", detail: "Starting the tracking service"}
 	}
-	if !status.LiveRunning {
-		if status.LastError != "" {
-			return menuBarStatus{status: "Needs attention", activity: status.LastError, canToggle: true, indicator: "!", detail: status.LastError}
-		}
-		return menuBarStatus{status: "Off", canToggle: true, detail: "Turn on live tracking from this menu or in Ponder"}
-	}
 	if status.LastError != "" {
-		return menuBarStatus{status: "Needs attention", activity: status.LastError, on: true, canToggle: true, indicator: "!", detail: status.LastError}
+		return menuBarStatus{status: "Needs attention", activity: status.LastError, on: status.LiveRunning, canToggle: true, indicator: "!", detail: status.LastError}
 	}
-	if !status.ActiveLogPathExists {
+	if status.LiveRunning && !status.ActiveLogPathExists {
 		return menuBarStatus{status: "Waiting for MTGA log", on: true, canToggle: true, indicator: "!", detail: status.ActiveLogPath}
+	}
+	// Without detailed logs Arena writes no match, draft, or rank data, so
+	// tracking runs but captures nothing until the user changes the setting.
+	if status.DetailedLogs == appstate.DetailedLogsDisabled {
+		return menuBarStatus{
+			status:    "Detailed Logs off",
+			activity:  "Turn on in Arena settings",
+			on:        status.LiveRunning,
+			canToggle: true,
+			indicator: "!",
+			detail:    detailedLogsSteps,
+		}
+	}
+	if !status.LiveRunning {
+		return menuBarStatus{status: "Off", canToggle: true, detail: "Turn on live tracking from this menu or in Ponder"}
 	}
 	detail := "Watching " + status.ActiveLogPath
 	if live != nil {

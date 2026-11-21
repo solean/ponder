@@ -16,6 +16,9 @@ function trackerSummary(status: RuntimeStatus | undefined, isError: boolean) {
     .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
     .pop();
 
+  if (status.detailedLogs === "disabled") {
+    return { state: "detailed logs off", detail: "turn on in Arena", dotClass: "sync-dot is-warning" };
+  }
   if (status.liveRunning) {
     return {
       state: "live tracker on",

@@ -5,8 +5,7 @@ export type DeckAnalyticsCoverageIssueKey =
   | "opening-hands"
   | "play-draw"
   | "card-data"
-  | "turn-data"
-  | "land-drops";
+  | "turn-data";
 
 export type DeckAnalyticsCoverageIssue = {
   key: DeckAnalyticsCoverageIssueKey;
@@ -35,7 +34,6 @@ type CoverageDefinition = {
     | "gamesWithPlayDraw"
     | "gamesWithCardStats"
     | "gamesWithTurnStats"
-    | "gamesWithLandJudged"
   >;
   label: string;
   shortLabel: string;
@@ -77,13 +75,6 @@ const COVERAGE_DEFINITIONS: CoverageDefinition[] = [
     label: "Turn analysis",
     shortLabel: "Turn data",
     impact: "Affects turn curves and game-shape analysis.",
-  },
-  {
-    key: "land-drops",
-    field: "gamesWithLandJudged",
-    label: "Land-drop analysis",
-    shortLabel: "Land drops",
-    impact: "Affects missed-land-drop and clean-land-drop comparisons.",
   },
 ];
 

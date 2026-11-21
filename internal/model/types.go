@@ -320,7 +320,6 @@ type DeckAnalyticsCoverage struct {
 	GamesWithPlayDraw    int64 `json:"gamesWithPlayDraw"`
 	GamesWithCardStats   int64 `json:"gamesWithCardStats"`
 	GamesWithTurnStats   int64 `json:"gamesWithTurnStats"`
-	GamesWithLandJudged  int64 `json:"gamesWithLandJudged"`
 }
 
 // DeckTurnCurvePoint aggregates game shape at one turn across a deck's games
@@ -338,17 +337,12 @@ type DeckTurnCurvePoint struct {
 }
 
 // DeckGameShape is the deck-level game-shape rollup: win rate by ending turn,
-// average winning/losing turn, missed-land-drop record splits (judged games
-// only), and per-turn land/spell curves split by result.
+// average winning/losing turn, and per-turn land/spell curves split by result.
 type DeckGameShape struct {
-	GameLengths            []AnalyticsBucket    `json:"gameLengths"`
-	AvgWinningTurn         *float64             `json:"avgWinningTurn,omitempty"`
-	AvgLosingTurn          *float64             `json:"avgLosingTurn,omitempty"`
-	LowestWinLife          *int64               `json:"lowestWinLife,omitempty"`
-	MissedDropGames        RecordAgg            `json:"missedDropGames"`
-	CleanDropGames         RecordAgg            `json:"cleanDropGames"`
-	MissedDropUnknownGames int64                `json:"missedDropUnknownGames"`
-	TurnCurve              []DeckTurnCurvePoint `json:"turnCurve"`
+	GameLengths    []AnalyticsBucket    `json:"gameLengths"`
+	AvgWinningTurn *float64             `json:"avgWinningTurn,omitempty"`
+	AvgLosingTurn  *float64             `json:"avgLosingTurn,omitempty"`
+	TurnCurve      []DeckTurnCurvePoint `json:"turnCurve"`
 }
 
 type DeckAnalytics struct {

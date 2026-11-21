@@ -76,7 +76,6 @@ function analyticsGamesSearch(params: DeckAnalyticsGamesParams): URLSearchParams
   if (params.minTurns != null) search.set("minTurns", String(params.minTurns));
   if (params.game) search.set("game", params.game);
   if (params.playDraw) search.set("playDraw", params.playDraw);
-  if (params.landDrops) search.set("landDrops", params.landDrops);
   return search;
 }
 

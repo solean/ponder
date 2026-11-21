@@ -11,3 +11,5 @@ func GetAutostartStatus() AutostartStatus {
 func SetAutostart(enabled bool) (AutostartStatus, error) {
 	return GetAutostartStatus(), fmt.Errorf("launch at login is not supported on this platform")
 }
+
+func RefreshAutostart() error { return nil }

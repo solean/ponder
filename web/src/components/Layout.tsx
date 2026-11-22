@@ -15,6 +15,7 @@ import {
 } from "../lib/theme";
 import { APP_NAME } from "../lib/branding";
 import { BreadcrumbProvider, Breadcrumbs } from "./Breadcrumbs";
+import { ConfigResetNotice } from "./ConfigResetNotice";
 import { DetailedLogsNotice } from "./DetailedLogsNotice";
 import { AppErrorFallback, ErrorBoundary } from "./ErrorBoundary";
 import { LiveStatus } from "./LiveStatus";
@@ -133,6 +134,9 @@ export function Layout() {
                 <div className="page-context-bar">
                   <Breadcrumbs />
                 </div>
+                <ErrorBoundary label="ConfigResetNotice" fallback={() => null}>
+                  <ConfigResetNotice />
+                </ErrorBoundary>
                 <ErrorBoundary label="DetailedLogsNotice" fallback={() => null}>
                   <DetailedLogsNotice />
                 </ErrorBoundary>

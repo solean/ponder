@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -129,6 +130,7 @@ type Status struct {
 	LastError             string           `json:"lastError,omitempty"`
 	Capabilities          Capabilities     `json:"capabilities"`
 	UpdateCheck           *UpdateCheck     `json:"updateCheck,omitempty"`
+	ConfigReset           *ConfigReset     `json:"configReset,omitempty"`
 }
 
 type Service struct {
@@ -156,6 +158,7 @@ type Service struct {
 	lastLiveActivity       *OperationResult
 	lastError              string
 	lastUpdateCheck        *UpdateCheck
+	configReset            *ConfigReset
 }
 
 func NewService(opts Options) (*Service, error) {
@@ -205,10 +208,14 @@ func NewService(opts Options) (*Service, error) {
 		AIModel:             ai.DefaultClaudeModel,
 	}
 
+	var configReset *ConfigReset
 	if raw, err := os.ReadFile(configPath); err == nil {
 		var saved Config
 		if unmarshalErr := json.Unmarshal(raw, &saved); unmarshalErr == nil {
 			cfg = normalizeConfig(saved, poll)
+		} else {
+			configReset = backupCorruptConfig(configPath, raw, unmarshalErr, time.Now())
+			log.Printf("appstate: %s; starting with default settings (backup: %q)", configReset.Reason, configReset.BackupPath)
 		}
 	} else if !os.IsNotExist(err) {
 		return nil, fmt.Errorf("read appstate config: %w", err)
@@ -227,6 +234,7 @@ func NewService(opts Options) (*Service, error) {
 		overlayShortcutChanged: opts.OverlayShortcutChanged,
 		appIconChanged:         opts.AppIconChanged,
 		liveDataChanged:        opts.LiveDataChanged,
+		configReset:            configReset,
 	}, nil
 }
 
@@ -243,6 +251,11 @@ func (s *Service) Status() Status {
 	if s.lastUpdateCheck != nil {
 		cloned := *s.lastUpdateCheck
 		lastUpdateCheck = &cloned
+	}
+	var configReset *ConfigReset
+	if s.configReset != nil {
+		cloned := *s.configReset
+		configReset = &cloned
 	}
 	s.mu.RUnlock()
 
@@ -278,7 +291,17 @@ func (s *Service) Status() Status {
 		LastError:             lastError,
 		Capabilities:          s.capabilities,
 		UpdateCheck:           lastUpdateCheck,
+		ConfigReset:           configReset,
 	}
+}
+
+// DismissConfigReset clears the startup notice about a reset config once the
+// user has seen it. The backup file stays where it is.
+func (s *Service) DismissConfigReset() Status {
+	s.mu.Lock()
+	s.configReset = nil
+	s.mu.Unlock()
+	return s.Status()
 }
 
 // Config returns a snapshot of persisted runtime and AI preferences.
@@ -324,7 +347,7 @@ func (s *Service) MaybeAutoStartLive() (bool, error) {
 // RevealablePaths lists the filesystem paths the UI displays; the desktop
 // reveal endpoint refuses anything outside this set.
 func (s Status) RevealablePaths() []string {
-	return []string{
+	paths := []string{
 		s.DBPath,
 		s.SupportDir,
 		s.ConfigPath,
@@ -333,6 +356,10 @@ func (s Status) RevealablePaths() []string {
 		s.DefaultLogPath,
 		s.DefaultPrevLogPath,
 	}
+	if s.ConfigReset != nil {
+		paths = append(paths, s.ConfigReset.BackupPath)
+	}
+	return paths
 }
 
 // ErrInvalidAppIcon means UpdateConfig was asked for an app icon that doesn't
@@ -595,14 +622,11 @@ func (s *Service) initialLiveLogPaths(cfg Config, activeLogPath string) []string
 }
 
 func (s *Service) saveConfig(cfg Config) error {
-	if err := os.MkdirAll(filepath.Dir(s.configPath), 0o755); err != nil {
-		return fmt.Errorf("create config dir: %w", err)
-	}
 	payload, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
-	if err := os.WriteFile(s.configPath, append(payload, '\n'), 0o644); err != nil {
+	if err := WriteFileAtomic(s.configPath, append(payload, '\n'), 0o644); err != nil {
 		return fmt.Errorf("write config: %w", err)
 	}
 	return nil

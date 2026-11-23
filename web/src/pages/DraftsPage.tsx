@@ -9,10 +9,11 @@ import { DraftPerformancePanel } from "../components/DraftPerformancePanel";
 import { DraftWins } from "../components/DraftWins";
 import { LimitedMatchupsPanel } from "../components/MatchupPanels";
 import { SetSymbol } from "../components/SetSymbol";
+import { QueryErrorState } from "../components/ErrorState";
 import { PageHeader } from "../components/PageHeader";
 import { SectionTabs, sectionPanelID, sectionTabID } from "../components/SectionTabs";
-import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { useQueryError } from "../lib/useQueryError";
 import {
   draftPerformanceOptions,
   draftSessionDateValue,
@@ -303,8 +304,9 @@ function DraftsOverview({
   setLookup: SetLookup;
   filter: DraftPerformanceFilter;
 }) {
+  const draftsError = useQueryError(draftsQuery);
+  if (draftsError.error) return <QueryErrorState view={draftsError} size="page" />;
   if (draftsQuery.isLoading) return <LoadingMessage page>Loading drafts…</LoadingMessage>;
-  if (draftsQuery.error) return <StatusMessage tone="error">{(draftsQuery.error as Error).message}</StatusMessage>;
 
   const drafts = sortDraftsNewestFirst(draftsQuery.data ?? []);
 

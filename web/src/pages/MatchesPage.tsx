@@ -12,9 +12,10 @@ import { ManaSymbol } from "../components/ManaSymbol";
 import { MatchTagsControl } from "../components/MatchTags";
 import { ResultPill } from "../components/ResultPill";
 import { SaveMatchButton, StarIcon } from "../components/SaveMatchButton";
+import { QueryErrorState } from "../components/ErrorState";
 import { PageHeader } from "../components/PageHeader";
-import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { useQueryError } from "../lib/useQueryError";
 import { eventCategory, parseEventName } from "../lib/events";
 import { formatCompactDateTime, formatDuration, formatGameFormat } from "../lib/format";
 import {
@@ -225,10 +226,12 @@ const MATCH_FETCH_LIMIT = 20000;
 
 export function MatchesPage() {
   const navigate = useNavigate();
-  const { data, isLoading, error } = useQuery({
+  const pageQuery = useQuery({
     queryKey: ["matches"],
     queryFn: () => api.matches(MATCH_FETCH_LIMIT),
   });
+  const { data, isLoading } = pageQuery;
+  const pageError = useQueryError(pageQuery);
 
   const [filters, setFilters] = useState<MatchFilters>(EMPTY_FILTERS);
   const [groupByEvent, setGroupByEvent] = useState(true);
@@ -439,8 +442,15 @@ export function MatchesPage() {
     openMatchDetails(matchId);
   }
 
+  if (pageError.error) {
+    return (
+      <div className="stack-lg matches-layout">
+        <PageHeader title="Matches" />
+        <QueryErrorState view={pageError} size="page" />
+      </div>
+    );
+  }
   if (isLoading) return <LoadingMessage page>Loading matches…</LoadingMessage>;
-  if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
 
   const filtersActive = hasActiveFilters(filters);
   const summary = matchListSummary({

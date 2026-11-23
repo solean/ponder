@@ -9,9 +9,11 @@ import { EventLabel } from "../components/EventLabel";
 import { MatchDeckColors } from "../components/MatchDeckColors";
 import { RankProgressPanel } from "../components/RankProgressPanel";
 import { ResultPill } from "../components/ResultPill";
+import { QueryErrorState } from "../components/ErrorState";
 import { PageHeader } from "../components/PageHeader";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { useQueryError } from "../lib/useQueryError";
 import { eventDisplayName, parseEventName } from "../lib/events";
 import {
   formatDateTime,
@@ -512,10 +514,12 @@ export function OverviewPage() {
     queryKey: ["overview", "activity", activityDays],
     queryFn: () => api.dailyActivity(activityDays),
   });
-  const { data, isLoading, error } = useQuery({
+  const pageQuery = useQuery({
     queryKey: ["overview"],
     queryFn: api.overview,
   });
+  const { data, isLoading } = pageQuery;
+  const pageError = useQueryError(pageQuery);
   const matchesQuery = useQuery({
     queryKey: ["matches", MATCH_WINDOW],
     queryFn: () => api.matches(MATCH_WINDOW),
@@ -550,8 +554,15 @@ export function OverviewPage() {
   const weekdays = useMemo(() => weekdayPerformance(allMatches), [allMatches]);
   const timeSlots = useMemo(() => timeOfDayPerformance(allMatches), [allMatches]);
 
+  if (pageError.error) {
+    return (
+      <div className="stack-lg">
+        <PageHeader className="overview-header" title="Overview" />
+        <QueryErrorState view={pageError} size="page" />
+      </div>
+    );
+  }
   if (isLoading) return <LoadingMessage page>Loading overview…</LoadingMessage>;
-  if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
   if (!data) return <StatusMessage>No data.</StatusMessage>;
 
   const header = (

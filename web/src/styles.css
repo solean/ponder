@@ -2052,6 +2052,16 @@ body.has-wide-deck-curve .app-shell {
   text-align: center;
 }
 
+/* Centred in the chart frame like its loading and empty messages. */
+.rank-chart-frame > .error-state {
+  min-height: 21.8rem;
+  box-sizing: border-box;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem;
+  text-align: center;
+}
+
 .panel-head p {
   margin: 0;
   color: var(--muted);
@@ -9706,12 +9716,6 @@ select option {
 .match-tag-suggestion.is-highlighted {
   background: var(--table-row-hover);
   color: var(--text);
-}
-
-.match-tag-error {
-  margin: 0;
-  color: var(--error);
-  font-size: var(--text-sm);
 }
 
 .deck-list-table th,

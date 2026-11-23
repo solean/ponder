@@ -26,6 +26,8 @@ const stubFetch = (async (input: RequestInfo | URL) => {
 }) as typeof fetch;
 const { DecksPage } = await import("../src/pages/DecksPage");
 const { DeckDetailPage } = await import("../src/pages/DeckDetailPage");
+const { DeckMatchupsPanel } = await import("../src/components/MatchupPanels");
+const { DraftPoolPanel } = await import("../src/components/DraftPoolPanel");
 
 let dom: Window;
 let root: Root;
@@ -128,4 +130,23 @@ test("Try again keeps the error on screen and counts the tries", async () => {
   expect(tryAgain()?.textContent).toBe("Try again");
   expect(container.textContent).toContain("Still failing after 2 tries.");
   expect(requests.filter((path) => path === "/api/decks")).toHaveLength(2);
+});
+
+test("a panel that fails keeps its heading and shows the panel-size error", async () => {
+  failures.set("/api/decks/7/matchups", { status: 500, error: "Couldn't load matchups." });
+  await renderAt("/decks/7", "/decks/:deckId", <DeckMatchupsPanel deckId={7} />);
+
+  expect(container.querySelector(".panel-head h3")?.textContent).toBe("Matchups");
+  const alert = container.querySelector('[role="alert"]');
+  expect(alert?.className).toContain("error-state--panel");
+  expect(alert?.textContent).toContain("Couldn't load matchups.");
+});
+
+test("the draft pool says the deck failed to load, not that Arena never sent one", async () => {
+  failures.set("/api/decks", { status: 500, error: "Couldn't load decks." });
+  const pick = { id: 1, packNumber: 1, pickNumber: 1, pickedCardIds: "101", packCardIds: "101", pickTs: "2026-11-01T00:00:00Z" };
+  await renderAt("/drafts/1", "/drafts/:draftId", <DraftPoolPanel eventName="PremierDraft_TST" picks={[pick]} />);
+
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain("Couldn't load the submitted deck.");
+  expect(container.textContent).not.toContain("has not reported a submitted deck");
 });

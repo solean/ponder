@@ -137,6 +137,17 @@ export function QueryErrorState({
   );
 }
 
+/**
+ * The API's reason for rejecting a request, worth showing under a headline
+ * written in the app, such as "stop live tracking before running a manual
+ * import." Only a 4xx carries one. A 5xx or network message only repeats the
+ * headline ("Couldn't save settings."), and other errors may be raw, so those
+ * give nothing.
+ */
+export function rejectionReason(error: unknown): string | undefined {
+  return error instanceof ApiError && error.status >= 400 && error.status < 500 ? error.message : undefined;
+}
+
 /** True when the API answered 404: the record doesn't exist. */
 export function isNotFound(error: unknown): boolean {
   return error instanceof ApiError && error.status === 404;

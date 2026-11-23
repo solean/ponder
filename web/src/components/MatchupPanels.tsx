@@ -9,10 +9,12 @@ import { DeckColorIdentity } from "./MatchDeckColors";
 import { EventLabel } from "./EventLabel";
 import { ResultPill } from "./ResultPill";
 import { SetSymbol } from "./SetSymbol";
+import { QueryErrorState } from "./ErrorState";
 import { StatusMessage } from "./StatusMessage";
 import { api } from "../lib/api";
 import { formatDateTime, pct } from "../lib/format";
 import { sortSetCodesByRelease, useEventSets, useSetCodes } from "../lib/useEventSets";
+import { useQueryError } from "../lib/useQueryError";
 import type { MatchupRow, RecordAgg } from "../lib/types";
 
 const ARCHETYPE_LABELS: Record<string, string> = {
@@ -144,6 +146,7 @@ function MatchupRowDetail({
         ? api.deckMatchupRefs(refs.deckId, refs.colorsKey, refs.archetype)
         : api.limitedMatchupRefs(refs.setCode, refs.colorsKey, refs.group, refs.format),
   });
+  const refsError = useQueryError(refsQuery);
   const matchRefs = refsQuery.data ?? [];
   const { lookup: setLookup } = useEventSets(matchRefs.map((ref) => ref.eventName));
   const overrideMutation = useMutation({
@@ -204,10 +207,10 @@ function MatchupRowDetail({
         </div>
       </div>
 
-      {refsQuery.isLoading ? (
+      {refsError.error ? (
+        <QueryErrorState view={refsError} />
+      ) : refsQuery.isLoading ? (
         <LoadingMessage>Loading matches…</LoadingMessage>
-      ) : refsQuery.error ? (
-        <StatusMessage tone="error">{(refsQuery.error as Error).message}</StatusMessage>
       ) : matchRefs.length === 0 ? (
         <StatusMessage>No matches recorded for this matchup.</StatusMessage>
       ) : (
@@ -290,19 +293,20 @@ export function DeckMatchupsPanel({ deckId }: { deckId: number }) {
     queryKey: ["deck-matchups", deckId],
     queryFn: () => api.deckMatchups(deckId),
   });
+  const matchupsError = useQueryError(query);
 
-  if (query.isLoading) {
-    return null;
-  }
-  if (query.error) {
+  if (matchupsError.error) {
     return (
       <section className="panel">
         <div className="panel-head">
           <h3>Matchups</h3>
         </div>
-        <StatusMessage tone="error">{(query.error as Error).message}</StatusMessage>
+        <QueryErrorState view={matchupsError} />
       </section>
     );
+  }
+  if (query.isLoading) {
+    return null;
   }
 
   const deck = query.data?.deck;
@@ -411,6 +415,7 @@ export function LimitedMatchupsPanel({
     queryKey: ["limited-matchups", format],
     queryFn: () => api.limitedMatchups(format),
   });
+  const matchupsError = useQueryError(query);
   const allSets = query.data?.sets ?? [];
   const { lookup: setLookup } = useSetCodes(allSets.map((set) => set.setCode));
   const releaseOrder = sortSetCodesByRelease(allSets.map((set) => set.setCode), setLookup);
@@ -433,18 +438,18 @@ export function LimitedMatchupsPanel({
     setSelection((current) => (current?.setCode === forSet ? null : current));
   };
 
-  if (query.isLoading) {
-    return emptyMessage ? <LoadingMessage page>Loading set matchups…</LoadingMessage> : null;
-  }
-  if (query.error) {
+  if (matchupsError.error) {
     return (
       <section className="panel">
         <div className="panel-head">
           <h3>{title}</h3>
         </div>
-        <StatusMessage tone="error">{(query.error as Error).message}</StatusMessage>
+        <QueryErrorState view={matchupsError} />
       </section>
     );
+  }
+  if (query.isLoading) {
+    return emptyMessage ? <LoadingMessage page>Loading set matchups…</LoadingMessage> : null;
   }
   if (sets.length === 0) {
     if (!emptyMessage) {

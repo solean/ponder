@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { OverlaySaveQueue } from "../lib/overlaySaveQueue";
 import { api } from "../lib/api";
 import { DEFAULT_OVERLAY_SETTINGS, overlayPanelWidth, overlayShortcutLabel, type OverlaySettings } from "../lib/overlaySettings";
-import { StatusMessage } from "./StatusMessage";
+import { ErrorState, QueryErrorState, rejectionReason } from "./ErrorState";
+import { useQueryError } from "../lib/useQueryError";
 import { CardPreviewName } from "./CardPreviewName";
 import { ManaSymbol } from "./ManaSymbol";
 import { SettingRow, ToggleRow } from "./SettingRow";
@@ -24,6 +25,7 @@ const badgeCalibrationFields = [
 export function OverlaySettingsPanel({ id, onStatusChange }: { id?: string; onStatusChange?: (status: "idle" | "saving" | "error") => void }) {
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: ["overlay-settings"], queryFn: api.overlaySettings });
+  const loadError = useQueryError(query);
   const [draft, setDraft] = useState<OverlaySettings | null>(null);
   const settings = draft ?? query.data ?? DEFAULT_OVERLAY_SETTINGS;
   const latest = useRef<OverlaySettings | null>(null);
@@ -32,7 +34,7 @@ export function OverlaySettingsPanel({ id, onStatusChange }: { id?: string; onSt
   queryData.current = query.data;
   const queue = useRef<OverlaySaveQueue | null>(null);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
   const [shortcutDraft, setShortcutDraft] = useState<string | null>(null);
   const undoPending = useRef(false);
   const [undo, setUndo] = useState<OverlaySettings | null>(null);
@@ -57,9 +59,9 @@ export function OverlaySettingsPanel({ id, onStatusChange }: { id?: string; onSt
       setDraft(latest.current);
     }
   }, (cause) => {
-    setError(cause instanceof Error ? cause.message : "Could not save overlay settings.");
+    setError(cause);
     setStatus("error");
-  }, () => { setStatus("saving"); setError(""); }, () => setStatus("saved"));
+  }, () => { setStatus("saving"); setError(null); }, () => setStatus("saved"));
   const enqueue = (value: OverlaySettings, shortcut = false) => queue.current!.enqueue({ settings: value, shortcut });
   const change = <K extends keyof OverlaySettings>(key: K, value: OverlaySettings[K], commit = true) => {
     const next = { ...(latest.current ?? settings), [key]: value };
@@ -109,15 +111,17 @@ export function OverlaySettingsPanel({ id, onStatusChange }: { id?: string; onSt
           </div>
         ) : null}
       </div>
-      {query.isPending ? <LoadingMessage>Loading overlay settings…</LoadingMessage> : query.isError ? (
-        <><StatusMessage tone="error">{(query.error as Error).message}</StatusMessage><button className="settings-button" type="button" onClick={() => void query.refetch()}>Try again</button></>
-      ) : (
+      {loadError.error ? (
+        <QueryErrorState view={loadError} title="Couldn't load the overlay settings." detail={rejectionReason(loadError.error)} />
+      ) : query.isPending ? <LoadingMessage>Loading overlay settings…</LoadingMessage> : (
         <>
           {status === "error" ? (
-            <StatusMessage tone="error">
-              Overlay settings could not be saved: {error}{" "}
-              <button type="button" className="settings-text-button" onClick={() => void queue.current!.drain()}>Retry</button>
-            </StatusMessage>
+            <ErrorState
+              size="inline"
+              title="Couldn't save the overlay settings."
+              detail={rejectionReason(error)}
+              onRetry={() => void queue.current!.drain()}
+            />
           ) : null}
           <div className="overlay-settings-fields">
             <div className="panel settings-card">

@@ -7,7 +7,9 @@ import { CardPreviewName } from "./CardPreviewName";
 import { EventLabel } from "./EventLabel";
 import { ResultPill } from "./ResultPill";
 import { StatusMessage } from "./StatusMessage";
+import { QueryErrorState } from "./ErrorState";
 import { api } from "../lib/api";
+import { useQueryError, type QueryErrorView } from "../lib/useQueryError";
 import {
   buildDeckAnalyticsCoveragePresentation,
   coverageSampleLabel,
@@ -543,6 +545,7 @@ function DrillDownSection({
           })
         : api.draftAnalyticsGames(scope.set, scope.format, drillDown.params),
   });
+  const gamesError = useQueryError(query);
   const rows = query.data ?? [];
   const { lookup: setLookup } = useEventSets(rows.map((row) => row.eventName));
 
@@ -554,10 +557,10 @@ function DrillDownSection({
           Close
         </button>
       </div>
-      {query.isLoading ? (
+      {gamesError.error ? (
+        <QueryErrorState view={gamesError} />
+      ) : query.isLoading ? (
         <LoadingMessage>Loading games…</LoadingMessage>
-      ) : query.error ? (
-        <StatusMessage tone="error">{(query.error as Error).message}</StatusMessage>
       ) : rows.length === 0 ? (
         <StatusMessage>No games match this statistic.</StatusMessage>
       ) : (
@@ -633,13 +636,14 @@ export function DeckAnalyticsPanel({ deckId, versions }: { deckId: number; versi
     queryFn: () => api.deckAnalytics(deckId, versionId || undefined),
     enabled: Number.isFinite(deckId),
   });
+  const analyticsError = useQueryError(query);
   return (
     <PerformanceAnalyticsPanel
       key={`${deckId}-${versionId}`}
       scope={{ kind: "deck", deckId, versionId }}
       data={query.data}
       isLoading={query.isLoading}
-      error={query.error}
+      errorView={analyticsError}
       versions={versions}
       onVersionChange={setVersionId}
     />
@@ -650,7 +654,7 @@ export function PerformanceAnalyticsPanel({
   scope,
   data,
   isLoading,
-  error,
+  errorView,
   versions = [],
   onVersionChange,
   headerControls,
@@ -658,7 +662,7 @@ export function PerformanceAnalyticsPanel({
   scope: AnalyticsScope;
   data?: DeckAnalytics;
   isLoading: boolean;
-  error: Error | null;
+  errorView: QueryErrorView;
   versions?: DeckVersion[];
   onVersionChange?: (versionId: number) => void;
   /** Filters shown at the right of the panel heading, such as a set picker. */
@@ -716,15 +720,15 @@ export function PerformanceAnalyticsPanel({
     });
   };
 
-  if (isLoading || error) {
+  if (errorView.error || isLoading) {
     return (
       <section className="panel deck-analytics-panel">
         <div className="panel-head deck-analytics-head">
           <h3>Performance Analytics</h3>
           {headerControls ? <div className="deck-analytics-controls">{headerControls}</div> : null}
         </div>
-        {error ? (
-          <StatusMessage tone="error">{error.message}</StatusMessage>
+        {errorView.error ? (
+          <QueryErrorState view={errorView} />
         ) : (
           <LoadingMessage>Deriving performance analytics…</LoadingMessage>
         )}

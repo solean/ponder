@@ -5,6 +5,7 @@ import type { useMatchReplay } from "../../lib/replay/useMatchReplay";
 import type { MatchReplayView } from "../../lib/replay/useMatchReplayView";
 import { replayRecordingCoverage } from "../../lib/replay/recordingCoverage";
 import type { Match } from "../../lib/types";
+import { ErrorState } from "../ErrorState";
 import { StatusMessage } from "../StatusMessage";
 import type { MatchGameTabState } from "./MatchGameTabs";
 import { MatchGameTabs } from "./MatchGameTabs";
@@ -106,17 +107,30 @@ export function MatchReplayPanel({
       <div className="stack-md">
         {replayQuery.error || timelineError ? (
           <div className="match-replay-recording-error">
-            <StatusMessage tone="error">
-              Unable to {replayQuery.error ? "load or refresh the recording" : "load first public sightings"}. Retry to check the saved data again.
-              {hasPlayableReplay || hasFallback ? " Previously loaded data remains available below." : ""}
-            </StatusMessage>
-            <button className="match-replay-button" type="button" disabled={replayQuery.isRetrying} onClick={() => void replayQuery.retry()}>
-              {replayQuery.isRetrying ? "Retrying…" : "Retry loading replay"}
-            </button>
+            <ErrorState
+              title={replayQuery.error ? "Couldn't load the replay recording." : "Couldn't load first public sightings."}
+              detail={hasPlayableReplay || hasFallback ? "Previously loaded data is still shown below." : undefined}
+              onRetry={() => void replayQuery.retry()}
+              retrying={replayQuery.isRetrying}
+            />
           </div>
         ) : null}
         {showsFrameBoard ? null : recordingNode}
-        {positionError ? <StatusMessage tone="error">{positionError} <Link to={`/matches/${matchId}`} onClick={() => { const game = timelineGameNumbers[0]; if (game !== undefined) { clearReplayKind(matchId, game); saveReplayGame(matchId, game); setSelectedTimelineGameNumber(game); } }}>Start from the first game</Link></StatusMessage> : replayQuery.isPending && !hasPlayableReplay ? (
+        {positionError ? (
+          <ErrorState
+            icon="missing"
+            title={positionError}
+            actions={
+              <Link
+                className="control-button"
+                to={`/matches/${matchId}`}
+                onClick={() => { const game = timelineGameNumbers[0]; if (game !== undefined) { clearReplayKind(matchId, game); saveReplayGame(matchId, game); setSelectedTimelineGameNumber(game); } }}
+              >
+                Start from the first game
+              </Link>
+            }
+          />
+        ) : replayQuery.isPending && !hasPlayableReplay ? (
           <LoadingMessage>Checking replay recording…</LoadingMessage>
         ) : (
           <div

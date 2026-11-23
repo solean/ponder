@@ -514,6 +514,7 @@ export function OverviewPage() {
     queryKey: ["overview", "activity", activityDays],
     queryFn: () => api.dailyActivity(activityDays),
   });
+  const activityError = useQueryError(activityQuery);
   const pageQuery = useQuery({
     queryKey: ["overview"],
     queryFn: api.overview,
@@ -698,10 +699,10 @@ export function OverviewPage() {
             </div>
           </div>
         </div>
-        {activityQuery.isPending ? (
+        {activityError.error ? (
+          <QueryErrorState view={activityError} />
+        ) : activityQuery.isPending ? (
           <LoadingMessage>Loading activity…</LoadingMessage>
-        ) : activityQuery.error ? (
-          <StatusMessage tone="error">Unable to load activity: {(activityQuery.error as Error).message}</StatusMessage>
         ) : (
           <ActivityGraph
             activity={activity}

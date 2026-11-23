@@ -18,7 +18,8 @@ void ponderMenuBarRender(
     bool on,
     bool canToggle,
     const char *indicator,
-    const char *tooltip
+    const char *tooltip,
+    const char *update
 );
 void ponderMenuBarRenderOverlay(const char *label);
 

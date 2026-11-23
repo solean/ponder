@@ -20,6 +20,7 @@ import { DetailedLogsNotice } from "./DetailedLogsNotice";
 import { AppErrorFallback, ErrorBoundary } from "./ErrorBoundary";
 import { LiveStatus } from "./LiveStatus";
 import { Plasma } from "./Plasma";
+import { UpdateIndicator } from "./UpdateIndicator";
 import { OrbLogo } from "./OrbLogo";
 
 const tabs = [
@@ -122,6 +123,9 @@ export function Layout() {
               ))}
             </nav>
             <div className="topbar-controls">
+              <ErrorBoundary label="UpdateIndicator" fallback={() => null}>
+                <UpdateIndicator />
+              </ErrorBoundary>
               <ErrorBoundary label="LiveStatus" fallback={() => null}>
                 <LiveStatus />
               </ErrorBoundary>

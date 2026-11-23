@@ -3,11 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { LoadingLabel, LoadingMessage } from "../components/LoadingMessage";
 import { SettingRow, ToggleRow } from "../components/SettingRow";
+import { QueryErrorState } from "../components/ErrorState";
 import { PageHeader } from "../components/PageHeader";
 import { StatusMessage } from "../components/StatusMessage";
 import { OverlaySettingsPanel } from "../components/OverlaySettingsPanel";
 import { AppIconPicker } from "../components/AppIconPicker";
 import { api } from "../lib/api";
+import { useQueryError } from "../lib/useQueryError";
 import { RuntimeConfigSaveQueue } from "../lib/runtimeConfigSaveQueue";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { APP_NAME } from "../lib/branding";
@@ -343,11 +345,13 @@ function syncForm(status: RuntimeStatus): RuntimeConfig {
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const { mode, modePreference, setModePreference, scheme, setScheme } = useThemeControls();
-  const { data, isLoading, error } = useQuery({
+  const pageQuery = useQuery({
     queryKey: runtimeStatusKey,
     queryFn: api.runtimeStatus,
     refetchInterval: 3000,
   });
+  const { data, isLoading } = pageQuery;
+  const pageError = useQueryError(pageQuery);
   const aiStatusQuery = useQuery({
     queryKey: aiStatusKey,
     queryFn: api.aiStatus,
@@ -504,8 +508,15 @@ export function SettingsPage() {
     return base.sort((a, b) => a - b);
   }, [form.pollIntervalSeconds]);
 
+  if (pageError.error) {
+    return (
+      <div className="stack-lg">
+        <PageHeader title="Settings" />
+        <QueryErrorState view={pageError} size="page" />
+      </div>
+    );
+  }
   if (isLoading) return <LoadingMessage page>Loading runtime settings…</LoadingMessage>;
-  if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
   if (!data) return <StatusMessage>No runtime status available.</StatusMessage>;
 
   const effectiveActivePath = form.logPath.trim() || data.defaultLogPath;

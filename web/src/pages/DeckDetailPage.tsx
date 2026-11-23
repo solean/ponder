@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
+import { BackLink, NotFoundState, QueryErrorState, isNotFound } from "../components/ErrorState";
 import { LoadingMessage } from "../components/LoadingMessage";
 import { CardPreviewName } from "../components/CardPreviewName";
 import { CardStatLine, CardStatsSource, useDraftCardStats } from "../components/CardStats";
@@ -19,6 +20,7 @@ import { ResultPill } from "../components/ResultPill";
 import { SectionTabs, sectionPanelID, sectionTabID } from "../components/SectionTabs";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { useQueryError } from "../lib/useQueryError";
 import { formatArenaDeck } from "../lib/arenaDeck";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { deckVersionChangeTotals, deckVersionChanges, type DeckVersionChange } from "../lib/deckVersionChanges";
@@ -1131,11 +1133,13 @@ export function DeckDetailPage() {
   const sectionTabBaseId = useId();
   const [arenaCopyStatus, setArenaCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
 
-  const { data, isLoading, error } = useQuery({
+  const pageQuery = useQuery({
     queryKey: ["deck", deckId],
     queryFn: () => api.deckDetail(deckId),
     enabled: Number.isFinite(deckId),
   });
+  const { data, isLoading } = pageQuery;
+  const pageError = useQueryError(pageQuery);
   const guideStatusQuery = useQuery({
     queryKey: ["ai-status"],
     queryFn: api.aiStatus,
@@ -1500,9 +1504,23 @@ export function DeckDetailPage() {
 
   useBreadcrumbLabel(data ? (data.name || `Deck #${deckId}`) : null);
 
-  if (!Number.isFinite(deckId)) return <StatusMessage tone="error">Invalid deck id.</StatusMessage>;
+  if (!Number.isFinite(deckId)) {
+    return <NotFoundState title="This deck doesn't exist." backTo="/decks" backLabel="Back to decks" />;
+  }
+  if (isNotFound(pageError.error)) {
+    return (
+      <NotFoundState
+        title="This deck doesn't exist."
+        detail={`Ponder has no record of deck #${deckId}. The link may be out of date.`}
+        backTo="/decks"
+        backLabel="Back to decks"
+      />
+    );
+  }
+  if (pageError.error) {
+    return <QueryErrorState view={pageError} size="page" actions={<BackLink to="/decks">Back to decks</BackLink>} />;
+  }
   if (isLoading) return <DeckDetailSkeleton />;
-  if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
   if (!data) return <StatusMessage>Deck not found.</StatusMessage>;
 
   const matches = data.matches ?? [];

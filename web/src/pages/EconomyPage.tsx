@@ -5,9 +5,10 @@ import { Link } from "react-router-dom";
 
 import { LoadingMessage } from "../components/LoadingMessage";
 import { EventLabel } from "../components/EventLabel";
+import { QueryErrorState } from "../components/ErrorState";
 import { PageHeader } from "../components/PageHeader";
-import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { useQueryError } from "../lib/useQueryError";
 import {
   eventEntryLabel as entryLabel,
   eventRewardLabel as rewardLabel,
@@ -200,11 +201,13 @@ function confidenceBadge(confidence: EventRunEconomy["linkConfidence"]): ReactNo
 
 export function EconomyPage() {
   const { mode, scheme } = useTheme();
-  const { data, isLoading, error } = useQuery({
+  const pageQuery = useQuery({
     queryKey: ["economy"],
     queryFn: api.economy,
     refetchInterval: 60_000,
   });
+  const { data, isLoading } = pageQuery;
+  const pageError = useQueryError(pageQuery);
 
   const changes = useMemo(() => economyChanges(data?.history ?? []), [data?.history]);
   const recentTransactions = useMemo(
@@ -296,8 +299,15 @@ export function EconomyPage() {
     };
   }, [chartPoints, mode]);
 
+  if (pageError.error) {
+    return (
+      <div className="stack-lg economy-page">
+        <PageHeader title="Economy" />
+        <QueryErrorState view={pageError} size="page" />
+      </div>
+    );
+  }
   if (isLoading) return <LoadingMessage page>Loading economy data…</LoadingMessage>;
-  if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
 
   const latest = data?.latest;
   if (!latest) {

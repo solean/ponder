@@ -5,9 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { LoadingMessage } from "../components/LoadingMessage";
 import { ManaSymbol } from "../components/ManaSymbol";
 import { DeckColorIdentity } from "../components/MatchDeckColors";
+import { QueryErrorState } from "../components/ErrorState";
 import { PageHeader } from "../components/PageHeader";
-import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { useQueryError } from "../lib/useQueryError";
 import {
   DECK_FILTER_COLORS,
   DECK_PERIODS,
@@ -261,10 +262,12 @@ function DeckRow({ row }: { row: DeckListRow }) {
 }
 
 export function DecksPage() {
-  const { data, isLoading, error } = useQuery({
+  const pageQuery = useQuery({
     queryKey: ["decks"],
     queryFn: () => api.decks(),
   });
+  const { data, isLoading } = pageQuery;
+  const pageError = useQueryError(pageQuery);
   const [searchParams, setSearchParams] = useSearchParams();
   const { filters, sort } = useMemo(() => parseDeckListParams(searchParams), [searchParams]);
 
@@ -304,8 +307,15 @@ export function DecksPage() {
     setSearchParams(deckListParams(filters, next), { replace: true });
   }
 
+  if (pageError.error) {
+    return (
+      <div className="stack-lg">
+        <PageHeader title="Decks" />
+        <QueryErrorState view={pageError} size="page" />
+      </div>
+    );
+  }
   if (isLoading) return <LoadingMessage page>Loading decks…</LoadingMessage>;
-  if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
 
   const filtersActive = hasActiveDeckFilters(filters);
   const deckCount = `${decks.length} ${decks.length === 1 ? "deck" : "decks"}`;

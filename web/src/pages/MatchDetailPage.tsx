@@ -1,3 +1,4 @@
+import { BackLink, NotFoundState, QueryErrorState, isNotFound } from "../components/ErrorState";
 import { LoadingMessage } from "../components/LoadingMessage";
 import { readReplayGame, saveReplayGame } from "../lib/replay/position";
 import { useQuery } from "@tanstack/react-query";
@@ -12,6 +13,7 @@ import {
 } from "../components/SectionTabs";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { useQueryError } from "../lib/useQueryError";
 import { useMatchReplay } from "../lib/replay/useMatchReplay";
 import { useEventSets } from "../lib/useEventSets";
 
@@ -59,6 +61,7 @@ function MatchDetailContent() {
     queryFn: () => api.matchDetail(matchId),
     enabled: isValidMatchID,
   });
+  const matchError = useQueryError(query);
   const timelineQuery = useQuery({
     queryKey: ["match-timeline", matchId],
     queryFn: () => api.matchTimeline(matchId),
@@ -158,15 +161,23 @@ function MatchDetailContent() {
     handleTimelineGameTabKeyDown,
   };
 
-  if (!isValidMatchID)
-    return <StatusMessage tone="error">Invalid match id.</StatusMessage>;
-  if (query.isLoading) return <LoadingMessage page>Loading match…</LoadingMessage>;
-  if (query.error)
+  if (!isValidMatchID) {
+    return <NotFoundState title="This match doesn't exist." backTo="/matches" backLabel="Back to matches" />;
+  }
+  if (isNotFound(matchError.error)) {
     return (
-      <StatusMessage tone="error">
-        {(query.error as Error).message}
-      </StatusMessage>
+      <NotFoundState
+        title="This match doesn't exist."
+        detail={`Ponder has no record of match #${matchId}. The link may be out of date.`}
+        backTo="/matches"
+        backLabel="Back to matches"
+      />
     );
+  }
+  if (matchError.error) {
+    return <QueryErrorState view={matchError} size="page" actions={<BackLink to="/matches">Back to matches</BackLink>} />;
+  }
+  if (query.isLoading) return <LoadingMessage page>Loading match…</LoadingMessage>;
   if (!query.data) return <StatusMessage>Match not found.</StatusMessage>;
 
   const { match } = query.data;

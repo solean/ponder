@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import { ApiError } from "../lib/apiError";
 import { isRetryableError } from "../lib/queryClient";
+import type { QueryErrorView } from "../lib/useQueryError";
 import { LoadingMark } from "./LoadingMessage";
 import "./ErrorState.css";
 
@@ -58,12 +60,9 @@ export function ErrorState({
 
   const stillFailing = !retrying && failureCount > 1;
   return (
-    <section
-      className={`error-state error-state--${size}`}
-      role="alert"
-      aria-atomic="true"
-      aria-busy={retrying || undefined}
-    >
+    // No aria-busy while retrying: background retries show this state too, and
+    // a busy region can hide the Try again button from screen readers.
+    <section className={`error-state error-state--${size}`} role="alert" aria-atomic="true">
       <div className="error-state__heading">
         <ErrorIcon kind={icon} />
         <p className="error-state__title">{title}</p>
@@ -99,48 +98,85 @@ export function ErrorState({
   );
 }
 
-/** The parts of a React Query result that QueryErrorState reads. */
-export type FailedQuery = {
-  error: Error | null;
-  refetch: () => unknown;
-  isFetching: boolean;
-  errorUpdateCount: number;
-};
-
 export const RESTART_HINT = "If it keeps failing, restart Ponder.";
 
 /**
- * ErrorState for a failed query. The headline defaults to the error's message.
- * Since IXN-90 the API sends one written for users, such as "Couldn't load
- * matches.". A retry is offered only when it could help: never for a 4xx.
+ * ErrorState for a failed query, fed by useQueryError. The headline defaults
+ * to the error's message: since IXN-90 the API sends one written for users,
+ * such as "Couldn't load matches.". A retry is offered only when it could
+ * help: never for a 4xx.
  */
 export function QueryErrorState({
-  query,
+  view,
   title,
   detail,
   size = "panel",
   actions,
   icon,
 }: {
-  query: FailedQuery;
+  view: QueryErrorView;
   title?: ReactNode;
   detail?: ReactNode;
   size?: ErrorStateSize;
   actions?: ReactNode;
   icon?: "failed" | "missing";
 }) {
-  const { error } = query;
+  const { error } = view;
   const retryable = isRetryableError(error);
   return (
     <ErrorState
       size={size}
       title={title ?? (error?.message || "Something went wrong.")}
       detail={detail ?? (retryable && size !== "inline" ? RESTART_HINT : undefined)}
-      onRetry={retryable ? () => void query.refetch() : undefined}
-      retrying={query.isFetching}
-      failureCount={query.errorUpdateCount}
+      onRetry={retryable ? () => void view.retry() : undefined}
+      retrying={view.retrying}
+      failureCount={view.tries}
       actions={actions}
-      icon={icon ?? (error instanceof ApiError && error.status === 404 ? "missing" : "failed")}
+      icon={icon ?? (isNotFound(error) ? "missing" : "failed")}
+    />
+  );
+}
+
+/** True when the API answered 404: the record doesn't exist. */
+export function isNotFound(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
+
+/** A link back to a list, styled to sit in an ErrorState's actions. */
+export function BackLink({ to, children, primary = false }: { to: string; children: ReactNode; primary?: boolean }) {
+  return (
+    <Link className={`control-button${primary ? " control-button--primary" : " control-button--quiet"}`} to={to}>
+      {children}
+    </Link>
+  );
+}
+
+/**
+ * Page error for a record that doesn't exist, such as a deck ID that isn't in
+ * the database or isn't a number at all. Offers a way back instead of a retry.
+ */
+export function NotFoundState({
+  title,
+  detail = "The link may be out of date.",
+  backTo,
+  backLabel,
+}: {
+  title: ReactNode;
+  detail?: ReactNode;
+  backTo: string;
+  backLabel: ReactNode;
+}) {
+  return (
+    <ErrorState
+      size="page"
+      icon="missing"
+      title={title}
+      detail={detail}
+      actions={
+        <BackLink to={backTo} primary>
+          {backLabel}
+        </BackLink>
+      }
     />
   );
 }

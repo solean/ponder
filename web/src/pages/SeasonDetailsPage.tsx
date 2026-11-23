@@ -3,9 +3,10 @@ import { useEffect, useMemo, type KeyboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { LoadingMessage } from "../components/LoadingMessage";
+import { QueryErrorState } from "../components/ErrorState";
 import { PageHeader } from "../components/PageHeader";
-import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { useQueryError } from "../lib/useQueryError";
 import { pct, winRateTone } from "../lib/format";
 import {
   formatRankLabel,
@@ -143,10 +144,12 @@ export function SeasonDetailsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedLadder = searchParams.get("ladder");
   const requestedSeason = searchParams.get("season");
-  const { data, isLoading, error } = useQuery({
+  const pageQuery = useQuery({
     queryKey: ["rank-history"],
     queryFn: api.rankHistory,
   });
+  const { data, isLoading } = pageQuery;
+  const pageError = useQueryError(pageQuery);
   const ladder: Ladder =
     requestedLadder === "constructed" || requestedLadder === "limited"
       ? requestedLadder
@@ -257,8 +260,15 @@ export function SeasonDetailsPage() {
     return [...bySeason.values()].sort((left, right) => right.season - left.season);
   }, [allMatches]);
 
+  if (pageError.error) {
+    return (
+      <div className="stack-lg season-details-page">
+        <PageHeader title="Season details" />
+        <QueryErrorState view={pageError} size="page" />
+      </div>
+    );
+  }
   if (isLoading) return <LoadingMessage page>Loading season details…</LoadingMessage>;
-  if (error) return <StatusMessage tone="error">{(error as Error).message}</StatusMessage>;
 
   const seasonScopeLabel =
     selectedSeason == null ? "all seasons" : `season ${selectedSeason}`;

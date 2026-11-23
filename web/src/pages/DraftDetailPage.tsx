@@ -1,14 +1,15 @@
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
+import { BackLink, NotFoundState, QueryErrorState } from "../components/ErrorState";
 import { LoadingMessage } from "../components/LoadingMessage";
 import { useBreadcrumbLabel } from "../components/Breadcrumbs";
 import { useDraftCardStats } from "../components/CardStats";
 import { DraftPickLog } from "../components/DraftPickLog";
 import { DraftPoolPanel } from "../components/DraftPoolPanel";
 import { DraftSessionOverview } from "../components/DraftSessionOverview";
-import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
+import { useQueryError } from "../lib/useQueryError";
 import { parseEventName } from "../lib/events";
 
 export function DraftDetailPage() {
@@ -26,6 +27,8 @@ export function DraftDetailPage() {
     queryFn: api.drafts,
     enabled: isValidDraftID,
   });
+  const sessionsError = useQueryError(sessionsQuery);
+  const picksError = useQueryError(picksQuery);
   const session = (sessionsQuery.data ?? []).find((row) => row.id === draftId);
   const draftBreadcrumbLabel = session
     ? `Draft #${session.id} · ${parseEventName(session.eventName).kindLabel}`
@@ -34,20 +37,27 @@ export function DraftDetailPage() {
   const cardStats = useDraftCardStats(session?.eventName ?? "");
 
   if (!isValidDraftID) {
-    return <StatusMessage tone="error">Invalid draft id.</StatusMessage>;
+    return <NotFoundState title="This draft doesn't exist." backTo="/drafts" backLabel="Back to drafts" />;
   }
+  if (sessionsError.error) {
+    return <QueryErrorState view={sessionsError} size="page" actions={<BackLink to="/drafts">Back to drafts</BackLink>} />;
+  }
+  if (picksError.error) {
+    return <QueryErrorState view={picksError} size="page" actions={<BackLink to="/drafts">Back to drafts</BackLink>} />;
+  }
+
   if (sessionsQuery.isLoading || picksQuery.isLoading) {
     return <LoadingMessage page>Loading draft report…</LoadingMessage>;
   }
-  if (sessionsQuery.error) {
-    return <StatusMessage tone="error">{(sessionsQuery.error as Error).message}</StatusMessage>;
-  }
-  if (picksQuery.error) {
-    return <StatusMessage tone="error">{(picksQuery.error as Error).message}</StatusMessage>;
-  }
-
   if (!session) {
-    return <StatusMessage tone="error">Draft session not found.</StatusMessage>;
+    return (
+      <NotFoundState
+        title="This draft doesn't exist."
+        detail={`Ponder has no record of draft #${draftId}. The link may be out of date.`}
+        backTo="/drafts"
+        backLabel="Back to drafts"
+      />
+    );
   }
 
   const picks = picksQuery.data ?? [];

@@ -55,7 +55,7 @@ export function ConfigResetNotice() {
         ) : null}
         <button
           type="button"
-          className="settings-button"
+          className={`settings-button${dismiss.error ? " is-failed" : ""}`}
           onClick={() => dismiss.mutate()}
           disabled={dismiss.isPending}
         >
@@ -63,6 +63,9 @@ export function ConfigResetNotice() {
         </button>
         {reveal.error ? (
           <ErrorState size="inline" title="Couldn't show the file in Finder." detail={rejectionReason(reveal.error)} />
+        ) : null}
+        {dismiss.error ? (
+          <ErrorState size="inline" title="Couldn't dismiss this notice." detail={rejectionReason(dismiss.error)} />
         ) : null}
       </div>
     </section>

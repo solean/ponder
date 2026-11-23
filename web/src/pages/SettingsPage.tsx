@@ -56,24 +56,13 @@ function CopyPathButton({ text }: { text: string }) {
   );
 }
 
-function RevealButton({ path }: { path: string }) {
-  const revealMutation = useMutation({ mutationFn: () => api.revealPath(path) });
-  const failed = Boolean(revealMutation.error);
-  return (
-    <button
-      type="button"
-      className={`settings-button${failed ? " is-failed" : ""}`}
-      onClick={() => revealMutation.mutate()}
-      disabled={revealMutation.isPending}
-      title={failed ? `Could not show the file: ${(revealMutation.error as Error).message}` : undefined}
-    >
-      Show in Finder
-    </button>
-  );
-}
-
-/** A file the app uses: its name, its path, and buttons to copy or reveal it. */
+/**
+ * A file the app uses: its name, its path, and buttons to copy or reveal it.
+ * A failed reveal is explained under the path, where it's seen and announced,
+ * rather than in the button's hover tooltip.
+ */
 function PathRow({ label, detail, path, canReveal }: { label: string; detail?: string; path: string; canReveal: boolean }) {
+  const reveal = useMutation({ mutationFn: () => api.revealPath(path) });
   return (
     <SettingRow
       label={
@@ -83,13 +72,27 @@ function PathRow({ label, detail, path, canReveal }: { label: string; detail?: s
         </>
       }
       help={
-        <code className="settings-path" title={path}>
-          {shortenHomePath(path)}
-        </code>
+        <>
+          <code className="settings-path" title={path}>
+            {shortenHomePath(path)}
+          </code>
+          {reveal.error ? (
+            <ErrorState size="inline" title="Couldn't show the file in Finder." detail={rejectionReason(reveal.error)} />
+          ) : null}
+        </>
       }
     >
       <CopyPathButton text={path} />
-      {canReveal ? <RevealButton path={path} /> : null}
+      {canReveal ? (
+        <button
+          type="button"
+          className={`settings-button${reveal.error ? " is-failed" : ""}`}
+          onClick={() => reveal.mutate()}
+          disabled={reveal.isPending}
+        >
+          Show in Finder
+        </button>
+      ) : null}
     </SettingRow>
   );
 }

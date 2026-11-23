@@ -2483,6 +2483,11 @@ body.has-wide-deck-curve .app-shell {
   gap: 0.5rem;
 }
 
+/* A failed action's message gets its own line under the buttons. */
+.config-reset-notice-actions > .error-state {
+  flex-basis: 100%;
+}
+
 .detailed-logs-notice {
   display: grid;
   gap: 1.1rem;

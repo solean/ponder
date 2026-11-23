@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
+import { ErrorState, rejectionReason } from "./ErrorState";
 
 function fileName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
@@ -48,7 +49,6 @@ export function ConfigResetNotice() {
             className={`settings-button${reveal.error ? " is-failed" : ""}`}
             onClick={() => reveal.mutate(backupPath)}
             disabled={reveal.isPending}
-            title={reveal.error ? `Could not show the file: ${(reveal.error as Error).message}` : undefined}
           >
             Show in Finder
           </button>
@@ -61,6 +61,9 @@ export function ConfigResetNotice() {
         >
           Dismiss
         </button>
+        {reveal.error ? (
+          <ErrorState size="inline" title="Couldn't show the file in Finder." detail={rejectionReason(reveal.error)} />
+        ) : null}
       </div>
     </section>
   );

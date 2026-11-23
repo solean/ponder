@@ -14,6 +14,7 @@ import { useReplayKeyboard } from "../../lib/replay/useReplayKeyboard";
 import { useReplayPlayer } from "../../lib/replay/useReplayPlayer";
 import type { CardPreview } from "../../lib/scryfall";
 import type { MatchCardPlay } from "../../lib/types";
+import { ErrorState } from "../ErrorState";
 import { StatusMessage } from "../StatusMessage";
 import { MatchReplayCard } from "./CardPreviews";
 import { MatchReplayBattlefield } from "./ReplayBattlefield";
@@ -123,7 +124,15 @@ export function MatchTimelineBoard({
     onLast: goToLastAction,
   });
 
-  if (missingPosition) return <StatusMessage tone="error">This saved replay position is no longer available. <button type="button" onClick={() => { setSelectedActionIndex(0); }}>Start from the first step</button></StatusMessage>;
+  if (missingPosition) {
+    return (
+      <ErrorState
+        icon="missing"
+        title="This saved replay position is no longer available."
+        actions={<button type="button" className="control-button" onClick={() => { setSelectedActionIndex(0); }}>Start from the first step</button>}
+      />
+    );
+  }
 
   if (!currentAction) {
     return (

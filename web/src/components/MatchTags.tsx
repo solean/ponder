@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { MAX_MATCH_TAG_LENGTH, MAX_MATCH_TAGS, matchTagSuggestions, withMatchTag } from "../lib/matchTags";
 import { useSetMatchTags } from "../lib/useSetMatchTags";
+import { ErrorState, rejectionReason } from "./ErrorState";
 
 const POPOVER_WIDTH_PX = 272;
 const POPOVER_GAP_PX = 6;
@@ -299,9 +300,13 @@ function MatchTagEditorPopover({
         </ul>
       ) : null}
       {mutation.isError ? (
-        <p className="match-tag-error" role="alert">
-          Couldn't save tags: {mutation.error.message}
-        </p>
+        <ErrorState
+          size="inline"
+          title="Couldn't save tags."
+          detail={rejectionReason(mutation.error)}
+          onRetry={mutation.variables ? () => mutation.mutate(mutation.variables!) : undefined}
+          retrying={mutation.isPending}
+        />
       ) : null}
     </div>,
     document.body,

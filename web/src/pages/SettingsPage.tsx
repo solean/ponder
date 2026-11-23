@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { LoadingLabel, LoadingMessage } from "../components/LoadingMessage";
 import { SettingRow, ToggleRow } from "../components/SettingRow";
-import { QueryErrorState } from "../components/ErrorState";
+import { ErrorState, QueryErrorState, rejectionReason } from "../components/ErrorState";
 import { PageHeader } from "../components/PageHeader";
 import { StatusMessage } from "../components/StatusMessage";
 import { OverlaySettingsPanel } from "../components/OverlaySettingsPanel";
@@ -357,6 +357,7 @@ export function SettingsPage() {
     queryFn: api.aiStatus,
     staleTime: 30_000,
   });
+  const aiStatusError = useQueryError(aiStatusQuery);
 
   const [form, setForm] = useState<RuntimeConfig>({
     appIcon: "white",
@@ -372,7 +373,7 @@ export function SettingsPage() {
     seventeenLandsFormat: "",
   });
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState("");
+  const [saveError, setSaveError] = useState<unknown>(null);
   const [pathError, setPathError] = useState("");
   const [savedFlash, setSavedFlash] = useState(false);
   const [dismissedError, setDismissedError] = useState("");
@@ -401,7 +402,7 @@ export function SettingsPage() {
     if (saveQueue.running) return;
     setSaving(true);
     setSavedFlash(false);
-    setSaveError("");
+    setSaveError(null);
     try {
       await saveQueue.drain(async (config, patch) => {
         await queryClient.cancelQueries({ queryKey: runtimeStatusKey });
@@ -420,7 +421,7 @@ export function SettingsPage() {
       });
       setSavedFlash(true);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Unable to save settings.");
+      setSaveError(error);
     } finally {
       setSaving(false);
     }
@@ -526,7 +527,6 @@ export function SettingsPage() {
   const settingsPending = saving || Boolean(saveError) || pathDirty || Boolean(pathError);
   const liveMutationPending = startLiveMutation.isPending || stopLiveMutation.isPending;
   const importDisabled = importMutation.isPending || data.liveRunning || settingsPending;
-  const liveError = (startLiveMutation.error || stopLiveMutation.error) as Error | null;
   const aiProviders = aiStatusQuery.data?.providers?.length ? aiStatusQuery.data.providers : fallbackAIProviders;
   const selectedAIProvider =
     aiProviders.find((provider) => provider.id === form.aiProvider) ??
@@ -593,10 +593,13 @@ export function SettingsPage() {
         }
       />
       {saveError ? (
-        <StatusMessage tone="error">
-          Settings could not be saved: {saveError}{" "}
-          <button type="button" className="settings-text-button" onClick={() => void drainSaves()} disabled={saving}>Retry</button>
-        </StatusMessage>
+        <ErrorState
+          size="inline"
+          title="Couldn't save settings."
+          detail={rejectionReason(saveError)}
+          onRetry={() => void drainSaves()}
+          retrying={saving}
+        />
       ) : null}
 
       <div className="settings-layout">
@@ -739,9 +742,13 @@ export function SettingsPage() {
                       ) : null}
                     </div>
                   ) : null}
-                  {pathError ? <StatusMessage tone="error">{pathError}</StatusMessage> : null}
+                  {pathError ? <ErrorState size="inline" title={pathError} /> : null}
                   {pickLogMutation.error ? (
-                    <StatusMessage tone="error">File picker: {(pickLogMutation.error as Error).message}</StatusMessage>
+                    <ErrorState
+                      size="inline"
+                      title="Couldn't open the file picker."
+                      detail={rejectionReason(pickLogMutation.error)}
+                    />
                   ) : null}
 
                   <ToggleRow
@@ -809,12 +816,24 @@ export function SettingsPage() {
                     </button>
                   </SettingRow>
                   {importMutation.error ? (
-                    <StatusMessage tone="error">Log check failed: {(importMutation.error as Error).message}</StatusMessage>
+                    <ErrorState size="inline" title="Couldn't check the logs." detail={rejectionReason(importMutation.error)} />
                   ) : null}
                 </div>
               </details>
             </div>
-            {liveError ? <StatusMessage tone="error">Tracking: {liveError.message}</StatusMessage> : null}
+            {startLiveMutation.error ? (
+              <ErrorState
+                size="inline"
+                title="Couldn't start live tracking."
+                detail={rejectionReason(startLiveMutation.error)}
+              />
+            ) : stopLiveMutation.error ? (
+              <ErrorState
+                size="inline"
+                title="Couldn't stop live tracking."
+                detail={rejectionReason(stopLiveMutation.error)}
+              />
+            ) : null}
           </section>
 
           <OverlaySettingsPanel id="settings-overlay" onStatusChange={setOverlayStatus} />
@@ -935,8 +954,8 @@ export function SettingsPage() {
                     AI generation stays off until the selected provider is ready.
                   </p>
                 ) : null}
-                {aiStatusQuery.error ? (
-                  <StatusMessage tone="error">AI status: {(aiStatusQuery.error as Error).message}</StatusMessage>
+                {aiStatusError.error ? (
+                  <QueryErrorState view={aiStatusError} size="inline" title="Couldn't check the AI provider." />
                 ) : null}
               </div>
 
@@ -969,7 +988,7 @@ export function SettingsPage() {
                 </summary>
                 <div className="settings-expander-body">
                   {aiStatusQuery.data?.usageError ? (
-                    <StatusMessage tone="error">Token usage: {aiStatusQuery.data.usageError}</StatusMessage>
+                    <ErrorState size="inline" title="Couldn't load token usage." />
                   ) : null}
                   {aiUsage ? (
                     <>
@@ -1087,11 +1106,13 @@ export function SettingsPage() {
               <h3 id="settings-app-title">App and data</h3>
             </div>
             {autostartMutation.error ? (
-              <StatusMessage tone="error">
-                Open at login could not be saved: {(autostartMutation.error as Error).message}{" "}
-                <button type="button" className="settings-text-button" disabled={autostartMutation.isPending}
-                  onClick={() => autostartDraft !== null && autostartMutation.mutate(autostartDraft)}>Retry</button>
-              </StatusMessage>
+              <ErrorState
+                size="inline"
+                title="Couldn't save the open-at-login setting."
+                detail={rejectionReason(autostartMutation.error)}
+                onRetry={() => autostartDraft !== null && autostartMutation.mutate(autostartDraft)}
+                retrying={autostartMutation.isPending}
+              />
             ) : null}
             <div className="panel settings-card">
               <ToggleRow
@@ -1150,7 +1171,13 @@ export function SettingsPage() {
                 }
               />
               {updateCheckMutation.error ? (
-                <StatusMessage tone="error">{(updateCheckMutation.error as Error).message}</StatusMessage>
+                <ErrorState
+                  size="inline"
+                  title="Couldn't check for updates."
+                  detail={rejectionReason(updateCheckMutation.error)}
+                  onRetry={() => updateCheckMutation.mutate()}
+                  retrying={updateCheckMutation.isPending}
+                />
               ) : null}
               <PathRow
                 label="Database"

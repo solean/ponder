@@ -4,7 +4,9 @@ import { useId, useMemo, type KeyboardEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { LoadingMessage } from "./LoadingMessage";
+import { QueryErrorState } from "./ErrorState";
 import { api } from "../lib/api";
+import { useQueryError } from "../lib/useQueryError";
 import { eventDisplayName, parseEventName } from "../lib/events";
 import { formatDateTime } from "../lib/format";
 import { rankBadgeUrl } from "../lib/rankBadgeAssets";
@@ -99,10 +101,12 @@ export function RankProgressPanel() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedLadder = searchParams.get("ladder");
   const requestedSeason = searchParams.get("season");
-  const { data, isLoading, error } = useQuery({
+  const rankQuery = useQuery({
     queryKey: ["rank-history"],
     queryFn: api.rankHistory,
   });
+  const { data, isLoading } = rankQuery;
+  const rankError = useQueryError(rankQuery);
   const ladder: Ladder =
     requestedLadder === "constructed" || requestedLadder === "limited"
       ? requestedLadder
@@ -467,9 +471,12 @@ export function RankProgressPanel() {
         role="region"
         aria-labelledby={headingId}
       >
-        {isLoading ? <LoadingMessage>Loading ladder data…</LoadingMessage> : null}
-        {error ? <p className="state error">{(error as Error).message}</p> : null}
-        {!isLoading && !error && !readyState ? (
+        {rankError.error ? (
+          <QueryErrorState view={rankError} />
+        ) : isLoading ? (
+          <LoadingMessage>Loading ladder data…</LoadingMessage>
+        ) : null}
+        {!isLoading && !rankError.error && !readyState ? (
           <p className="state">{emptyStateMessage(seasonView)}</p>
         ) : null}
         {readyState && !hasChartableTrend ? (

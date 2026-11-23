@@ -2,6 +2,7 @@ import { LoadingMessage } from "../LoadingMessage";
 import type { useMatchReplay } from "../../lib/replay/useMatchReplay";
 import type { MatchReplayView } from "../../lib/replay/useMatchReplayView";
 import { GameReviewPanel } from "../GameReviewPanel";
+import { ErrorState } from "../ErrorState";
 import { StatusMessage } from "../StatusMessage";
 import type { MatchGameTabState } from "./MatchGameTabs";
 import { MatchGameTabs } from "./MatchGameTabs";
@@ -31,7 +32,11 @@ export function MatchReviewSection({
   return (
     <>
       {replayQuery.error ? (
-        <StatusMessage tone="error">{replayQuery.error.message}</StatusMessage>
+        <ErrorState
+          title="Couldn't load the replay recording."
+          onRetry={() => void replayQuery.retry()}
+          retrying={replayQuery.isRetrying}
+        />
       ) : null}
       {replayQuery.isPending ? (
         <LoadingMessage>Loading replay frames for review…</LoadingMessage>

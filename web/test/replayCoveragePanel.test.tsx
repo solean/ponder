@@ -53,10 +53,10 @@ test("load failures offer a working retry and do not claim the recording is miss
   const retry = mock(async () => {});
   render({ error: new Error("offline"), retry });
   expect(container.querySelector('[data-recording-state]')).toBeNull();
-  const button = [...container.querySelectorAll("button")].find(button => button.textContent === "Retry loading replay")!;
+  const button = [...container.querySelectorAll("button")].find(button => button.textContent === "Try again")!;
   act(() => button.click()); expect(retry).toHaveBeenCalledTimes(1);
   render({ error: new Error("offline"), retry, isRetrying: true });
-  expect([...container.querySelectorAll("button")].find(button => button.textContent === "Retrying…")?.disabled).toBe(true);
+  expect([...container.querySelectorAll("button")].find(button => button.textContent === "Trying again…")?.disabled).toBe(true);
 });
 test("loading does not imply permanent absence", () => {
   render({ isPending: true, matchComplete: undefined });
@@ -94,5 +94,5 @@ test("open latest game waits without claiming recording is active or permanently
 test("a sightings load failure cannot be described as permanent absence", () => {
   render({}, {}, new Error("timeline offline"));
   expect(container.querySelector('[data-recording-state]')).toBeNull();
-  expect(container.textContent).toContain("Unable to load first public sightings");
+  expect(container.textContent).toContain("Couldn't load first public sightings.");
 });

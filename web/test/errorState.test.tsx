@@ -3,7 +3,7 @@ import { Window } from "happy-dom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
-import { ErrorState, NotFoundState, QueryErrorState, RESTART_HINT, isNotFound } from "../src/components/ErrorState";
+import { ErrorState, NotFoundState, QueryErrorState, RESTART_HINT, isNotFound, rejectionReason } from "../src/components/ErrorState";
 import { ApiError } from "../src/lib/apiError";
 import type { QueryErrorView } from "../src/lib/useQueryError";
 
@@ -144,4 +144,14 @@ test("a missing record offers a way back instead of a retry", () => {
   const back = container.querySelector(".error-state__actions a");
   expect(back?.textContent).toBe("Back to decks");
   expect(back?.getAttribute("href")).toBe("/decks");
+});
+
+test("only a 4xx gives a reason to show under the headline", () => {
+  expect(rejectionReason(new ApiError(400, "stop live tracking before running a manual import"))).toBe(
+    "stop live tracking before running a manual import",
+  );
+  expect(rejectionReason(new ApiError(500, "Couldn't save settings."))).toBeUndefined();
+  expect(rejectionReason(new ApiError(0, "Couldn't reach Ponder's backend."))).toBeUndefined();
+  expect(rejectionReason(new Error("exec: open: permission denied"))).toBeUndefined();
+  expect(rejectionReason(null)).toBeUndefined();
 });

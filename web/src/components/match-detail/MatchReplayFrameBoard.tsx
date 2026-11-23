@@ -36,6 +36,7 @@ import { useReplayPlayer } from "../../lib/replay/useReplayPlayer";
 import type { CardPreview } from "../../lib/scryfall";
 import type { MatchReplayFrame, MatchReplayFrameObject } from "../../lib/types";
 import { ResultPill } from "../ResultPill";
+import { ErrorState } from "../ErrorState";
 import { StatusMessage } from "../StatusMessage";
 import {
   MatchReplayFrameBattlefield,
@@ -525,7 +526,15 @@ export function MatchReplayFrameBoard({
     replayCardShellsRef.current.delete(instanceId);
   }
 
-  if (missingPosition) return <StatusMessage tone="error">This saved replay position is no longer available. <button type="button" onClick={() => { setSelectedFrameIndex(0); }}>Start from the first step</button></StatusMessage>;
+  if (missingPosition) {
+    return (
+      <ErrorState
+        icon="missing"
+        title="This saved replay position is no longer available."
+        actions={<button type="button" className="control-button" onClick={() => { setSelectedFrameIndex(0); }}>Start from the first step</button>}
+      />
+    );
+  }
 
   if (!currentFrame) {
     return (

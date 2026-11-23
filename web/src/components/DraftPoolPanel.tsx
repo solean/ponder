@@ -9,6 +9,8 @@ import { api } from "../lib/api";
 import type { CurveCard } from "../lib/deckCurve";
 import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
 import type { DeckSummary, DraftPick } from "../lib/types";
+import { ErrorState, QueryErrorState, RESTART_HINT } from "./ErrorState";
+import { useQueryError } from "../lib/useQueryError";
 
 /** Decks submitted for this event, most recently updated first. */
 export function draftDeckCandidates(decks: DeckSummary[], eventName: string): DeckSummary[] {
@@ -37,6 +39,7 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
     queryKey: ["decks", "draft"],
     queryFn: () => api.decks("draft"),
   });
+  const decksError = useQueryError(decksQuery);
   const candidates = useMemo(
     () => draftDeckCandidates(decksQuery.data ?? [], eventName),
     [decksQuery.data, eventName],
@@ -125,6 +128,9 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
   }, [deckCards, pool, poolCardIDs, previewByCardID]);
 
   const isMetadataLoading = previewQueries.some((query) => query.isPending);
+  // A failed candidate means the submitted deck can't be identified. Without
+  // this check the panel would claim Arena never reported one.
+  const failedCandidates = candidateQueries.filter((query) => query.error);
 
   if (picks.length === 0) {
     return null;
@@ -148,7 +154,16 @@ export function DraftPoolPanel({ eventName, picks }: { eventName: string; picks:
         ) : null}
       </div>
 
-      {decksQuery.isLoading || candidateQueries.some((query) => query.isPending) ? (
+      {decksError.error ? (
+        <QueryErrorState view={decksError} title="Couldn't load the submitted deck." />
+      ) : failedCandidates.length > 0 ? (
+        <ErrorState
+          title="Couldn't load the submitted deck."
+          detail={RESTART_HINT}
+          onRetry={() => failedCandidates.forEach((query) => void query.refetch())}
+          retrying={failedCandidates.some((query) => query.isFetching)}
+        />
+      ) : decksQuery.isLoading || candidateQueries.some((query) => query.isPending) ? (
         <LoadingMessage>Loading submitted deck…</LoadingMessage>
       ) : !deckSummary ? (
         <StatusMessage>

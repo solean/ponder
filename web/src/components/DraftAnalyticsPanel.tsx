@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { PerformanceAnalyticsPanel } from "./DeckAnalyticsPanel";
 import { api } from "../lib/api";
+import { useQueryError } from "../lib/useQueryError";
 
 /**
  * Draft performance analytics for one set and format; a null set or format
@@ -12,6 +13,7 @@ export function DraftAnalyticsPanel({ set, format }: { set: string | null; forma
     queryKey: ["draft-analytics", set, format],
     queryFn: () => api.draftAnalytics(set ?? undefined, format ?? undefined),
   });
+  const analyticsError = useQueryError(query);
 
   return (
     <PerformanceAnalyticsPanel
@@ -19,14 +21,7 @@ export function DraftAnalyticsPanel({ set, format }: { set: string | null; forma
       scope={{ kind: "drafts", set: set ?? undefined, format: format ?? undefined }}
       data={query.data?.analytics}
       isLoading={query.isLoading}
-      error={query.error}
-      headerControls={
-        query.error ? (
-          <button type="button" className="text-link" onClick={() => void query.refetch()}>
-            Retry analytics
-          </button>
-        ) : null
-      }
+      errorView={analyticsError}
     />
   );
 }

@@ -1,13 +1,19 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/solean/ponder/internal/api"
+	"github.com/solean/ponder/internal/appstate"
+	"github.com/solean/ponder/internal/db"
 )
 
 func TestDesktopDatabasePath(t *testing.T) {
@@ -26,6 +32,73 @@ func TestDesktopDatabasePath(t *testing.T) {
 		t.Setenv(desktopDBEnvVar, "  "+explicit+"  ")
 		if got := desktopDatabasePath(supportDir); got != explicit {
 			t.Fatalf("desktopDatabasePath() = %q, want %q", got, explicit)
+		}
+	})
+}
+
+func TestShutdownWaitsForLiveLoopBeforeClosingDatabase(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		dir := t.TempDir()
+		dbPath := filepath.Join(dir, "ponder.db")
+		database, err := db.Open(dbPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer database.Close()
+		if err := db.Init(t.Context(), database); err != nil {
+			t.Fatal(err)
+		}
+		logPath := filepath.Join(dir, "Player.log")
+		if err := os.WriteFile(logPath, []byte("Arena log line\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		tickStarted := make(chan struct{})
+		finishTick := make(chan struct{})
+		service, err := appstate.NewService(appstate.Options{
+			Store:              db.NewStore(database),
+			DBPath:             dbPath,
+			SupportDir:         dir,
+			DefaultLogPath:     logPath,
+			DefaultPrevLogPath: filepath.Join(dir, "Player-prev.log"),
+			LiveDataChanged: func() {
+				close(tickStarted)
+				<-finishTick
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer service.ShutdownLive()
+		if _, err := service.StartLive(); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case <-tickStarted:
+		case <-time.After(5 * time.Second):
+			close(finishTick)
+			t.Fatal("live tick did not start")
+		}
+
+		background, cancel := context.WithCancel(t.Context())
+		app := &App{database: database, runtimeService: service, cancel: cancel}
+		shutdownDone := make(chan struct{})
+		go func() {
+			app.shutdown()
+			close(shutdownDone)
+		}()
+		<-background.Done()
+		synctest.Wait()
+		if err := database.Ping(); err != nil {
+			t.Errorf("database closed before live loop exited: %v", err)
+		}
+		close(finishTick)
+		<-shutdownDone
+		if err := database.Ping(); err == nil {
+			t.Error("database is still open after shutdown")
+		}
+		if status, err := service.StartLive(); err == nil || status.LiveRunning {
+			t.Errorf("tracking could restart after shutdown: running=%t, error=%v", status.LiveRunning, err)
 		}
 	})
 }

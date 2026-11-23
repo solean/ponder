@@ -1,10 +1,11 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 
 import { App } from "./App";
 import { AppErrorFallback, ErrorBoundary } from "./components/ErrorBoundary";
+import { createQueryClient } from "./lib/queryClient";
 import { applyStoredTheme } from "./lib/theme";
 
 // Self-hosted fonts (bundled by Vite; no network dependency at runtime).
@@ -44,7 +45,7 @@ wailsRuntime.type = "module";
 wailsRuntime.src = "/wails/runtime.js";
 document.head.append(wailsRuntime);
 
-const queryClient = new QueryClient();
+const queryClient = createQueryClient();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

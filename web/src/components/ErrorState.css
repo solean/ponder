@@ -1,0 +1,167 @@
+/* Error states (IXN-91). Three sizes share one structure: icon + headline,
+   an optional detail line, actions, and a "still failing" note. */
+
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+}
+
+.error-state__heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.error-state__icon {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: none;
+  color: var(--error);
+}
+
+.error-state__title {
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: var(--track-display);
+  line-height: 1.25;
+}
+
+.error-state__detail {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--muted-strong);
+  line-height: 1.55;
+}
+
+.error-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+/* Buttons and links passed as actions share the app's control-button look;
+   44px tall so they're easy to hit. */
+.error-state__actions > .control-button,
+.error-state__actions > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  box-sizing: border-box;
+  text-decoration: none;
+}
+
+.error-state__button-icon,
+.error-state .loading-mark {
+  width: 1em;
+  height: 1em;
+  flex: none;
+}
+
+/* On the primary button the orb takes the button's text colour, not the accent. */
+.error-state .control-button .loading-mark {
+  color: currentColor;
+}
+
+/* --muted-strong, not --muted: --muted dips under 4.5:1 on light panels. */
+.error-state__note {
+  margin: 0;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: var(--track-sm);
+}
+
+/* Page: the whole view failed. */
+.error-state--page {
+  max-width: 36rem;
+  box-sizing: border-box;
+  padding: 1.75rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: linear-gradient(155deg, var(--panel-inner-a) 0%, var(--panel-inner-b) 100%);
+  box-shadow: inset 0 1px 0 var(--card-inner-border);
+}
+
+/* Panel: one section failed. Lives inside the section's own box. */
+.error-state--panel {
+  gap: 0.625rem;
+}
+
+.error-state--panel .error-state__heading {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.error-state--panel .error-state__icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.error-state--panel .error-state__title {
+  font-size: var(--text-md);
+}
+
+/* Inline: a save failed next to its field. */
+.error-state--inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  font-size: var(--text-sm);
+}
+
+.error-state--inline .error-state__icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* The red is carried by the icon (3:1 is enough for graphics). Red text dips
+   just under 4.5:1 on light panels, so the message itself uses body colour. */
+.error-state--inline .error-state__title {
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.error-state--inline .error-state__detail {
+  font-size: var(--text-sm);
+}
+
+.error-state__text-button {
+  min-height: 2.75rem;
+  padding: 0 0.5rem;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: var(--track-md);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.error-state__text-button:hover:not(:disabled) {
+  color: var(--link-hover);
+}
+
+.error-state__text-button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}

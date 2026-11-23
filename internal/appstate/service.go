@@ -321,9 +321,8 @@ func (s *Service) SetUpdateCheck(result UpdateCheck) {
 	s.mu.Unlock()
 }
 
-// MaybeAutoStartLive starts the live poller when the saved config asks for it
-// and the active log exists. Called once at app launch; a failure should be
-// logged by the caller, not abort startup.
+// MaybeAutoStartLive starts the live poller when the saved config asks for it.
+// The poller waits if Arena has yet to create the active log.
 func (s *Service) MaybeAutoStartLive() (bool, error) {
 	s.mu.RLock()
 	cfg := s.config
@@ -331,13 +330,6 @@ func (s *Service) MaybeAutoStartLive() (bool, error) {
 	s.mu.RUnlock()
 
 	if !cfg.AutoStartLive || running {
-		return false, nil
-	}
-	activeLogPath := strings.TrimSpace(cfg.LogPath)
-	if activeLogPath == "" {
-		activeLogPath = s.defaultLogPath
-	}
-	if !fileExists(activeLogPath) {
 		return false, nil
 	}
 	if _, err := s.StartLive(); err != nil {
@@ -477,8 +469,7 @@ func (s *Service) startLive() error {
 		s.setLastError(err.Error())
 		return err
 	}
-	if !fileExists(activeLogPath) {
-		err := fmt.Errorf("active log path not found: %s", activeLogPath)
+	if err := validateLiveLogPath(activeLogPath); err != nil {
 		s.setLastError(err.Error())
 		return err
 	}
@@ -545,29 +536,37 @@ func (s *Service) runLiveLoop(
 ) {
 	defer close(done)
 
-	runTick := func(logPaths []string) bool {
+	runTick := func(logPaths []string) {
+		parsedPaths := make([]string, 0, len(logPaths))
 		statsByFile := make([]model.ParseStats, 0, len(logPaths))
 		for _, logPath := range logPaths {
 			stats, err := parser.ParseFile(ctx, logPath, true)
 			if err != nil {
 				// StopLive cancels mid-parse; that is not a tracking failure.
 				if ctx.Err() != nil {
-					return false
+					return
+				}
+				if errors.Is(err, os.ErrNotExist) {
+					continue
 				}
 				now := time.Now().UTC()
 				s.mu.Lock()
 				s.liveLastTickAt = now
 				s.lastError = fmt.Sprintf("live parse error for %s: %v", logPath, err)
 				s.mu.Unlock()
-				return false
+				return
 			}
+			parsedPaths = append(parsedPaths, logPath)
 			statsByFile = append(statsByFile, stats)
+		}
+		if len(statsByFile) == 0 {
+			return
 		}
 		now := time.Now().UTC()
 
 		s.mu.Lock()
 		s.liveLastTickAt = now
-		result := summarizeOperation("live", logPaths, statsByFile)
+		result := summarizeOperation("live", parsedPaths, statsByFile)
 		for _, stats := range statsByFile {
 			result.HasActivity = result.HasActivity || hasActivity(stats)
 		}
@@ -579,7 +578,6 @@ func (s *Service) runLiveLoop(
 		if result.LinesRead > 0 && s.liveDataChanged != nil {
 			s.liveDataChanged()
 		}
-		return true
 	}
 
 	// Capture before parsing so writes arriving during a parse are noticed on
@@ -601,14 +599,32 @@ func (s *Service) runLiveLoop(
 			runTick([]string{activeLogPath})
 		case <-changeTicker.C:
 			info, err := os.Stat(activeLogPath)
-			if err != nil || (lastInfo != nil && os.SameFile(lastInfo, info) &&
-				lastInfo.Size() == info.Size() && lastInfo.ModTime().Equal(info.ModTime())) {
+			if err != nil {
+				lastInfo = nil
+				continue
+			}
+			if lastInfo != nil && os.SameFile(lastInfo, info) &&
+				lastInfo.Size() == info.Size() && lastInfo.ModTime().Equal(info.ModTime()) {
 				continue
 			}
 			lastInfo = info
 			runTick([]string{activeLogPath})
 		}
 	}
+}
+
+func validateLiveLogPath(path string) error {
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("check active log path: %w", err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("active log path is a directory: %s", path)
+	}
+	return nil
 }
 
 // initialLiveLogPaths imports the retained Player-prev.log once on each live

@@ -571,9 +571,13 @@ export function SettingsPage() {
       : saveError || overlayStatus === "error" || autostartMutation.error
         ? "Some changes were not saved"
         : "All changes saved";
+  const waitingForLog = data.liveRunning && !data.activeLogPathExists;
+  const trackingStatus = waitingForLog
+    ? "Waiting for MTGA log"
+    : data.liveRunning ? "Recording Arena activity" : "Tracking is stopped";
   const activityText = lastActivity?.completedAt
     ? `last activity ${formatRelativeTime(lastActivity.completedAt)}`
-    : data.liveRunning
+    : data.liveRunning && !waitingForLog
       ? "watching for Arena activity"
       : "no activity yet";
   const usageSummary = aiUsage
@@ -639,11 +643,9 @@ export function SettingsPage() {
             <div className="panel settings-card">
               <div className="settings-row settings-row--status">
                 <div className="settings-status">
-                  <span className={`settings-status-dot${data.liveRunning ? " is-on" : ""}`} aria-hidden="true" />
+                  <span className={`settings-status-dot${data.liveRunning && !waitingForLog ? " is-on" : ""}`} aria-hidden="true" />
                   <div className="settings-row-text">
-                    <div className="settings-status-title">
-                      {data.liveRunning ? "Recording Arena activity" : "Tracking is stopped"}
-                    </div>
+                    <div className="settings-status-title">{trackingStatus}</div>
                     <div className="settings-row-help">
                       {data.activeLogPathExists ? "Arena log found" : <strong className="is-negative">Arena log not found</strong>}
                       {data.detailedLogs === "disabled" ? (

@@ -43,3 +43,24 @@ test("titlebar flags Detailed Logs being off ahead of the tracker state", async 
   expect(html).toContain("sync-dot is-warning");
   expect(html).not.toContain("is-live");
 });
+
+test("the titlebar shows that tracking is waiting for the Arena log", () => {
+  const client = new QueryClient();
+  client.setQueryData(["runtime-status"], { liveRunning: true, activeLogPathExists: false });
+  client.setQueryData(["live"], { live: { match: { id: 1, eventName: "", opponent: "Rival" } } });
+  const render = () => renderToStaticMarkup(
+    <QueryClientProvider client={client}>
+      <StaticRouter location="/"><LiveStatus /></StaticRouter>
+    </QueryClientProvider>,
+  );
+
+  const waiting = render();
+  expect(waiting).toContain("Waiting for MTGA log");
+  expect(waiting).toContain('href="/settings"');
+  expect(waiting).not.toContain("Rival");
+
+  client.setQueryData(["runtime-status"], { liveRunning: true, activeLogPathExists: true });
+  const tracking = render();
+  expect(tracking).toContain("vs Rival");
+  expect(tracking).not.toContain("Waiting for MTGA log");
+});

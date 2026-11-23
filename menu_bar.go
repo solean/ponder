@@ -169,7 +169,14 @@ func (a *App) startMenuBar() {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	a.mu.Lock()
+	if a.shuttingDown {
+		a.mu.Unlock()
+		cancel()
+		return
+	}
 	a.trayCancel = cancel
+	a.mu.Unlock()
 
 	// The switch moves as soon as it is clicked. Refreshing re-renders
 	// unconditionally so an ignored or failed toggle snaps back at once.

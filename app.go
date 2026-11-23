@@ -61,6 +61,7 @@ type App struct {
 	mu             sync.RWMutex
 	apiHandler     http.Handler
 	startupErr     string
+	shuttingDown   bool
 	runtimeService *appstate.Service
 	store          *db.Store
 	trayCancel     context.CancelFunc
@@ -281,25 +282,31 @@ func (a *App) startup() {
 	}
 	server := api.NewServer(store, "", runtimeService)
 	server.SetDesktop(a)
+	// The dev API listener below serves the whole app to a plain browser, so
+	// give it the embedded frontend; deep links fall back to index.html there.
+	server.SetStaticAssets(a.staticAssets)
+	bgCtx, cancel := context.WithCancel(context.Background())
 
+	// Quit can run while startup is initializing the database.
+	a.mu.Lock()
+	if a.shuttingDown {
+		a.mu.Unlock()
+		cancel()
+		_ = database.Close()
+		return
+	}
 	if started, err := runtimeService.MaybeAutoStartLive(); err != nil {
 		log.Printf("auto-start live tracking failed: %v", err)
 	} else if started {
 		log.Printf("live tracking auto-started")
 	}
-	// The dev API listener below serves the whole app to a plain browser, so
-	// give it the embedded frontend; deep links fall back to index.html there.
-	server.SetStaticAssets(a.staticAssets)
-	bgCtx, cancel := context.WithCancel(context.Background())
-	server.StartUpdateChecker(bgCtx)
-
 	a.database = database
 	a.cancel = cancel
-	a.mu.Lock()
 	a.apiHandler = server.Handler()
 	a.runtimeService = runtimeService
 	a.store = store
 	a.mu.Unlock()
+	server.StartUpdateChecker(bgCtx)
 	a.startOverlayMonitor(bgCtx, store)
 
 	devAddr := strings.TrimSpace(os.Getenv(devAPIEnvVar))
@@ -558,15 +565,28 @@ func desktopDatabasePath(supportDir string) string {
 }
 
 func (a *App) shutdown() {
-	if a.trayCancel != nil {
-		a.trayCancel()
+	a.mu.Lock()
+	if a.shuttingDown {
+		a.mu.Unlock()
+		return
 	}
-	if a.cancel != nil {
-		a.cancel()
+	a.shuttingDown = true
+	trayCancel, cancel := a.trayCancel, a.cancel
+	runtimeService, database := a.runtimeService, a.database
+	a.database = nil
+	a.mu.Unlock()
+
+	if trayCancel != nil {
+		trayCancel()
 	}
-	if a.database != nil {
-		_ = a.database.Close()
-		a.database = nil
+	if cancel != nil {
+		cancel()
+	}
+	if runtimeService != nil {
+		runtimeService.ShutdownLive()
+	}
+	if database != nil {
+		_ = database.Close()
 	}
 }
 

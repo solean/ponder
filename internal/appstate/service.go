@@ -147,13 +147,15 @@ type Service struct {
 	overlayShortcutChanged func(string) error
 	appIconChanged         func(string) error
 	liveDataChanged        func()
+	liveMu                 sync.Mutex // Serializes starting and joining the live loop.
+	liveClosed             bool
+	liveCancel             context.CancelFunc
+	liveDone               chan struct{}
 	mu                     sync.RWMutex
 	config                 Config
 	liveRunning            bool
 	liveStartedAt          time.Time
 	liveLastTickAt         time.Time
-	liveCancel             context.CancelFunc
-	liveDone               chan struct{}
 	lastImport             *OperationResult
 	lastLiveActivity       *OperationResult
 	lastError              string
@@ -396,21 +398,20 @@ func (s *Service) UpdateConfig(next Config) (Status, error) {
 		return s.Status(), err
 	}
 
+	s.liveMu.Lock()
 	s.mu.Lock()
 	restartLive := s.liveRunning && trackingConfigChanged(s.config, cfg)
 	s.config = cfg
 	s.mu.Unlock()
 
+	var err error
 	if restartLive {
-		if _, err := s.StopLive(); err != nil {
-			return s.Status(), err
-		}
-		if _, err := s.StartLive(); err != nil {
-			return s.Status(), err
-		}
+		s.stopLive()
+		err = s.startLive()
 	}
+	s.liveMu.Unlock()
 
-	return s.Status(), nil
+	return s.Status(), err
 }
 
 func (s *Service) ParseNow(ctx context.Context, resume bool) (OperationResult, error) {
@@ -451,14 +452,22 @@ func (s *Service) ParseNow(ctx context.Context, resume bool) (OperationResult, e
 }
 
 func (s *Service) StartLive() (Status, error) {
-	s.mu.RLock()
-	if s.liveRunning {
-		s.mu.RUnlock()
-		return s.Status(), nil
-	}
-	cfg := s.config
-	s.mu.RUnlock()
+	s.liveMu.Lock()
+	err := s.startLive()
+	s.liveMu.Unlock()
+	return s.Status(), err
+}
 
+// startLive must be called with liveMu held.
+func (s *Service) startLive() error {
+	if s.liveClosed {
+		return errors.New("live tracking is shutting down")
+	}
+	if s.liveDone != nil {
+		return nil
+	}
+
+	cfg := s.Config()
 	activeLogPath := strings.TrimSpace(cfg.LogPath)
 	if activeLogPath == "" {
 		activeLogPath = s.defaultLogPath
@@ -466,12 +475,12 @@ func (s *Service) StartLive() (Status, error) {
 	if activeLogPath == "" {
 		err := fmt.Errorf("no active MTGA log path configured")
 		s.setLastError(err.Error())
-		return s.Status(), err
+		return err
 	}
 	if !fileExists(activeLogPath) {
 		err := fmt.Errorf("active log path not found: %s", activeLogPath)
 		s.setLastError(err.Error())
-		return s.Status(), err
+		return err
 	}
 
 	poll := time.Duration(cfg.PollIntervalSeconds) * time.Second
@@ -481,53 +490,49 @@ func (s *Service) StartLive() (Status, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	parser := ingest.NewParser(s.store)
-	startedAt := time.Now().UTC()
 	initialLogPaths := s.initialLiveLogPaths(cfg, activeLogPath)
-
-	s.mu.Lock()
-	if s.liveRunning {
-		s.mu.Unlock()
-		cancel()
-		return s.Status(), nil
-	}
-	s.liveRunning = true
-	s.liveStartedAt = startedAt
-	s.liveLastTickAt = time.Time{}
 	s.liveCancel = cancel
 	s.liveDone = done
+
+	s.mu.Lock()
+	s.liveRunning = true
+	s.liveStartedAt = time.Now().UTC()
+	s.liveLastTickAt = time.Time{}
 	s.lastError = ""
 	s.mu.Unlock()
 
-	go s.runLiveLoop(ctx, done, parser, initialLogPaths, activeLogPath, poll)
-
-	return s.Status(), nil
+	go s.runLiveLoop(ctx, done, ingest.NewParser(s.store), initialLogPaths, activeLogPath, poll)
+	return nil
 }
 
 func (s *Service) StopLive() (Status, error) {
-	s.mu.Lock()
-	if !s.liveRunning {
-		s.mu.Unlock()
-		return s.Status(), nil
+	s.liveMu.Lock()
+	s.stopLive()
+	s.liveMu.Unlock()
+	return s.Status(), nil
+}
+
+// ShutdownLive stops and joins the poller and prevents it from being restarted.
+func (s *Service) ShutdownLive() {
+	s.liveMu.Lock()
+	defer s.liveMu.Unlock()
+	s.liveClosed = true
+	s.stopLive()
+}
+
+// stopLive must be called with liveMu held. The loop can still take mu while
+// finishing its current tick.
+func (s *Service) stopLive() {
+	if s.liveDone == nil {
+		return
 	}
-	cancel := s.liveCancel
-	done := s.liveDone
-	s.liveRunning = false
+	s.liveCancel()
+	<-s.liveDone
 	s.liveCancel = nil
 	s.liveDone = nil
+	s.mu.Lock()
+	s.liveRunning = false
 	s.mu.Unlock()
-
-	if cancel != nil {
-		cancel()
-	}
-	if done != nil {
-		select {
-		case <-done:
-		case <-time.After(2 * time.Second):
-		}
-	}
-
-	return s.Status(), nil
 }
 
 func (s *Service) runLiveLoop(

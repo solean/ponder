@@ -326,6 +326,7 @@ func runServe(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	defer runtimeService.ShutdownLive()
 
 	go compactReplays(ctx, store)
 

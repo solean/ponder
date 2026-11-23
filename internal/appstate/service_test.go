@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/solean/ponder/internal/ai"
@@ -93,6 +94,36 @@ func TestNewServiceAutoStartsLiveByDefault(t *testing.T) {
 	if _, err := service.StopLive(); err != nil {
 		t.Fatalf("stop live: %v", err)
 	}
+}
+
+func TestStopLiveWaitsForLoopExit(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		loopDone := make(chan struct{})
+		service := &Service{liveRunning: true, liveCancel: cancel, liveDone: loopDone}
+		var status Status
+		var returned bool
+		go func() {
+			status, _ = service.StopLive()
+			returned = true
+		}()
+
+		<-ctx.Done()
+		time.Sleep(3 * time.Second) // Advance past the former two-second timeout.
+		synctest.Wait()
+		if !service.Status().LiveRunning {
+			t.Error("tracking reported stopped while the cancelled loop was still running")
+		}
+		if returned {
+			t.Error("StopLive returned before the loop exited")
+		}
+
+		close(loopDone)
+		synctest.Wait()
+		if !returned || status.LiveRunning {
+			t.Errorf("after the loop exited: StopLive returned=%t, live running=%t", returned, status.LiveRunning)
+		}
+	})
 }
 
 // Stopping live tracking cancels any parse in flight. That cancellation must

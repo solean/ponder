@@ -126,3 +126,61 @@ func TestInvalidAppIconIsBadRequest(t *testing.T) {
 		t.Fatalf("error = %q", got)
 	}
 }
+
+func TestAIStatusReportsUsageFailureWithoutDetails(t *testing.T) {
+	t.Parallel()
+
+	database, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	if err := db.Init(context.Background(), database); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+	// Any failure in the usage summary; a missing table is the easiest.
+	if _, err := database.Exec(`DROP TABLE ai_usage_events`); err != nil {
+		t.Fatalf("drop table: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	NewServer(db.NewStore(database), "", nil).Handler().ServeHTTP(rec, localRequest(http.MethodGet, "/api/ai/status", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if _, ok := body["usage"]; ok {
+		t.Fatalf("usage should be left out when the summary fails: %s", body["usage"])
+	}
+	var usageError string
+	if err := json.Unmarshal(body["usageError"], &usageError); err != nil || usageError != "Couldn't load token usage." {
+		t.Fatalf("usageError = %s, want %q", body["usageError"], "Couldn't load token usage.")
+	}
+	if strings.Contains(rec.Body.String(), "ai_usage_events") {
+		t.Fatalf("response leaks the database error: %s", rec.Body.String())
+	}
+}
+
+func TestAIStatusIncludesUsageWhenItLoads(t *testing.T) {
+	t.Parallel()
+
+	rec := httptest.NewRecorder()
+	NewServer(seedMatchListStore(t, 1), "", nil).Handler().ServeHTTP(rec, localRequest(http.MethodGet, "/api/ai/status", nil))
+
+	var body struct {
+		Usage *struct {
+			Providers []json.RawMessage `json:"providers"`
+		} `json:"usage"`
+		UsageError string `json:"usageError"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Usage == nil || body.Usage.Providers == nil || body.UsageError != "" {
+		t.Fatalf("want usage with a providers list and no error, got %s", rec.Body.String())
+	}
+}

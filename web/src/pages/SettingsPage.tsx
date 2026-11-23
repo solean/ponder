@@ -534,6 +534,8 @@ export function SettingsPage() {
   const aiModels = modelsForProvider(aiProviders, form.aiProvider, form.aiModel);
   const selectedAIModel = aiModels.find((model) => model.id === form.aiModel);
   const aiUsage = aiStatusQuery.data?.usage;
+  // Guarded: an older backend sent "providers": null when the summary failed (IXN-98).
+  const aiUsageProviders = aiUsage?.providers ?? [];
 
   const importCompletedAt = data.lastImport?.completedAt ? Date.parse(data.lastImport.completedAt) : 0;
   const liveCompletedAt = data.lastLiveActivity?.completedAt ? Date.parse(data.lastLiveActivity.completedAt) : 0;
@@ -1007,12 +1009,12 @@ export function SettingsPage() {
                           </thead>
                           <tbody>
                             {[
-                              ...aiUsage.providers.map((usage) => ({
+                              ...aiUsageProviders.map((usage) => ({
                                 key: usage.provider as string,
                                 name: aiProviders.find((provider) => provider.id === usage.provider)?.name ?? usage.provider,
                                 usage,
                               })),
-                              ...(aiUsage.providers.length === 1 ? [] : [{ key: "total", name: "Total", usage: aiUsage }]),
+                              ...(aiUsageProviders.length === 1 ? [] : [{ key: "total", name: "Total", usage: aiUsage }]),
                             ].map(({ key, name, usage }) => (
                               <tr key={key} className={key === "total" ? "is-total" : undefined}>
                                 <th scope="row">{name}</th>
@@ -1042,7 +1044,7 @@ export function SettingsPage() {
                     </>
                   ) : aiStatusQuery.isLoading ? (
                     <LoadingMessage className="settings-row-help">Loading token usage…</LoadingMessage>
-                  ) : (
+                  ) : aiStatusQuery.data?.usageError ? null : (
                     <p className="settings-row-help">Token usage is unavailable.</p>
                   )}
                 </div>

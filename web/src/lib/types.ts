@@ -794,7 +794,8 @@ export type AiStatus = {
   authMethod?: string;
   detail?: string;
   providers: AiProviderStatus[];
-  usage: AiUsageSummary;
+  /** Left out when the usage summary failed; usageError then says so. */
+  usage?: AiUsageSummary;
   usageError?: string;
 };
 

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/solean/ponder/internal/ai"
@@ -277,4 +278,61 @@ func TestStartLiveRestoresMatchContextAfterStop(t *testing.T) {
 	if plays != 2 || opponentCards != 2 || frames != 2 || correctContext != 2 {
 		t.Fatalf("after repeated stop/start: plays=%d opponent=%d frames=%d correct context=%d, want 2 each", plays, opponentCards, frames, correctContext)
 	}
+}
+
+func TestAutoStartLiveWaitsForMissingLog(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		dir := t.TempDir()
+		dbPath := filepath.Join(dir, "ponder.db")
+		database, err := db.Open(dbPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer database.Close()
+		if err := db.Init(t.Context(), database); err != nil {
+			t.Fatal(err)
+		}
+
+		logDir := filepath.Join(dir, "arena")
+		logPath := filepath.Join(logDir, "Player.log")
+		parsed := make(chan struct{}, 1)
+		service, err := NewService(Options{
+			Store:               db.NewStore(database),
+			DBPath:              dbPath,
+			SupportDir:          dir,
+			DefaultLogPath:      logPath,
+			DefaultPrevLogPath:  filepath.Join(logDir, "Player-prev.log"),
+			DefaultPollInterval: time.Second,
+			LiveDataChanged:     func() { parsed <- struct{}{} },
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer service.StopLive()
+		started, err := service.MaybeAutoStartLive()
+		if err != nil || !started {
+			t.Fatalf("auto-start with no log: started=%t, error=%v", started, err)
+		}
+
+		time.Sleep(3 * time.Second)
+		if status := service.Status(); !status.LiveRunning || status.ActiveLogPathExists || status.LastError != "" || status.LiveLastTickAt != "" {
+			t.Fatalf("while waiting: live=%t, log exists=%t, error=%q, last tick=%q",
+				status.LiveRunning, status.ActiveLogPathExists, status.LastError, status.LiveLastTickAt)
+		}
+		if err := os.Mkdir(logDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(logPath, []byte("Arena log line\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case <-parsed:
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("the log was not picked up by the file change check")
+		}
+		status := service.Status()
+		if status.LastLiveActivity == nil || status.LastLiveActivity.LinesRead != 1 || status.LastError != "" {
+			t.Fatalf("after the log appeared: activity=%+v, error=%q", status.LastLiveActivity, status.LastError)
+		}
+	})
 }

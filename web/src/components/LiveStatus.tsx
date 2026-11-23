@@ -7,9 +7,16 @@ import { formatRelativeTime } from "../lib/format";
 import { parseEventName } from "../lib/events";
 import type { RuntimeStatus } from "../lib/types";
 
+function isWaitingForLog(status: RuntimeStatus | undefined) {
+  return status?.liveRunning === true && status.activeLogPathExists === false;
+}
+
 function trackerSummary(status: RuntimeStatus | undefined, isError: boolean) {
   if (isError) return { state: "live tracker unknown", detail: "", dotClass: "sync-dot is-unknown" };
   if (!status) return { state: "checking status", detail: "", dotClass: "sync-dot" };
+  if (isWaitingForLog(status)) {
+    return { state: "Waiting for MTGA log", detail: "", dotClass: "sync-dot is-warning" };
+  }
 
   const lastSyncedAt = [status.lastImport?.completedAt ?? "", status.liveLastTickAt ?? ""]
     .filter(Boolean)
@@ -48,7 +55,7 @@ export function LiveStatus() {
   const statusQuery = useQuery({
     queryKey: ["runtime-status"],
     queryFn: api.runtimeStatus,
-    refetchInterval: 30_000,
+    refetchInterval: (query) => isWaitingForLog(query.state.data) ? 2_000 : 30_000,
   });
   const overviewQuery = useQuery({
     queryKey: ["overview"],
@@ -69,7 +76,8 @@ export function LiveStatus() {
     }
   }, [liveMatchId, queryClient]);
 
-  if (live) {
+  const waitingForLog = !statusQuery.isError && isWaitingForLog(statusQuery.data);
+  if (live && !waitingForLog) {
     const { match } = live;
     const opponent = match.opponent || "Unknown";
     const context = [parseEventName(match.eventName).kindLabel, match.deckName].filter(Boolean).join(" · ");

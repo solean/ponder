@@ -35,8 +35,10 @@ func (s *Server) aiSelection() (string, string) {
 
 type aiStatusResponse struct {
 	ai.Status
-	Usage      db.AIUsageSummary `json:"usage"`
-	UsageError string            `json:"usageError,omitempty"`
+	// Usage is left out when the summary fails; UsageError then says so in
+	// words for users. The underlying error only goes to the log.
+	Usage      *db.AIUsageSummary `json:"usage,omitempty"`
+	UsageError string             `json:"usageError,omitempty"`
 }
 
 func (s *Server) handleAIStatus(w http.ResponseWriter, r *http.Request) {
@@ -46,11 +48,12 @@ func (s *Server) handleAIStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	provider, model := s.aiSelection()
 	status := s.aiProvider.Status(r.Context(), provider, model)
-	usage, err := s.store.GetAIUsageSummary(r.Context())
-	response := aiStatusResponse{Status: status, Usage: usage}
-	if err != nil {
+	response := aiStatusResponse{Status: status}
+	if usage, err := s.store.GetAIUsageSummary(r.Context()); err != nil {
 		log.Printf("AI usage summary failed: %v", err)
-		response.UsageError = err.Error()
+		response.UsageError = internalErrorMessage("load token usage")
+	} else {
+		response.Usage = &usage
 	}
 	writeJSON(w, http.StatusOK, response)
 }

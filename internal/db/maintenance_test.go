@@ -158,3 +158,111 @@ func TestRunMaintenanceRecompressesArchivesOnce(t *testing.T) {
 		t.Fatalf("second pass ArchivesRecompressed = %d, want 0", result.ArchivesRecompressed)
 	}
 }
+
+func TestShouldVacuum(t *testing.T) {
+	t.Parallel()
+
+	const pageSize = 4096
+	mib := func(n int64) int64 { return n << 20 / pageSize }
+	cases := []struct {
+		name       string
+		free, size int64
+		want       bool
+	}{
+		{"empty file", 0, 0, false},
+		{"no free pages", 0, mib(180), false},
+		{"one archived replay", 3, mib(180), false},
+		{"large share but under the byte floor", mib(8), mib(20), false},
+		{"over the byte floor but a small share", mib(16), mib(400), false},
+		{"sizeable and a meaningful share", mib(40), mib(180), true},
+	}
+	for _, tc := range cases {
+		if got := shouldVacuum(tc.free, tc.size, pageSize); got != tc.want {
+			t.Errorf("%s: shouldVacuum(%d, %d) = %v, want %v", tc.name, tc.free, tc.size, got, tc.want)
+		}
+	}
+}
+
+func TestRunMaintenanceVacuumsOnlyWhenWorthwhile(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database := openTempSQLiteDB(t)
+	if err := Init(ctx, database); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	store := NewStore(database)
+
+	// A single prunable raw event reclaims something, but far too little to
+	// justify rewriting the file.
+	mustExec(t, database, `
+		INSERT INTO events_raw (log_path, line_no, byte_offset, kind, method_name, request_id, payload_json, raw_text, created_at)
+		VALUES ('p', 1, 1, 'outgoing', 'DeckUpsertDeckV2', '', '{"Deck":{}}', '', '2026-01-01T00:00:00Z')
+	`)
+	result, err := store.RunMaintenance(ctx)
+	if err != nil {
+		t.Fatalf("RunMaintenance: %v", err)
+	}
+	if result.RawEventsPruned != 1 {
+		t.Fatalf("RawEventsPruned = %d, want 1", result.RawEventsPruned)
+	}
+	if result.Vacuumed {
+		t.Fatal("small reclaim vacuumed, want it skipped")
+	}
+
+	// ~24 MiB of prunable payloads leaves a freelist worth handing back.
+	mustExec(t, database, `
+		WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 24)
+		INSERT INTO events_raw (log_path, line_no, byte_offset, kind, method_name, request_id, payload_json, raw_text, created_at)
+		SELECT 'p', 100 + i, 100 + i, 'outgoing', 'DeckUpsertDeckV2', '', hex(randomblob(512 * 1024)), '', '2026-01-01T00:00:00Z'
+		FROM n
+	`)
+	result, err = store.RunMaintenance(ctx)
+	if err != nil {
+		t.Fatalf("RunMaintenance large reclaim: %v", err)
+	}
+	if result.RawEventsPruned != 24 {
+		t.Fatalf("RawEventsPruned = %d, want 24", result.RawEventsPruned)
+	}
+	if !result.Vacuumed {
+		t.Fatal("large reclaim did not vacuum")
+	}
+	var freePages int64
+	if err := database.QueryRow(`PRAGMA freelist_count`).Scan(&freePages); err != nil {
+		t.Fatalf("freelist_count: %v", err)
+	}
+	if freePages != 0 {
+		t.Fatalf("freelist_count after vacuum = %d, want 0", freePages)
+	}
+}
+
+func TestRunMaintenanceIfIdleWaitsForLiveMatch(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database := openTempSQLiteDB(t)
+	if err := Init(ctx, database); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	store := NewStore(database)
+
+	now := nowUTC()
+	if _, err := database.Exec(`
+		INSERT INTO matches (arena_match_id, started_at, created_at, updated_at) VALUES ('live', ?, ?, ?)
+	`, now, now, now); err != nil {
+		t.Fatalf("insert live match: %v", err)
+	}
+
+	if _, ran, err := store.RunMaintenanceIfIdle(ctx); err != nil {
+		t.Fatalf("RunMaintenanceIfIdle during live match: %v", err)
+	} else if ran {
+		t.Fatal("maintenance ran during a live match")
+	}
+
+	mustExec(t, database, `UPDATE matches SET ended_at = '2026-01-01T00:30:00Z', result = 'win' WHERE arena_match_id = 'live'`)
+	if _, ran, err := store.RunMaintenanceIfIdle(ctx); err != nil {
+		t.Fatalf("RunMaintenanceIfIdle after match: %v", err)
+	} else if !ran {
+		t.Fatal("maintenance skipped with no live match")
+	}
+}

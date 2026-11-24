@@ -327,17 +327,48 @@ func (a *App) startup() {
 		}()
 	}
 
-	go func() {
-		result, err := store.RunMaintenance(bgCtx)
-		if err != nil {
-			log.Printf("db maintenance failed (%+v): %v", result, err)
+	go runMaintenanceLoop(bgCtx, store)
+}
+
+const (
+	// maintenanceInterval spaces passes for sessions that stay up for weeks
+	// under launch at login.
+	maintenanceInterval = 6 * time.Hour
+	// maintenanceRetryInterval is how soon a pass deferred by a live match is
+	// tried again.
+	maintenanceRetryInterval = 15 * time.Minute
+)
+
+// runMaintenanceLoop runs database maintenance at startup and then every
+// maintenanceInterval, deferring any pass that would land during a live match.
+func runMaintenanceLoop(ctx context.Context, store *db.Store) {
+	var delay time.Duration
+	for {
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
 			return
+		case <-timer.C:
 		}
-		if result.ReplaysArchived > 0 || result.ArchivesRecompressed > 0 || result.RawEventsPruned > 0 || result.AnalyticsRefreshed > 0 {
-			log.Printf("db maintenance: archived %d replays, recompressed %d archives, pruned %d raw events, refreshed %d analytics records",
-				result.ReplaysArchived, result.ArchivesRecompressed, result.RawEventsPruned, result.AnalyticsRefreshed)
+
+		result, ran, err := store.RunMaintenanceIfIdle(ctx)
+		switch {
+		case ctx.Err() != nil:
+			return
+		case err != nil:
+			log.Printf("db maintenance failed (%+v): %v", result, err)
+			delay = maintenanceInterval
+		case !ran:
+			delay = maintenanceRetryInterval
+		default:
+			if result.ReplaysArchived > 0 || result.ArchivesRecompressed > 0 || result.RawEventsPruned > 0 || result.AnalyticsRefreshed > 0 {
+				log.Printf("db maintenance: archived %d replays, recompressed %d archives, pruned %d raw events, refreshed %d analytics records, vacuumed %t",
+					result.ReplaysArchived, result.ArchivesRecompressed, result.RawEventsPruned, result.AnalyticsRefreshed, result.Vacuumed)
+			}
+			delay = maintenanceInterval
 		}
-	}()
+	}
 }
 
 // overlayShownScript forces the overlay's live query to refetch. A window that

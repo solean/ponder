@@ -29,6 +29,7 @@ type menuBarStatus struct {
 	canToggle bool
 	indicator string // Text beside the menu bar icon.
 	detail    string // Tooltip only.
+	update    string // Label of the "Update Available" item; empty hides it.
 }
 
 // statusLine joins status and activity so the header is always two lines tall:
@@ -109,6 +110,30 @@ func trackingMenuBarStatus(status *appstate.Status, startupErr string, live *men
 	return menuBarStatus{status: "On", activity: lastActivityLabel(status.LastLiveActivity, now), on: true, canToggle: true, detail: detail}
 }
 
+// updateMenuLabel names the release the dropdown offers, or "" when there is
+// nothing to open. The item links to the release page, so it needs a URL.
+func updateMenuLabel(status *appstate.Status) string {
+	check := updateToOffer(status)
+	if check == nil {
+		return ""
+	}
+	if check.LatestVersion == "" {
+		return "Update Available"
+	}
+	return "Update Available: Version " + check.LatestVersion
+}
+
+func updateToOffer(status *appstate.Status) *appstate.UpdateCheck {
+	if status == nil || status.UpdateCheck == nil {
+		return nil
+	}
+	check := status.UpdateCheck
+	if !check.UpdateAvailable || !strings.HasPrefix(check.ReleaseURL, "https://") {
+		return nil
+	}
+	return check
+}
+
 // lastActivityLabel ages the newest log read that captured anything. The
 // tracker only records activity since it started, so nil means a quiet log.
 func lastActivityLabel(activity *appstate.OperationResult, now time.Time) string {
@@ -152,10 +177,11 @@ func loadMenuBarLiveMatch(ctx context.Context, store *db.Store) (*menuBarLiveMat
 // menuBarCallbacks routes native status item actions into the app. The native
 // side invokes them on their own goroutine, never on the main thread.
 type menuBarCallbacks struct {
-	toggle  func(on bool)
-	overlay func()
-	open    func()
-	quit    func()
+	toggle     func(on bool)
+	overlay    func()
+	openUpdate func()
+	open       func()
+	quit       func()
 }
 
 // menuBarActions is assigned before the status item exists and never changes.
@@ -209,8 +235,26 @@ func (a *App) startMenuBar() {
 			}
 		},
 		overlay: a.toggleOverlay,
-		open:    func() { a.onSecondInstanceLaunch(application.SecondInstanceData{}) },
-		quit:    func() { a.wailsApp.Quit() },
+		// Reads the current result rather than the rendered one, so a click
+		// never opens a release that a newer check has replaced.
+		openUpdate: func() {
+			a.mu.RLock()
+			service := a.runtimeService
+			a.mu.RUnlock()
+			if service == nil {
+				return
+			}
+			status := service.Status()
+			check := updateToOffer(&status)
+			if check == nil {
+				return
+			}
+			if err := a.OpenURL(check.ReleaseURL); err != nil {
+				log.Printf("menu bar update link failed: %v", err)
+			}
+		},
+		open: func() { a.onSecondInstanceLaunch(application.SecondInstanceData{}) },
+		quit: func() { a.wailsApp.Quit() },
 	}
 	application.InvokeSync(func() {
 		menuBarCreate(menuBarIcon(true), menuBarIcon(false), "Live Tracking", "Open "+appDisplayName, "Quit "+appDisplayName)
@@ -244,6 +288,7 @@ func (a *App) startMenuBar() {
 				}
 			}
 			next := trackingMenuBarStatus(status, startupErr, live, time.Now())
+			next.update = updateMenuLabel(status)
 			if force || next != previous {
 				application.InvokeSync(func() {
 					if ctx.Err() == nil {

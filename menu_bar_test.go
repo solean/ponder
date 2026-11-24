@@ -65,3 +65,28 @@ func TestMenuBarStatusLine(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateMenuLabel(t *testing.T) {
+	const releaseURL = "https://github.com/solean/ponder/releases/tag/v1.4.0"
+	tests := []struct {
+		name   string
+		status *appstate.Status
+		want   string
+	}{
+		{name: "starting", want: ""},
+		{name: "never checked", status: &appstate.Status{}, want: ""},
+		{name: "up to date", status: &appstate.Status{UpdateCheck: &appstate.UpdateCheck{LatestVersion: "1.4.0", ReleaseURL: releaseURL}}, want: ""},
+		{name: "failed check", status: &appstate.Status{UpdateCheck: &appstate.UpdateCheck{Note: "update check failed: timeout"}}, want: ""},
+		{name: "available", status: &appstate.Status{UpdateCheck: &appstate.UpdateCheck{UpdateAvailable: true, LatestVersion: "1.4.0", ReleaseURL: releaseURL}}, want: "Update Available: Version 1.4.0"},
+		{name: "available without version", status: &appstate.Status{UpdateCheck: &appstate.UpdateCheck{UpdateAvailable: true, ReleaseURL: releaseURL}}, want: "Update Available"},
+		{name: "no release page", status: &appstate.Status{UpdateCheck: &appstate.UpdateCheck{UpdateAvailable: true, LatestVersion: "1.4.0"}}, want: ""},
+		{name: "non-https release page", status: &appstate.Status{UpdateCheck: &appstate.UpdateCheck{UpdateAvailable: true, LatestVersion: "1.4.0", ReleaseURL: "file:///etc/passwd"}}, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := updateMenuLabel(tt.status); got != tt.want {
+				t.Fatalf("label = %q; want %q", got, tt.want)
+			}
+		})
+	}
+}

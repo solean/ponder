@@ -151,6 +151,8 @@ static void ponderForceKeyAppearance(NSWindow *window, BOOL force) {
 @property(nonatomic, strong) NSStatusItem *statusItem;
 @property(nonatomic, strong) PonderMenuBarHeaderView *header;
 @property(nonatomic, strong) NSMenuItem *overlayItem;
+@property(nonatomic, strong) NSMenuItem *updateItem;          // Hidden until a release is available.
+@property(nonatomic, strong) NSMenuItem *updateSeparatorItem; // Hidden with it.
 @property(nonatomic, strong) NSImage *onIcon;  // Filled orbs: tracking.
 @property(nonatomic, strong) NSImage *offIcon; // Hollow rings: stopped.
 @end
@@ -159,6 +161,10 @@ static void ponderForceKeyAppearance(NSWindow *window, BOOL force) {
 
 - (void)toggleOverlay:(id)sender {
     ponderMenuBarDidToggleOverlay();
+}
+
+- (void)openUpdate:(id)sender {
+    ponderMenuBarDidOpenUpdate();
 }
 
 - (void)open:(id)sender {
@@ -216,6 +222,16 @@ void ponderMenuBarCreate(
     [menu addItem:headerItem];
     [menu addItem:[NSMenuItem separatorItem]];
 
+    controller.updateItem = [[NSMenuItem alloc] initWithTitle:@""
+                                                     action:@selector(openUpdate:)
+                                              keyEquivalent:@""];
+    controller.updateItem.target = controller;
+    controller.updateItem.hidden = YES;
+    [menu addItem:controller.updateItem];
+    controller.updateSeparatorItem = [NSMenuItem separatorItem];
+    controller.updateSeparatorItem.hidden = YES;
+    [menu addItem:controller.updateSeparatorItem];
+
     controller.overlayItem = [[NSMenuItem alloc] initWithTitle:@"Hide Game Overlay"
                                                       action:@selector(toggleOverlay:)
                                                keyEquivalent:@""];
@@ -251,7 +267,8 @@ void ponderMenuBarRender(
     bool on,
     bool canToggle,
     const char *indicator,
-    const char *tooltip
+    const char *tooltip,
+    const char *update
 ) {
     if (ponderMenuBar == nil) {
         return;
@@ -274,4 +291,10 @@ void ponderMenuBarRender(
     button.title = indicatorText;
     button.imagePosition = indicatorText.length == 0 ? NSImageOnly : NSImageLeading;
     button.toolTip = tooltipText;
+
+    NSString *updateText = ponderString(update);
+    BOOL hideUpdate = updateText.length == 0;
+    ponderMenuBar.updateItem.title = updateText;
+    ponderMenuBar.updateItem.hidden = hideUpdate;
+    ponderMenuBar.updateSeparatorItem.hidden = hideUpdate;
 }

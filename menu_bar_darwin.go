@@ -35,10 +35,12 @@ func menuBarCreate(onIcon, offIcon []byte, title, openLabel, quitLabel string) {
 func menuBarRender(s menuBarStatus) {
 	cStatus := C.CString(s.statusLine())
 	cIndicator, cTooltip := C.CString(s.indicator), C.CString(s.tooltip())
+	cUpdate := C.CString(s.update)
 	defer C.free(unsafe.Pointer(cStatus))
 	defer C.free(unsafe.Pointer(cIndicator))
 	defer C.free(unsafe.Pointer(cTooltip))
-	C.ponderMenuBarRender(cStatus, C.bool(s.on), C.bool(s.canToggle), cIndicator, cTooltip)
+	defer C.free(unsafe.Pointer(cUpdate))
+	C.ponderMenuBarRender(cStatus, C.bool(s.on), C.bool(s.canToggle), cIndicator, cTooltip, cUpdate)
 }
 
 // menuBarRenderOverlay keeps the dropdown action in sync with the app menu.
@@ -57,6 +59,9 @@ func ponderMenuBarDidToggleOverlay() { go menuBarActions.overlay() }
 
 //export ponderMenuBarDidToggle
 func ponderMenuBarDidToggle(on C.bool) { go menuBarActions.toggle(bool(on)) }
+
+//export ponderMenuBarDidOpenUpdate
+func ponderMenuBarDidOpenUpdate() { go menuBarActions.openUpdate() }
 
 //export ponderMenuBarDidOpen
 func ponderMenuBarDidOpen() { go menuBarActions.open() }

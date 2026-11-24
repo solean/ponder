@@ -14696,6 +14696,67 @@ select.settings-select {
   }
 }
 
+/* Newer release in the titlebar; links to the release page. */
+.update-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 3px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--track-md);
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.update-indicator:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.update-indicator:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.update-indicator svg {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.update-indicator-version::before {
+  content: "v";
+}
+
+/* Icon only where the titlebar runs short, alongside .live-status trimming. */
+@media (max-width: 1100px) {
+  .update-indicator {
+    padding-inline: 0.4rem;
+  }
+
+  .update-indicator-label,
+  .update-indicator-version {
+    display: none;
+  }
+}
+
 /* Tracker state in the titlebar: the match in progress, or tracker on/off. */
 .live-status {
   display: inline-flex;

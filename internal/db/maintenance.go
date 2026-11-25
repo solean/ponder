@@ -5,6 +5,14 @@ import (
 	"fmt"
 )
 
+// VACUUM rewrites the whole file while holding the write slot, so live
+// tracking stalls for as long as it runs. Only pay that when the free pages it
+// would hand back are both sizeable and a meaningful share of the file.
+const (
+	vacuumMinFreeBytes    = 16 << 20
+	vacuumMinFreeFraction = 0.10
+)
+
 // appMetadataReplayEncoderLevelKey records which zstd level existing replay
 // archives were written with, so the one-time recompress pass runs only once.
 const appMetadataReplayEncoderLevelKey = "replay_archive_encoder_level"
@@ -16,6 +24,7 @@ type MaintenanceResult struct {
 	ArchivesRecompressed int
 	RawEventsPruned      int64
 	AnalyticsRefreshed   int
+	Vacuumed             bool
 }
 
 func (r MaintenanceResult) reclaimedAnything() bool {
@@ -25,8 +34,9 @@ func (r MaintenanceResult) reclaimedAnything() bool {
 // RunMaintenance performs the periodic space and hygiene work in one pass:
 // compacts finished-match replay rows into archives, recompresses archives
 // written at the old zstd level (once), prunes raw events nothing reads,
-// backfills draft metadata, and — when anything was reclaimed — VACUUMs and
-// truncates the WAL so the space returns to the filesystem.
+// backfills draft metadata, and — when anything was reclaimed — truncates the
+// WAL and, if enough of the file is free pages, VACUUMs so the space returns to
+// the filesystem.
 func (s *Store) RunMaintenance(ctx context.Context) (MaintenanceResult, error) {
 	result := MaintenanceResult{}
 
@@ -70,8 +80,15 @@ func (s *Store) RunMaintenance(ctx context.Context) (MaintenanceResult, error) {
 	}
 
 	if result.reclaimedAnything() {
-		if _, err := s.db.ExecContext(ctx, `VACUUM`); err != nil {
-			return result, fmt.Errorf("vacuum after maintenance: %w", err)
+		vacuum, err := s.vacuumWorthwhile(ctx)
+		if err != nil {
+			return result, err
+		}
+		if vacuum {
+			if _, err := s.db.ExecContext(ctx, `VACUUM`); err != nil {
+				return result, fmt.Errorf("vacuum after maintenance: %w", err)
+			}
+			result.Vacuumed = true
 		}
 		// Hand freed WAL pages back to the filesystem too; busy is fine, the
 		// next checkpoint will pick it up.
@@ -80,6 +97,48 @@ func (s *Store) RunMaintenance(ctx context.Context) (MaintenanceResult, error) {
 	}
 
 	return result, nil
+}
+
+// RunMaintenanceIfIdle runs a maintenance pass unless a match is live, so
+// periodic passes never compete with in-game ingest. ran is false when the pass
+// was skipped; the caller should try again later.
+func (s *Store) RunMaintenanceIfIdle(ctx context.Context) (result MaintenanceResult, ran bool, err error) {
+	_, live, err := s.GetLiveMatchID(ctx)
+	if err != nil {
+		return result, false, err
+	}
+	if live {
+		return result, false, nil
+	}
+	result, err = s.RunMaintenance(ctx)
+	return result, true, err
+}
+
+// vacuumWorthwhile reports whether the free pages left by deletes are worth a
+// full VACUUM. Deleted rows land on the freelist and are reused by later
+// inserts, so a small freelist costs nothing to keep.
+func (s *Store) vacuumWorthwhile(ctx context.Context) (bool, error) {
+	var pageSize, pageCount, freePages int64
+	if err := s.db.QueryRowContext(ctx, `PRAGMA page_size`).Scan(&pageSize); err != nil {
+		return false, fmt.Errorf("read page size: %w", err)
+	}
+	if err := s.db.QueryRowContext(ctx, `PRAGMA page_count`).Scan(&pageCount); err != nil {
+		return false, fmt.Errorf("read page count: %w", err)
+	}
+	if err := s.db.QueryRowContext(ctx, `PRAGMA freelist_count`).Scan(&freePages); err != nil {
+		return false, fmt.Errorf("read freelist count: %w", err)
+	}
+	return shouldVacuum(freePages, pageCount, pageSize), nil
+}
+
+func shouldVacuum(freePages, pageCount, pageSize int64) bool {
+	if pageCount <= 0 || freePages <= 0 {
+		return false
+	}
+	if freePages*pageSize < vacuumMinFreeBytes {
+		return false
+	}
+	return float64(freePages)/float64(pageCount) >= vacuumMinFreeFraction
 }
 
 // recompressReplayArchivesOnce rewrites every replay archive with the current

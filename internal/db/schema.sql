@@ -134,6 +134,14 @@ CREATE TABLE IF NOT EXISTS card_catalog (
 
 CREATE INDEX IF NOT EXISTS idx_card_catalog_name ON card_catalog(name);
 
+-- Card IDs that neither the MTGA raw card database nor Scryfall could name,
+-- with when that was last checked, so the lookup is retried rarely instead of
+-- on every request.
+CREATE TABLE IF NOT EXISTS card_name_misses (
+  arena_id INTEGER PRIMARY KEY,
+  checked_at TEXT NOT NULL
+);
+
 -- Card type lines (Scryfall `type_line`), resolved on demand and cached so the
 -- live banner can compute land odds without re-fetching every poll.
 CREATE TABLE IF NOT EXISTS card_types (

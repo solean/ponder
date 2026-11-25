@@ -906,6 +906,7 @@ const (
 	scryfallSearchBatchMax     = 40
 	scryfallMinRequestInterval = 500 * time.Millisecond
 	scryfallDefaultCooldown    = 60 * time.Second
+	cardNameMissRetryInterval  = 24 * time.Hour
 	mtgaRawCardDBEnvVar        = "MTGA_RAW_CARD_DB"
 )
 
@@ -975,45 +976,8 @@ func (s *Server) resolveCardNames(ctx context.Context, cardIDs []int64) map[int6
 		resolvedNames = map[int64]string{}
 	}
 
-	newlyResolved := make(map[int64]string, len(cardIDs))
-	unresolved := unresolvedCardIDs(cardIDs, resolvedNames)
-
-	if len(unresolved) > 0 {
-		localNames, localErr := s.fetchCardNamesFromMTGARaw(ctx, unresolved)
-		if localErr != nil {
-			log.Printf("local MTGA card lookup failed: %v", localErr)
-		}
-		for cardID, name := range localNames {
-			trimmed := strings.TrimSpace(name)
-			if trimmed == "" {
-				continue
-			}
-			resolvedNames[cardID] = trimmed
-			newlyResolved[cardID] = trimmed
-		}
-
-		unresolved = unresolvedCardIDs(cardIDs, resolvedNames)
-	}
-
-	if len(unresolved) > 0 {
-		fetchedNames, fetchErr := s.fetchCardNamesFromScryfall(ctx, unresolved)
-		if fetchErr != nil {
-			logScryfallError("scryfall card name lookup failed: %v", fetchErr)
-		}
-		for cardID, name := range fetchedNames {
-			trimmed := strings.TrimSpace(name)
-			if trimmed == "" {
-				continue
-			}
-			resolvedNames[cardID] = trimmed
-			newlyResolved[cardID] = trimmed
-		}
-	}
-
-	if len(newlyResolved) > 0 {
-		if err := s.store.UpsertCardNames(ctx, newlyResolved); err != nil {
-			log.Printf("card name cache upsert failed: %v", err)
-		}
+	for cardID, name := range s.fetchUncachedCardNames(ctx, unresolvedCardIDs(cardIDs, resolvedNames)) {
+		resolvedNames[cardID] = name
 	}
 
 	return resolvedNames
@@ -1085,50 +1049,7 @@ func (s *Server) enrichDeckCardNames(ctx context.Context, cards []model.DeckCard
 		return
 	}
 
-	resolvedNames, err := s.store.LookupCardNames(ctx, missingCardIDs)
-	if err != nil {
-		log.Printf("card name lookup failed: %v", err)
-		resolvedNames = map[int64]string{}
-	}
-	newlyResolved := make(map[int64]string, len(missingCardIDs))
-
-	unresolved := make([]int64, 0, len(missingCardIDs))
-	for _, cardID := range missingCardIDs {
-		if _, ok := resolvedNames[cardID]; !ok {
-			unresolved = append(unresolved, cardID)
-		}
-	}
-
-	if len(unresolved) > 0 {
-		localNames, localErr := s.fetchCardNamesFromMTGARaw(ctx, unresolved)
-		if localErr != nil {
-			log.Printf("local MTGA card lookup failed: %v", localErr)
-		}
-		for cardID, name := range localNames {
-			resolvedNames[cardID] = name
-			newlyResolved[cardID] = name
-		}
-
-		unresolved = unresolvedCardIDs(missingCardIDs, resolvedNames)
-	}
-
-	if len(unresolved) > 0 {
-		fetchedNames, fetchErr := s.fetchCardNamesFromScryfall(ctx, unresolved)
-		if fetchErr != nil {
-			logScryfallError("scryfall card name lookup failed: %v", fetchErr)
-		}
-		if len(fetchedNames) > 0 {
-			for cardID, name := range fetchedNames {
-				resolvedNames[cardID] = name
-				newlyResolved[cardID] = name
-			}
-		}
-	}
-	if len(newlyResolved) > 0 {
-		if err := s.store.UpsertCardNames(ctx, newlyResolved); err != nil {
-			log.Printf("card name cache upsert failed: %v", err)
-		}
-	}
+	resolvedNames := s.resolveCardNames(ctx, missingCardIDs)
 
 	for i := range cards {
 		if strings.TrimSpace(cards[i].CardName) != "" {
@@ -1211,49 +1132,7 @@ func (s *Server) enrichOpponentObservedCardNames(ctx context.Context, cards []mo
 		return
 	}
 
-	resolvedNames, err := s.store.LookupCardNames(ctx, missingCardIDs)
-	if err != nil {
-		log.Printf("card name lookup failed: %v", err)
-		resolvedNames = map[int64]string{}
-	}
-	newlyResolved := make(map[int64]string, len(missingCardIDs))
-
-	unresolved := make([]int64, 0, len(missingCardIDs))
-	for _, cardID := range missingCardIDs {
-		if _, ok := resolvedNames[cardID]; !ok {
-			unresolved = append(unresolved, cardID)
-		}
-	}
-
-	if len(unresolved) > 0 {
-		localNames, localErr := s.fetchCardNamesFromMTGARaw(ctx, unresolved)
-		if localErr != nil {
-			log.Printf("local MTGA card lookup failed: %v", localErr)
-		}
-		for cardID, name := range localNames {
-			resolvedNames[cardID] = name
-			newlyResolved[cardID] = name
-		}
-
-		unresolved = unresolvedCardIDs(missingCardIDs, resolvedNames)
-	}
-
-	if len(unresolved) > 0 {
-		fetchedNames, fetchErr := s.fetchCardNamesFromScryfall(ctx, unresolved)
-		if fetchErr != nil {
-			logScryfallError("scryfall card name lookup failed: %v", fetchErr)
-		}
-		for cardID, name := range fetchedNames {
-			resolvedNames[cardID] = name
-			newlyResolved[cardID] = name
-		}
-	}
-
-	if len(newlyResolved) > 0 {
-		if err := s.store.UpsertCardNames(ctx, newlyResolved); err != nil {
-			log.Printf("card name cache upsert failed: %v", err)
-		}
-	}
+	resolvedNames := s.resolveCardNames(ctx, missingCardIDs)
 
 	for i := range cards {
 		if strings.TrimSpace(cards[i].CardName) != "" {
@@ -1286,49 +1165,7 @@ func (s *Server) enrichMatchCardPlayNames(ctx context.Context, plays []model.Mat
 		return
 	}
 
-	resolvedNames, err := s.store.LookupCardNames(ctx, missingCardIDs)
-	if err != nil {
-		log.Printf("card name lookup failed: %v", err)
-		resolvedNames = map[int64]string{}
-	}
-	newlyResolved := make(map[int64]string, len(missingCardIDs))
-
-	unresolved := make([]int64, 0, len(missingCardIDs))
-	for _, cardID := range missingCardIDs {
-		if _, ok := resolvedNames[cardID]; !ok {
-			unresolved = append(unresolved, cardID)
-		}
-	}
-
-	if len(unresolved) > 0 {
-		localNames, localErr := s.fetchCardNamesFromMTGARaw(ctx, unresolved)
-		if localErr != nil {
-			log.Printf("local MTGA card lookup failed: %v", localErr)
-		}
-		for cardID, name := range localNames {
-			resolvedNames[cardID] = name
-			newlyResolved[cardID] = name
-		}
-
-		unresolved = unresolvedCardIDs(missingCardIDs, resolvedNames)
-	}
-
-	if len(unresolved) > 0 {
-		fetchedNames, fetchErr := s.fetchCardNamesFromScryfall(ctx, unresolved)
-		if fetchErr != nil {
-			logScryfallError("scryfall card name lookup failed: %v", fetchErr)
-		}
-		for cardID, name := range fetchedNames {
-			resolvedNames[cardID] = name
-			newlyResolved[cardID] = name
-		}
-	}
-
-	if len(newlyResolved) > 0 {
-		if err := s.store.UpsertCardNames(ctx, newlyResolved); err != nil {
-			log.Printf("card name cache upsert failed: %v", err)
-		}
-	}
+	resolvedNames := s.resolveCardNames(ctx, missingCardIDs)
 
 	for i := range plays {
 		if strings.TrimSpace(plays[i].CardName) != "" {
@@ -1373,48 +1210,7 @@ func (s *Server) enrichMatchReplayNames(ctx context.Context, frames []model.Matc
 		return
 	}
 
-	resolvedNames, err := s.store.LookupCardNames(ctx, missingCardIDs)
-	if err != nil {
-		log.Printf("card name lookup failed: %v", err)
-		resolvedNames = map[int64]string{}
-	}
-	newlyResolved := make(map[int64]string, len(missingCardIDs))
-
-	unresolved := make([]int64, 0, len(missingCardIDs))
-	for _, cardID := range missingCardIDs {
-		if _, ok := resolvedNames[cardID]; !ok {
-			unresolved = append(unresolved, cardID)
-		}
-	}
-
-	if len(unresolved) > 0 {
-		localNames, localErr := s.fetchCardNamesFromMTGARaw(ctx, unresolved)
-		if localErr != nil {
-			log.Printf("local MTGA card lookup failed: %v", localErr)
-		}
-		for cardID, name := range localNames {
-			resolvedNames[cardID] = name
-			newlyResolved[cardID] = name
-		}
-		unresolved = unresolvedCardIDs(missingCardIDs, resolvedNames)
-	}
-
-	if len(unresolved) > 0 {
-		fetchedNames, fetchErr := s.fetchCardNamesFromScryfall(ctx, unresolved)
-		if fetchErr != nil {
-			logScryfallError("scryfall card name lookup failed: %v", fetchErr)
-		}
-		for cardID, name := range fetchedNames {
-			resolvedNames[cardID] = name
-			newlyResolved[cardID] = name
-		}
-	}
-
-	if len(newlyResolved) > 0 {
-		if err := s.store.UpsertCardNames(ctx, newlyResolved); err != nil {
-			log.Printf("card name cache upsert failed: %v", err)
-		}
-	}
+	resolvedNames := s.resolveCardNames(ctx, missingCardIDs)
 
 	for i := range frames {
 		for j := range frames[i].Objects {
@@ -1444,6 +1240,84 @@ func unresolvedCardIDs(cardIDs []int64, resolved map[int64]string) []int64 {
 		}
 	}
 	return unresolved
+}
+
+// fetchUncachedCardNames asks the MTGA raw card database, then Scryfall, for
+// card IDs the local catalog cannot name, and caches what they return. IDs that
+// neither source knows are remembered, and are not asked about again until
+// cardNameMissRetryInterval has passed.
+func (s *Server) fetchUncachedCardNames(ctx context.Context, cardIDs []int64) map[int64]string {
+	found := make(map[int64]string, len(cardIDs))
+	if len(cardIDs) == 0 {
+		return found
+	}
+
+	now := time.Now()
+	recentMisses, err := s.store.RecentCardNameMisses(ctx, cardIDs, now.Add(-cardNameMissRetryInterval))
+	if err != nil {
+		log.Printf("card name miss lookup failed: %v", err)
+	}
+	pending := make([]int64, 0, len(cardIDs))
+	for _, cardID := range cardIDs {
+		if _, missed := recentMisses[cardID]; !missed {
+			pending = append(pending, cardID)
+		}
+	}
+	if len(pending) == 0 {
+		return found
+	}
+
+	// A miss is only recorded when every source answered; a failed lookup
+	// says nothing about whether the card exists.
+	sourcesAnswered := true
+
+	localNames, localErr := s.fetchCardNamesFromMTGARaw(ctx, pending)
+	if localErr != nil {
+		log.Printf("local MTGA card lookup failed: %v", localErr)
+		sourcesAnswered = false
+	}
+	for cardID, name := range localNames {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			found[cardID] = trimmed
+		}
+	}
+
+	var unchecked map[int64]struct{}
+	if remaining := unresolvedCardIDs(pending, found); len(remaining) > 0 {
+		fetchedNames, failedIDs, fetchErr := s.fetchCardNamesFromScryfall(ctx, remaining)
+		if fetchErr != nil {
+			logScryfallError("scryfall card name lookup failed: %v", fetchErr)
+		}
+		for cardID, name := range fetchedNames {
+			if trimmed := strings.TrimSpace(name); trimmed != "" {
+				found[cardID] = trimmed
+			}
+		}
+		unchecked = make(map[int64]struct{}, len(failedIDs))
+		for _, cardID := range failedIDs {
+			unchecked[cardID] = struct{}{}
+		}
+	}
+
+	if len(found) > 0 {
+		if err := s.store.UpsertCardNames(ctx, found); err != nil {
+			log.Printf("card name cache upsert failed: %v", err)
+		}
+	}
+
+	if sourcesAnswered {
+		misses := make([]int64, 0)
+		for _, cardID := range unresolvedCardIDs(pending, found) {
+			if _, skipped := unchecked[cardID]; !skipped {
+				misses = append(misses, cardID)
+			}
+		}
+		if err := s.store.RecordCardNameMisses(ctx, misses, now); err != nil {
+			log.Printf("card name miss record failed: %v", err)
+		}
+	}
+
+	return found
 }
 
 func (s *Server) fetchCardNamesFromMTGARaw(ctx context.Context, cardIDs []int64) (map[int64]string, error) {
@@ -1556,27 +1430,26 @@ func discoverMTGARawCardDBPath() string {
 	return newestPath
 }
 
-func (s *Server) fetchCardNamesFromScryfall(ctx context.Context, cardIDs []int64) (map[int64]string, error) {
-	out := make(map[int64]string, len(cardIDs))
-	if len(cardIDs) == 0 {
-		return out, nil
-	}
-
-	var firstErr error
+// fetchCardNamesFromScryfall looks card IDs up in batches. failed lists the
+// IDs whose batch errored, so Scryfall gave no answer for them either way.
+func (s *Server) fetchCardNamesFromScryfall(ctx context.Context, cardIDs []int64) (names map[int64]string, failed []int64, err error) {
+	names = make(map[int64]string, len(cardIDs))
 	for start := 0; start < len(cardIDs); start += scryfallSearchBatchMax {
 		end := min(start+scryfallSearchBatchMax, len(cardIDs))
-		batchNames, err := s.fetchCardNameBatch(ctx, cardIDs[start:end])
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
+		batch := cardIDs[start:end]
+		batchNames, batchErr := s.fetchCardNameBatch(ctx, batch)
+		if batchErr != nil {
+			if err == nil {
+				err = batchErr
 			}
+			failed = append(failed, batch...)
 			continue
 		}
 		for cardID, name := range batchNames {
-			out[cardID] = name
+			names[cardID] = name
 		}
 	}
-	return out, firstErr
+	return names, failed, err
 }
 
 func (s *Server) fetchCardNameBatch(ctx context.Context, cardIDs []int64) (map[int64]string, error) {

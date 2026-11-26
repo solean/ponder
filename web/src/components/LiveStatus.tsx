@@ -11,9 +11,28 @@ function isWaitingForLog(status: RuntimeStatus | undefined) {
   return status?.liveRunning === true && status.activeLogPathExists === false;
 }
 
-function trackerSummary(status: RuntimeStatus | undefined, isError: boolean) {
+function needsAttention(status: RuntimeStatus | undefined) {
+  return Boolean(status?.lastError);
+}
+
+type TrackerSummary = { state: string; detail: string; dotClass: string; title?: string; attention?: boolean };
+
+/**
+ * Mirrors trackingMenuBarStatus in menu_bar.go so the titlebar and the menu
+ * bar agree; keep the order of the checks in step with it.
+ */
+export function trackerSummary(status: RuntimeStatus | undefined, isError: boolean): TrackerSummary {
   if (isError) return { state: "live tracker unknown", detail: "", dotClass: "sync-dot is-unknown" };
   if (!status) return { state: "checking status", detail: "", dotClass: "sync-dot" };
+  if (status.lastError) {
+    return {
+      state: "Needs attention",
+      detail: status.lastError,
+      dotClass: "sync-dot is-error",
+      title: `${status.lastError} — open tracking settings`,
+      attention: true,
+    };
+  }
   if (isWaitingForLog(status)) {
     return { state: "Waiting for MTGA log", detail: "", dotClass: "sync-dot is-warning" };
   }
@@ -42,7 +61,8 @@ function trackerSummary(status: RuntimeStatus | undefined, isError: boolean) {
 
 /**
  * Tracker state in the titlebar. Shows the match in progress and links to it;
- * otherwise shows whether live tracking is running and links to Settings.
+ * otherwise shows whether live tracking is running, or what needs attention,
+ * and links to Settings.
  */
 export function LiveStatus() {
   const queryClient = useQueryClient();
@@ -76,8 +96,10 @@ export function LiveStatus() {
     }
   }, [liveMatchId, queryClient]);
 
-  const waitingForLog = !statusQuery.isError && isWaitingForLog(statusQuery.data);
-  if (live && !waitingForLog) {
+  // A tracking problem outranks the match in progress, as in the menu bar.
+  const statusProblem =
+    !statusQuery.isError && (needsAttention(statusQuery.data) || isWaitingForLog(statusQuery.data));
+  if (live && !statusProblem) {
     const { match } = live;
     const opponent = match.opponent || "Unknown";
     const context = [parseEventName(match.eventName).kindLabel, match.deckName].filter(Boolean).join(" · ");
@@ -102,7 +124,11 @@ export function LiveStatus() {
   const tracker = trackerSummary(statusQuery.data, statusQuery.isError);
   const playerName = overviewQuery.data?.playerName;
   return (
-    <Link className="live-status" to="/settings" title="Open tracking settings">
+    <Link
+      className={`live-status${tracker.attention ? " is-attention" : ""}`}
+      to="/settings"
+      title={tracker.title ?? "Open tracking settings"}
+    >
       <span className={tracker.dotClass} aria-hidden="true" />
       {playerName ? <span className="live-status-name">{playerName}</span> : null}
       <span className="live-status-main">{tracker.state}</span>

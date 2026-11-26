@@ -1,4 +1,9 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { reportClientError } from "../lib/api";
+import { APP_NAME } from "../lib/branding";
+
+/** Where the packaged app writes its logs (internal/applog). */
+export const APP_LOG_PATH = `~/Library/Logs/${APP_NAME}/ponder.log`;
 
 type FallbackRender = (error: Error, reset: () => void) => ReactNode;
 
@@ -10,7 +15,7 @@ type Props = {
    * (silent) — use a visible fallback for app/page scopes.
    */
   fallback?: ReactNode | FallbackRender;
-  /** Optional label to identify the boundary in console errors. */
+  /** Optional label to identify the boundary in console and log errors. */
   label?: string;
 };
 
@@ -31,6 +36,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error(`ErrorBoundary${this.props.label ? ` (${this.props.label})` : ""} caught:`, error, info);
+    reportClientError({
+      scope: this.props.label ?? "unlabeled",
+      message: error.message,
+      stack: error.stack,
+      componentStack: info.componentStack ?? undefined,
+    });
   }
 
   reset = () => this.setState({ error: null });
@@ -76,7 +87,9 @@ export function AppErrorFallback({
             Reload app
           </button>
         </div>
-        <p className="app-error-hint">If this keeps happening, check the developer console for details.</p>
+        <p className="app-error-hint">
+          If this keeps happening, the details are in <code>{APP_LOG_PATH}</code>.
+        </p>
       </div>
     </div>
   );

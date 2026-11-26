@@ -29,6 +29,8 @@ func main() {
 		return
 	}
 
+	wailsLogger := setupLogging()
+
 	assets, err := fs.Sub(embeddedAssets, "web/dist")
 	if err != nil {
 		log.Fatalf("prepare embedded web assets: %v", err)
@@ -45,6 +47,7 @@ func main() {
 		Name:        appDisplayName,
 		Description: "Private, local-first MTG Arena match tracking and analytics.",
 		Icon:        developmentAppIcon,
+		Logger:      wailsLogger,
 		Assets: application.AssetOptions{
 			Handler:    assetHandler(assets),
 			Middleware: desktop.APIMiddleware,

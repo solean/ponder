@@ -55,6 +55,23 @@ function postJSON<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
+/**
+ * Writes a frontend crash to the app log file, which the crash screen points
+ * users to. Best effort: a failure here must not mask the original error.
+ */
+export function reportClientError(report: {
+  scope: string;
+  message: string;
+  stack?: string;
+  componentStack?: string;
+}): void {
+  void fetch(`${API_BASE}/api/client-error`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(report),
+  }).catch(() => {});
+}
+
 /** Like getJSON, but resolves to null when the resource doesn't exist yet. */
 async function getJSONOrNull<T>(path: string): Promise<T | null> {
   try {

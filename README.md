@@ -155,12 +155,17 @@ Everything is stored in `~/Library/Application Support/ponder/`:
 **Settings → Data** shows both paths and can reveal them in Finder. To back
 up, quit Ponder and copy that folder.
 
+Ponder writes its own logs to `~/Library/Logs/Ponder/ponder.log`. When the
+file reaches 5 MB, it moves to `ponder.log.1` and a new file starts. Include
+these files when you report a problem.
+
 ### Uninstalling
 
 1. Quit Ponder and drag it from Applications to the Trash.
 2. To remove your data too, delete `~/Library/Application Support/ponder/`.
 3. If you turned on launch at login, delete
    `~/Library/LaunchAgents/dev.ixianlabs.ponder.plist`.
+4. To remove Ponder's logs, delete `~/Library/Logs/Ponder/`.
 
 ---
 

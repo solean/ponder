@@ -1080,7 +1080,9 @@ body.has-wide-deck-curve .app-shell {
   z-index: 1;
   flex: none;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* The nav keeps its width; the controls take what's left and trim the
+     tracker status rather than run under the nav. */
+  grid-template-columns: auto auto minmax(0, 1fr);
   align-items: stretch;
   gap: 1.75rem;
   min-height: 52px;
@@ -1144,14 +1146,16 @@ body.has-wide-deck-curve .app-shell {
 
 .topbar-controls {
   grid-column: 3;
-  justify-self: end;
+  min-width: 0;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.6rem;
   --wails-draggable: no-drag;
 }
 
 .theme-toggle {
+  flex: none;
   appearance: none;
   cursor: pointer;
   touch-action: manipulation;
@@ -10141,6 +10145,11 @@ select option {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
+.sync-dot.is-error {
+  background: var(--error);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--error) 22%, transparent);
+}
+
 .sync-dot.is-live {
   background: var(--win);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--win) 22%, transparent);
@@ -14812,6 +14821,7 @@ select.settings-select {
 
 .live-status-main,
 .live-status-name,
+.live-status-detail,
 .live-status-deck {
   min-width: 0;
   overflow: hidden;
@@ -14825,6 +14835,15 @@ select.settings-select {
 
 .live-status.is-match {
   background: color-mix(in srgb, var(--win) 10%, transparent);
+}
+
+/* Outside a match the state label is short; trim the detail instead. */
+.live-status:not(.is-match) .live-status-main {
+  flex: none;
+}
+
+.live-status.is-attention .live-status-main {
+  color: var(--text);
 }
 
 .live-status.is-match .live-status-main {

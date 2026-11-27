@@ -8,7 +8,7 @@ import (
 	"github.com/solean/ponder/internal/model"
 )
 
-func TestSpellCopyMigrationRepairsLegacyArchivesAndObservations(t *testing.T) {
+func TestRefreshRepairsLegacySpellCopyEvidence(t *testing.T) {
 	ctx := context.Background()
 	store := newReplayArchiveTestStore(t)
 	tx := mustBeginTx(t, store)
@@ -47,20 +47,6 @@ func TestSpellCopyMigrationRepairsLegacyArchivesAndObservations(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustCommit(t, tx)
-	// Simulate an installation from before the new columns and backfill marker.
-	for _, table := range []string{"match_replay_frame_objects", "match_card_plays"} {
-		for _, column := range []string{"is_copy", "cast_confirmed"} {
-			if _, err := store.db.Exec(`ALTER TABLE ` + table + ` DROP COLUMN ` + column); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-	if _, err := store.db.Exec(`DELETE FROM app_metadata WHERE key = 'spell_copies_backfill_v1'`); err != nil {
-		t.Fatal(err)
-	}
-	if err := Init(ctx, store.db); err != nil {
-		t.Fatal(err)
-	}
 	if count, err := store.RefreshPendingMatchAnalytics(ctx); err != nil || count != 1 {
 		t.Fatalf("backfill = %d, %v; want one refreshed match", count, err)
 	}

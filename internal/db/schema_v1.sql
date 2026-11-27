@@ -1,3 +1,8 @@
+-- Schema version 1: the baseline squashed from Ponder's pre-1.0 development
+-- migrations. It is frozen. Change the schema by appending a migration to
+-- migrations in migrate.go, never by editing this file, or databases created
+-- before the edit will silently differ from new ones.
+--
 -- journal_mode, foreign_keys, and the other connection pragmas are set on the
 -- DSN in db.Open so they apply to every pooled connection.
 
@@ -53,6 +58,7 @@ CREATE TABLE IF NOT EXISTS event_runs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_event_runs_name_started ON event_runs(event_name, started_at);
+CREATE INDEX IF NOT EXISTS idx_event_runs_pay_source ON event_runs(pay_source_id);
 
 -- Arena CourseId is the paid run identity; records remain authoritative when
 -- match logs are incomplete or retained logs are replayed out of order.
@@ -246,6 +252,8 @@ CREATE TABLE IF NOT EXISTS match_decks (
   FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE,
   FOREIGN KEY(deck_version_id) REFERENCES deck_versions(id) ON DELETE SET NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_match_decks_version ON match_decks(deck_version_id);
 
 -- Exact player decklists reported by GRE when each game connects. Keeping
 -- these separate from the match-linked starting deck version preserves the
@@ -610,6 +618,18 @@ CREATE TABLE IF NOT EXISTS economy_transactions (
 
 CREATE INDEX IF NOT EXISTS idx_economy_transactions_event ON economy_transactions(event_name);
 CREATE INDEX IF NOT EXISTS idx_economy_transactions_observed ON economy_transactions(observed_at);
+CREATE INDEX IF NOT EXISTS idx_economy_transactions_run ON economy_transactions(event_run_id);
+
+-- Reparsing a replaced Player.log must not record the same inventory change
+-- twice; rows without an observation time can't be matched, so they're exempt.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_economy_transactions_observation
+ON economy_transactions (
+  observed_at,
+  change_index,
+  source,
+  COALESCE(source_id, '')
+)
+WHERE COALESCE(observed_at, '') != '';
 
 CREATE TABLE IF NOT EXISTS draft_sessions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

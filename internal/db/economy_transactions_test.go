@@ -60,104 +60,6 @@ func openEconomyTestDB(t *testing.T) (*sql.DB, *Store) {
 	}
 	return database, NewStore(database)
 }
-func TestMigrateEconomySnapshotIdentityRecoversReusedLogLines(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	database, err := Open(filepath.Join(t.TempDir(), "legacy.db"))
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { _ = database.Close() })
-
-	if _, err := database.ExecContext(ctx, `
-		CREATE TABLE ingest_state (
-			log_path TEXT PRIMARY KEY,
-			byte_offset INTEGER NOT NULL DEFAULT 0,
-			line_no INTEGER NOT NULL DEFAULT 0,
-			file_signature TEXT NOT NULL DEFAULT '',
-			updated_at TEXT NOT NULL
-		);
-		INSERT INTO ingest_state (log_path, byte_offset, line_no, file_signature, updated_at)
-		VALUES ('Player.log', 9000, 200, 'old-signature', '2026-09-09T00:00:00Z');
-
-		CREATE TABLE economy_snapshots (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			log_path TEXT NOT NULL,
-			line_no INTEGER NOT NULL,
-			observed_at TEXT,
-			sequence_id INTEGER NOT NULL DEFAULT 0,
-			gold INTEGER NOT NULL DEFAULT 0,
-			gems INTEGER NOT NULL DEFAULT 0,
-			vault_progress INTEGER NOT NULL DEFAULT 0,
-			wildcard_track_position INTEGER NOT NULL DEFAULT 0,
-			wildcard_commons INTEGER NOT NULL DEFAULT 0,
-			wildcard_uncommons INTEGER NOT NULL DEFAULT 0,
-			wildcard_rares INTEGER NOT NULL DEFAULT 0,
-			wildcard_mythics INTEGER NOT NULL DEFAULT 0,
-			custom_tokens_json TEXT NOT NULL DEFAULT '{}',
-			boosters_json TEXT NOT NULL DEFAULT '[]',
-			vouchers_json TEXT NOT NULL DEFAULT '{}',
-			changes_json TEXT NOT NULL DEFAULT '[]',
-			created_at TEXT NOT NULL,
-			UNIQUE(log_path, line_no)
-		);
-		INSERT INTO economy_snapshots (
-			log_path, line_no, observed_at, sequence_id, gems, changes_json, created_at
-		) VALUES (
-			'Player.log', 100, '2026-08-22T20:59:49Z', 34, 4340, '[]',
-			'2026-08-22T20:59:50Z'
-		);
-	`); err != nil {
-		t.Fatalf("seed legacy economy schema: %v", err)
-	}
-
-	if err := migrateEconomySnapshotIdentity(ctx, database); err != nil {
-		t.Fatalf("migrate economy snapshot identity: %v", err)
-	}
-	var offset, lineNo int64
-	if err := database.QueryRowContext(ctx, `
-		SELECT byte_offset, line_no FROM ingest_state WHERE log_path = 'Player.log'
-	`).Scan(&offset, &lineNo); err != nil {
-		t.Fatalf("read reset ingest state: %v", err)
-	}
-	if offset != 0 || lineNo != 0 {
-		t.Fatalf("ingest state = %d/%d, want replay from 0/0", offset, lineNo)
-	}
-
-	store := NewStore(database)
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("begin tx: %v", err)
-	}
-	reward := EconomySnapshotRecord{
-		ObservedAt:  "2026-09-08T23:27:39Z",
-		SequenceID:  6,
-		Gems:        4970,
-		ChangesJSON: `[{"Source":"EventReward","SourceId":"draft-run","InventoryGems":1400}]`,
-	}
-	rewardID, inserted, err := store.InsertEconomySnapshot(ctx, tx, "Player.log", 100, reward)
-	if err != nil || !inserted {
-		t.Fatalf("insert replacement-log reward: id=%d inserted=%v err=%v", rewardID, inserted, err)
-	}
-	repeatedID, inserted, err := store.InsertEconomySnapshot(ctx, tx, "Player.log", 100, reward)
-	if err != nil || inserted || repeatedID != rewardID {
-		t.Fatalf("repeat reward: id=%d inserted=%v err=%v, want existing id %d", repeatedID, inserted, err, rewardID)
-	}
-	if err := tx.Commit(); err != nil {
-		t.Fatalf("commit replacement-log reward: %v", err)
-	}
-
-	var snapshots int64
-	if err := database.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM economy_snapshots WHERE log_path = 'Player.log' AND line_no = 100
-	`).Scan(&snapshots); err != nil {
-		t.Fatalf("count reused-line snapshots: %v", err)
-	}
-	if snapshots != 2 {
-		t.Fatalf("snapshots at reused line = %d, want 2", snapshots)
-	}
-}
 
 func TestDeriveEconomyTransactionsLinksEventRuns(t *testing.T) {
 	t.Parallel()
@@ -281,15 +183,14 @@ func TestEconomyTransactionsDeduplicateRotatedLogObservations(t *testing.T) {
 
 	ctx := context.Background()
 	database, store := openEconomyTestDB(t)
-	if _, err := database.ExecContext(ctx, `DROP INDEX idx_economy_transactions_observation`); err != nil {
-		t.Fatalf("drop observation index: %v", err)
-	}
 
+	// A replaced Player.log reappears under another path with the same
+	// inventory change; only the first copy becomes a transaction.
 	tx, err := store.BeginTx(ctx)
 	if err != nil {
 		t.Fatalf("begin tx: %v", err)
 	}
-	for index, logPath := range []string{"Player.log", "Player-prev.log"} {
+	for index, logPath := range []string{"Player.log", "Player-prev.log", "Player-older.log"} {
 		snapshotID, inserted, err := store.InsertEconomySnapshot(ctx, tx, logPath, 100, EconomySnapshotRecord{
 			ObservedAt:  "2026-09-02T00:48:48Z",
 			ChangesJSON: testPayChangesJSON,
@@ -297,49 +198,26 @@ func TestEconomyTransactionsDeduplicateRotatedLogObservations(t *testing.T) {
 		if err != nil || !inserted {
 			t.Fatalf("insert snapshot %d: id=%d inserted=%v err=%v", index, snapshotID, inserted, err)
 		}
+		want := int64(0)
+		if index == 0 {
+			want = 1
+		}
 		if insertedRows, err := store.DeriveEconomyTransactions(
 			ctx, tx, snapshotID, "2026-09-02T00:48:48Z", testPayChangesJSON,
-		); err != nil || insertedRows != 1 {
-			t.Fatalf("derive snapshot %d: inserted=%d err=%v", index, insertedRows, err)
+		); err != nil || insertedRows != want {
+			t.Fatalf("derive snapshot %d: inserted=%d err=%v, want %d", index, insertedRows, err, want)
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		t.Fatalf("commit duplicate observations: %v", err)
+		t.Fatalf("commit observations: %v", err)
 	}
 
-	if err := ensureUniqueEconomyTransactionObservations(ctx, database); err != nil {
-		t.Fatalf("deduplicate observations: %v", err)
-	}
 	var transactions int64
 	if err := database.QueryRowContext(ctx, `SELECT COUNT(*) FROM economy_transactions`).Scan(&transactions); err != nil {
 		t.Fatalf("count transactions: %v", err)
 	}
 	if transactions != 1 {
-		t.Fatalf("transactions after migration = %d, want 1", transactions)
-	}
-
-	tx, err = store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("begin post-migration tx: %v", err)
-	}
-	snapshotID, inserted, err := store.InsertEconomySnapshot(ctx, tx, "Player-older.log", 100, EconomySnapshotRecord{
-		ObservedAt:  "2026-09-02T00:48:48Z",
-		ChangesJSON: testPayChangesJSON,
-	})
-	if err != nil || !inserted {
-		t.Fatalf("insert third snapshot: id=%d inserted=%v err=%v", snapshotID, inserted, err)
-	}
-	insertedRows, err := store.DeriveEconomyTransactions(
-		ctx, tx, snapshotID, "2026-09-02T00:48:48Z", testPayChangesJSON,
-	)
-	if err != nil {
-		t.Fatalf("derive third snapshot: %v", err)
-	}
-	if insertedRows != 0 {
-		t.Fatalf("third snapshot inserted %d transactions, want 0", insertedRows)
-	}
-	if err := tx.Commit(); err != nil {
-		t.Fatalf("commit third snapshot: %v", err)
+		t.Fatalf("transactions = %d, want 1", transactions)
 	}
 }
 
@@ -376,47 +254,6 @@ func TestEventRunEconomiesFallBackToJoinEntryCost(t *testing.T) {
 	}
 	if run.LinkConfidence != "none" {
 		t.Fatalf("link confidence = %q, want none", run.LinkConfidence)
-	}
-}
-
-func TestInitBackfillsEconomyTransactionsFromStoredSnapshots(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	database, store := openEconomyTestDB(t)
-
-	// Simulate a pre-ledger database: a snapshot exists with a Changes
-	// payload but no derived transactions.
-	tx, err := store.BeginTx(ctx)
-	if err != nil {
-		t.Fatalf("begin tx: %v", err)
-	}
-	if err := store.UpsertEventRunJoin(ctx, tx, "QuickDraft_FIN_20250619", "Gold", 5000, "2026-07-01T18:00:00Z"); err != nil {
-		t.Fatalf("upsert event run: %v", err)
-	}
-	if _, _, err := store.InsertEconomySnapshot(ctx, tx, "Player.log", 10, EconomySnapshotRecord{
-		ObservedAt:  "2026-07-01T18:02:00Z",
-		ChangesJSON: testPayChangesJSON,
-	}); err != nil {
-		t.Fatalf("insert snapshot: %v", err)
-	}
-	if err := tx.Commit(); err != nil {
-		t.Fatalf("commit: %v", err)
-	}
-
-	if err := Init(ctx, database); err != nil {
-		t.Fatalf("re-init db: %v", err)
-	}
-
-	transactions, err := store.ListEconomyTransactions(ctx)
-	if err != nil {
-		t.Fatalf("list transactions: %v", err)
-	}
-	if len(transactions) != 1 {
-		t.Fatalf("transactions after backfill = %d, want 1", len(transactions))
-	}
-	if transactions[0].GoldDelta != -5000 || transactions[0].EventName != "QuickDraft_FIN_20250619" {
-		t.Fatalf("backfilled transaction = %#v", transactions[0])
 	}
 }
 

@@ -10,25 +10,6 @@ import (
 	"github.com/solean/ponder/internal/model"
 )
 
-func migrateSpellCopyColumns(ctx context.Context, conn dbConn) error {
-	for _, table := range []string{"match_replay_frame_objects", "match_card_plays"} {
-		for _, column := range []string{"is_copy", "cast_confirmed"} {
-			has, err := tableHasColumn(ctx, conn, table, column)
-			if err != nil {
-				return err
-			}
-			if !has {
-				if _, err := conn.ExecContext(ctx, `ALTER TABLE `+table+` ADD COLUMN `+column+` INTEGER NOT NULL DEFAULT 0`); err != nil {
-					return fmt.Errorf("add %s.%s: %w", table, column, err)
-				}
-			}
-		}
-	}
-	// Legacy archives retain isCopy in detailsJson and cast evidence in frame
-	// annotations. RefreshMatchAnalytics reconciles those facts before deriving.
-	return invalidateAnalyticsCoverageOnce(ctx, conn, "spell_copies_backfill_v1")
-}
-
 // MarkMatchCardPlayCopy preserves the timeline but removes physical-card evidence,
 // including observations recorded before copy identity arrived.
 func (s *Store) MarkMatchCardPlayCopy(ctx context.Context, tx *sql.Tx, arenaMatchID string, gameNumber, instanceID int64, castConfirmed bool) error {

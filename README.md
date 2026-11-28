@@ -151,9 +151,9 @@ Everything is stored in `~/Library/Application Support/ponder/`:
 
 - `ponder.db` is the SQLite database with all your tracked history.
 - `config.json` holds your settings.
-- `backups/` holds a copy of `ponder.db` from just before each update that
-  changed its format. Ponder keeps the three newest. To roll back, quit Ponder
-  and copy one over `ponder.db`.
+- `backups/` holds a copy of `ponder.db` from just before the last update
+  that changed its format. To roll back, quit Ponder and copy it over
+  `ponder.db`.
 
 **Settings → Data** shows both paths and can reveal them in Finder. To back
 up, quit Ponder and copy that folder.

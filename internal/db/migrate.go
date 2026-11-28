@@ -31,8 +31,10 @@ var migrations = []migrationStep{
 // SchemaVersion is the newest database schema this build understands.
 func SchemaVersion() int { return len(migrations) }
 
-// keepBackups is how many pre-migration backups stay beside the database.
-const keepBackups = 3
+// keepBackups is how many pre-migration backups stay beside the database. One
+// is enough: an upgrade across several versions backs up once before the
+// first step, and an older backup would lose every match played since.
+const keepBackups = 1
 
 // NewerSchemaError means a newer Ponder already migrated this database. An
 // older build can't know what that migration changed, so it won't touch it.

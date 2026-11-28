@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -193,43 +195,69 @@ func TestFailedLookupIsNotRememberedAsMiss(t *testing.T) {
 	}
 }
 
-func TestSyncAllCardPreviewsFollowsPages(t *testing.T) {
+func TestSyncAllCardPreviewsReadsBulkFile(t *testing.T) {
 	ctx := context.Background()
-	failSecondPage := true
+	compact := func(card string) string {
+		var buf bytes.Buffer
+		if err := json.Compact(&buf, []byte(card)); err != nil {
+			t.Fatal(err)
+		}
+		return buf.String()
+	}
+	jsonl := strings.Join([]string{
+		compact(boltJSON),
+		compact(strings.Replace(boltJSON, `"arena_id": 101`, `"arena_id": 102`, 1)),
+		`{"name":"Not On Arena","image_uris":{"normal":"https://img/paper.jpg"}}`,
+	}, "\n") + "\n"
+	var gz bytes.Buffer
+	zw := gzip.NewWriter(&gz)
+	if _, err := zw.Write([]byte(jsonl)); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	file := gz.String()
+
+	truncate := true
+	var apiRequests []string
 	server, store, _ := newCardPreviewTestServer(t, func(req *http.Request) (int, string, error) {
-		if req.URL.Query().Get("page") == "2" {
-			if failSecondPage {
-				return http.StatusInternalServerError, "oops", nil
+		switch req.URL.Host {
+		case "api.scryfall.com":
+			apiRequests = append(apiRequests, req.URL.Path)
+			return http.StatusOK, `{"object":"bulk_data","type":"default_cards",
+				"jsonl_download_uri":"https://data.scryfall.io/default-cards/default-cards-1.jsonl.gz"}`, nil
+		case "data.scryfall.io":
+			if truncate {
+				return http.StatusOK, file[:len(file)/2], nil
 			}
-			return http.StatusOK, `{"data":[` + strings.NewReplacer(`"arena_id": 101`, `"arena_id": 102`).Replace(boltJSON) +
-				`, {"name":"Not On Arena","image_uris":{"normal":"x"}}],"has_more":false}`, nil
+			return http.StatusOK, file, nil
 		}
-		if req.URL.Query().Get("q") != "game:arena" || req.URL.Query().Get("unique") != "prints" {
-			t.Errorf("sync query = %q", req.URL.RawQuery)
-		}
-		return http.StatusOK, `{"data":[` + boltJSON + `],"has_more":true,"next_page":"https://api.scryfall.com/cards/search?q=game%3Aarena&unique=prints&page=2"}`, nil
+		t.Errorf("unexpected request %s", req.URL)
+		return http.StatusNotFound, "", nil
 	})
 
 	if err := server.syncAllCardPreviews(ctx); err == nil {
-		t.Fatal("sync with a failed page reported success")
+		t.Fatal("sync of a truncated file reported success")
 	}
 	if syncedAt, _ := store.CardPreviewsSyncedAt(ctx); !syncedAt.IsZero() {
-		t.Fatalf("interrupted sync recorded synced_at %v", syncedAt)
-	}
-	if stored, _ := store.LookupCardPreviews(ctx, []int64{101}); len(stored) != 1 {
-		t.Fatal("interrupted sync dropped the page it finished")
+		t.Fatalf("truncated sync recorded synced_at %v", syncedAt)
 	}
 
-	failSecondPage = false
+	truncate = false
+	apiRequests = nil
 	if err := server.syncAllCardPreviews(ctx); err != nil {
 		t.Fatal(err)
+	}
+	if len(apiRequests) != 1 || apiRequests[0] != "/bulk-data/default-cards" {
+		t.Fatalf("API requests = %v, want only the bulk data lookup", apiRequests)
 	}
 	stored, err := store.LookupCardPreviews(ctx, []int64{101, 102})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(stored) != 2 {
-		t.Fatalf("stored = %v, want 101 and 102", stored)
+	if len(stored) != 2 || stored[102].ImageURL != "https://img/bolt-normal.jpg?1" {
+		t.Fatalf("stored = %+v, want 101 and 102", stored)
 	}
 	if syncedAt, _ := store.CardPreviewsSyncedAt(ctx); time.Since(syncedAt) > time.Minute {
 		t.Fatalf("synced_at = %v", syncedAt)

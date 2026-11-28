@@ -933,7 +933,10 @@ func ParseAddr(raw string) (string, error) {
 const (
 	scryfallSearchURL          = "https://api.scryfall.com/cards/search"
 	scryfallSearchBatchMax     = 40
-	scryfallMinRequestInterval = 500 * time.Millisecond
+	// Scryfall allows 2 searches or collection lookups a second per IP. Half
+	// that leaves room for a second Ponder process (a dev build beside the
+	// app) sharing the address.
+	scryfallMinRequestInterval = time.Second
 	scryfallDefaultCooldown    = 60 * time.Second
 	cardNameMissRetryInterval  = 24 * time.Hour
 	mtgaRawCardDBEnvVar        = "MTGA_RAW_CARD_DB"

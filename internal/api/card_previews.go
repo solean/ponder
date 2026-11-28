@@ -1,9 +1,12 @@
 package api
 
 import (
+	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -20,9 +23,13 @@ const (
 	scryfallCollectionURL = "https://api.scryfall.com/cards/collection"
 	// scryfallCollectionMax is the most identifiers /cards/collection takes.
 	scryfallCollectionMax = 75
-	// cardPreviewSyncQuery lists every printing on Arena; ~21k cards in about
-	// 125 pages, ~13 MB gzipped.
-	cardPreviewSyncQuery = "game:arena"
+	// scryfallDefaultCardsURL describes the default_cards bulk file: every
+	// printing in English, about 80 MB gzipped, about 20k of them on Arena.
+	scryfallDefaultCardsURL = "https://api.scryfall.com/bulk-data/default-cards"
+	// cardPreviewBulkTimeout bounds downloading and storing the bulk file.
+	cardPreviewBulkTimeout = 30 * time.Minute
+	// cardPreviewBulkBatch is how many cards each write transaction stores.
+	cardPreviewBulkBatch = 500
 	// cardPreviewSyncInterval is how old the stored copy of every Arena card
 	// can get before it is downloaded again. New cards in between are fetched
 	// one batch at a time when a preview asks for them.
@@ -458,34 +465,125 @@ func (s *Server) StartCardPreviewSync(ctx context.Context) {
 	}()
 }
 
-// syncAllCardPreviews downloads every Arena printing and stores each page as
-// it arrives, so an interrupted download keeps what it got. Only a finished
-// download counts as a sync.
+// syncAllCardPreviews downloads Scryfall's default_cards bulk file and stores
+// every card with an Arena ID, a batch at a time, so an interrupted download
+// keeps what it got. Only a finished download counts as a sync.
+//
+// Scryfall requires the bulk files, not paged searches, for loading this many
+// cards: the files come from data.scryfall.io, which has no rate limit, so
+// this costs one API request.
 func (s *Server) syncAllCardPreviews(ctx context.Context) error {
 	started := time.Now()
+	downloadURL, err := s.cardPreviewBulkURL(ctx)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, cardPreviewBulkTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
+	if err != nil {
+		return fmt.Errorf("build bulk card request: %w", err)
+	}
+	req.Header.Set("User-Agent", version.UserAgent("local tracker"))
+	// s.httpClient's timeout fits API calls, not an ~80 MB download.
+	res, err := (&http.Client{Transport: s.httpClient.Transport}).Do(req)
+	if err != nil {
+		return fmt.Errorf("download bulk cards: %w", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(res.Body, 1024))
+		return fmt.Errorf("bulk cards status %d: %s", res.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	cards, err := gunzipIfCompressed(res.Body)
+	if err != nil {
+		return fmt.Errorf("read bulk cards: %w", err)
+	}
 	stored := 0
-	searchURL := fmt.Sprintf("%s?q=%s&unique=prints", scryfallSearchURL, url.QueryEscape(cardPreviewSyncQuery))
-	err := s.scryfallSearchPages(ctx, searchURL, func(cards []scryfallPreviewCard) error {
-		previews := make([]db.CardPreview, 0, len(cards))
-		for _, card := range cards {
-			if p, ok := card.preview(); ok && card.ArenaID > 0 {
-				previews = append(previews, p)
-			}
-		}
-		if err := s.store.UpsertCardPreviews(ctx, previews); err != nil {
+	batch := make([]db.CardPreview, 0, cardPreviewBulkBatch)
+	flush := func() error {
+		if err := s.store.UpsertCardPreviews(ctx, batch); err != nil {
 			return err
 		}
-		stored += len(previews)
+		stored += len(batch)
+		batch = batch[:0]
 		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("after %d cards: %w", stored, err)
+	}
+	// The file is JSON Lines; a json.Decoder reads one card per Decode.
+	decoder := json.NewDecoder(cards)
+	for {
+		var card scryfallPreviewCard
+		if err := decoder.Decode(&card); errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			return fmt.Errorf("decode bulk cards after %d stored: %w", stored, err)
+		}
+		if p, ok := card.preview(); ok && card.ArenaID > 0 {
+			batch = append(batch, p)
+			if len(batch) == cardPreviewBulkBatch {
+				if err := flush(); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if err := flush(); err != nil {
+		return err
+	}
+	if stored == 0 {
+		return errors.New("bulk card file had no Arena cards")
 	}
 	if err := s.store.SetCardPreviewsSyncedAt(ctx, time.Now()); err != nil {
 		return err
 	}
 	log.Printf("card preview sync: stored %d Arena cards in %s", stored, time.Since(started).Round(time.Second))
 	return nil
+}
+
+// cardPreviewBulkURL asks Scryfall where today's default_cards file is.
+func (s *Server) cardPreviewBulkURL(ctx context.Context) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, scryfallDefaultCardsURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("build bulk data request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", version.UserAgent("local tracker"))
+	res, err := s.doScryfallRequest(req)
+	if err != nil {
+		return "", fmt.Errorf("request bulk data: %w", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(res.Body, 1024))
+		return "", fmt.Errorf("bulk data status %d: %s", res.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var bulk struct {
+		JSONLDownloadURI string `json:"jsonl_download_uri"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&bulk); err != nil {
+		return "", fmt.Errorf("decode bulk data: %w", err)
+	}
+	if uri := strings.TrimSpace(bulk.JSONLDownloadURI); uri != "" {
+		return uri, nil
+	}
+	return "", errors.New("bulk data has no JSON Lines download")
+}
+
+// gunzipIfCompressed returns r decompressed when it starts with the gzip
+// magic bytes. Scryfall serves .jsonl.gz as application/gzip with no
+// Content-Encoding, so the transport doesn't decompress it.
+func gunzipIfCompressed(r io.Reader) (io.Reader, error) {
+	buffered := bufio.NewReaderSize(r, 64<<10)
+	magic, err := buffered.Peek(2)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	if len(magic) == 2 && magic[0] == 0x1f && magic[1] == 0x8b {
+		return gzip.NewReader(buffered)
+	}
+	return buffered, nil
 }
 
 type scryfallImageURIs struct {

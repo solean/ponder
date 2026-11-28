@@ -279,6 +279,17 @@ cd web && bun test && bun run typecheck
 Ponder is built and tested on macOS only, so the repo carries no Windows,
 Linux, or iOS build files.
 
+## License
+
+Ponder is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See [LICENSE](LICENSE).
+
+The bundled fonts and Wizards of the Coast material are not covered by that
+license. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists them with
+their own licenses and terms.
+
 ## Disclaimer
 
 Ponder is unofficial Fan Content permitted under the Wizards of the Coast Fan

@@ -14659,6 +14659,23 @@ select.settings-select {
   line-height: 1.45;
 }
 
+.settings-footnote-link {
+  color: var(--link);
+}
+
+.settings-footnote-link:hover {
+  color: var(--link-hover);
+}
+
+.settings-row-control .text-link + .text-link {
+  margin-left: 0.75rem;
+}
+
+.settings-about-version {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
 .settings-section > .settings-last-error {
   margin-bottom: 0;
 }

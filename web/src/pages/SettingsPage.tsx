@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { LoadingLabel, LoadingMessage } from "../components/LoadingMessage";
+import { AboutSection } from "../components/AboutSection";
 import { SettingRow, ToggleRow } from "../components/SettingRow";
 import { ErrorState, QueryErrorState, rejectionReason } from "../components/ErrorState";
 import { PageHeader } from "../components/PageHeader";
@@ -144,6 +145,7 @@ const sections = [
   { id: "settings-ai", label: "AI" },
   { id: "settings-appearance", label: "Appearance" },
   { id: "settings-app", label: "App and data" },
+  { id: "settings-about", label: "About" },
 ] as const;
 
 /**
@@ -1198,6 +1200,8 @@ export function SettingsPage() {
               Closing the window keeps {APP_NAME} tracking in the background. Quit fully with Cmd+Q.
             </p>
           </section>
+
+          <AboutSection id="settings-about" version={data.version} />
         </div>
       </div>
     </div>

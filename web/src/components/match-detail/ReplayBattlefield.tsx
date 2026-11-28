@@ -21,7 +21,7 @@ import {
   type BoardZoneKind,
   type ReplayTargetLookup,
 } from "../../lib/replay";
-import type { CardPreview } from "../../lib/scryfall";
+import type { CardPreview } from "../../lib/cardPreviews";
 import type {
   MatchCardPlay,
   MatchReplayFrame,

@@ -12,7 +12,7 @@ import { api } from "../lib/api";
 import { useLiveDraft } from "../lib/useLiveDraft";
 import { pct } from "../lib/format";
 import { DEFAULT_OVERLAY_SETTINGS, overlayPanelWidth, overlayShortcutLabel } from "../lib/overlaySettings";
-import { fetchCardPreview } from "../lib/scryfall";
+import { fetchCardPreview } from "../lib/cardPreviews";
 import { SEVENTEEN_LANDS_FORMAT_LABELS, SEVENTEEN_LANDS_USER_GROUP_LABELS } from "../lib/seventeenLands";
 import type { LiveDraft, LiveMatch } from "../lib/types";
 

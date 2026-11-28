@@ -29,8 +29,8 @@ import {
   type PreviewCard,
 } from "../../lib/replay";
 import { cardPreviewQueryKey } from "../../lib/replay/cardPreviewQuery";
-import type { CardPreview } from "../../lib/scryfall";
-import { fetchCardPreview } from "../../lib/scryfall";
+import type { CardPreview } from "../../lib/cardPreviews";
+import { fetchCardPreview } from "../../lib/cardPreviews";
 import type { MatchCardPlay, MatchReplayFrameObject } from "../../lib/types";
 import { ManaSymbol } from "../ManaSymbol";
 

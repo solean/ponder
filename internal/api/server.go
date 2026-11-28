@@ -41,6 +41,8 @@ type Server struct {
 	aiGenBusy             sync.Mutex
 	cardStatsMu           sync.Mutex
 	cardStats             map[string]*cardStatsEntry
+	cardPreviewMissMu     sync.Mutex
+	cardPreviewMisses     map[string]time.Time
 }
 
 func NewServer(store *db.Store, staticDir string, appState *appstate.Service) *Server {
@@ -126,6 +128,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/drafts/", s.handleDraftPicks)
 	mux.HandleFunc("/api/sets", s.handleSets)
 	mux.HandleFunc("/api/card-stats", s.handleCardStats)
+	mux.HandleFunc("/api/cards/previews", s.handleCardPreviews)
 	mux.HandleFunc("/api/ai/status", s.handleAIStatus)
 	mux.HandleFunc("/api/live", s.handleLive)
 	mux.HandleFunc("/api/live/draft", s.handleLiveDraft)

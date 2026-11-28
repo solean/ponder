@@ -1,4 +1,4 @@
-import type { CardRarity } from "../lib/scryfall";
+import type { CardRarity } from "../lib/cardPreviews";
 
 export const RARITY_ORDER: CardRarity[] = ["common", "uncommon", "rare", "mythic"];
 

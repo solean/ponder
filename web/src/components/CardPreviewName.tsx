@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { LoadingMessage } from "./LoadingMessage";
-import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
+import { fetchCardPreview, type CardPreview } from "../lib/cardPreviews";
 
 import { floatingCardPreviewPosition } from "../lib/cardPreviewPosition";
 

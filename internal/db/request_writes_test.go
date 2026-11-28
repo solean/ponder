@@ -25,6 +25,9 @@ func TestRequestWritesWaitForBackgroundWriter(t *testing.T) {
 		{"card metadata", func(ctx context.Context, s *Store) error {
 			return s.UpsertCardMetadata(ctx, map[int64]CardMetadata{1: {ColorIdentity: "G"}})
 		}, "SELECT COUNT(*) FROM card_metadata"},
+		{"card previews", func(ctx context.Context, s *Store) error {
+			return s.UpsertCardPreviews(ctx, []CardPreview{{ArenaID: 1, Name: "Forest", ImageURL: "https://img/forest.jpg"}})
+		}, "SELECT COUNT(*) FROM card_previews"},
 		{"sets", func(ctx context.Context, s *Store) error {
 			return s.UpsertSets(ctx, map[string]model.SetInfo{"tst": {Name: "Test"}})
 		}, "SELECT COUNT(*) FROM set_catalog"},

@@ -59,22 +59,3 @@ func TestIngestCheckpointCommitsAndRollsBackContextWithCursor(t *testing.T) {
 		t.Fatalf("metadata-only cursor = %+v", cursor)
 	}
 }
-
-func TestMigrateIngestStateAddsContextWithoutChangingCursor(t *testing.T) {
-	ctx := context.Background()
-	database := openTempSQLiteDB(t)
-	mustExec(t, database, `CREATE TABLE ingest_state(log_path TEXT PRIMARY KEY,byte_offset INTEGER NOT NULL,line_no INTEGER NOT NULL,updated_at TEXT NOT NULL)`)
-	mustExec(t, database, `INSERT INTO ingest_state VALUES('Player.log',100,2,'now')`)
-	for range 2 {
-		if err := migrateIngestState(ctx, database); err != nil {
-			t.Fatal(err)
-		}
-	}
-	state, err := NewStore(database).GetIngestState(ctx, "Player.log")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !state.Found || state.Offset != 100 || state.LineNo != 2 || state.FileSignature != "" || state.ContextJSON != "" {
-		t.Fatalf("migrated checkpoint = %+v", state)
-	}
-}

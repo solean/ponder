@@ -29,22 +29,6 @@ func playerNameKey(personaID string) string {
 	return appMetadataPlayerNameKey + ":" + personaID
 }
 
-func migrateArenaAccountColumns(ctx context.Context, conn dbConn) error {
-	for _, table := range personaTables {
-		exists, err := tableHasColumn(ctx, conn, table, "persona_id")
-		if err != nil {
-			return fmt.Errorf("inspect %s persona column: %w", table, err)
-		}
-		if exists {
-			continue
-		}
-		if _, err := conn.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s ADD COLUMN persona_id TEXT`, table)); err != nil {
-			return fmt.Errorf("add %s persona column: %w", table, err)
-		}
-	}
-	return nil
-}
-
 // assignSingleArenaAccount gives untagged rows to the only Arena account this
 // database has seen. That covers rows written before accounts were recorded
 // and rows that maintenance repairs recreate outside ingest. Once a second

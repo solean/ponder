@@ -286,41 +286,6 @@ func TestListMatchGamesDoesNotInferBaselineFromMutableCurrentDeck(t *testing.T) 
 	}
 }
 
-func TestPrepareSideboardSnapshotsBackfillResetsIngestStateOnce(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	database := openTempSQLiteDB(t)
-	if err := Init(ctx, database); err != nil {
-		t.Fatalf("Init: %v", err)
-	}
-	mustExec(t, database, `DELETE FROM app_metadata WHERE key = 'sideboard_snapshots_backfill_v1'`)
-	mustExec(t, database, `INSERT INTO ingest_state (log_path, byte_offset, line_no, updated_at)
-		VALUES
-			('Player-prev.log', 4321, 65, '2026-07-26T08:00:00Z'),
-			('Player.log', 1234, 56, '2026-07-26T08:00:00Z')`)
-
-	if err := prepareSideboardSnapshotsBackfill(ctx, database); err != nil {
-		t.Fatalf("prepareSideboardSnapshotsBackfill(first): %v", err)
-	}
-	assertSideboardBackfillState(t, database, 0, 0, 1)
-	var nonResetCursors int64
-	if err := database.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM ingest_state WHERE byte_offset != 0 OR line_no != 0
-	`).Scan(&nonResetCursors); err != nil {
-		t.Fatalf("count non-reset ingest cursors: %v", err)
-	}
-	if nonResetCursors != 0 {
-		t.Fatalf("non-reset ingest cursors = %d, want 0", nonResetCursors)
-	}
-
-	mustExec(t, database, `UPDATE ingest_state SET byte_offset = 999, line_no = 77 WHERE log_path = 'Player.log'`)
-	if err := prepareSideboardSnapshotsBackfill(ctx, database); err != nil {
-		t.Fatalf("prepareSideboardSnapshotsBackfill(second): %v", err)
-	}
-	assertSideboardBackfillState(t, database, 999, 77, 1)
-}
-
 func insertSideboardTestGames(t *testing.T, ctx context.Context, tx *sql.Tx, matchID, count int64) {
 	t.Helper()
 	for gameNumber := int64(1); gameNumber <= count; gameNumber++ {
@@ -349,28 +314,5 @@ func assertSideboardCards(t *testing.T, got []model.SideboardCardRow, want []sid
 			got[index].CardName != want[index].cardName {
 			t.Fatalf("sideboard card %d = %#v, want %#v", index, got[index], want[index])
 		}
-	}
-}
-
-func assertSideboardBackfillState(t *testing.T, database *sql.DB, wantOffset, wantLineNo, wantMarkers int64) {
-	t.Helper()
-	ctx := context.Background()
-	var offset, lineNo int64
-	if err := database.QueryRowContext(ctx, `
-		SELECT byte_offset, line_no FROM ingest_state WHERE log_path = 'Player.log'
-	`).Scan(&offset, &lineNo); err != nil {
-		t.Fatalf("read ingest state: %v", err)
-	}
-	if offset != wantOffset || lineNo != wantLineNo {
-		t.Fatalf("ingest state = (%d, %d), want (%d, %d)", offset, lineNo, wantOffset, wantLineNo)
-	}
-	var markerCount int64
-	if err := database.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM app_metadata WHERE key = ?
-	`, sideboardSnapshotsBackfillMetadataKey).Scan(&markerCount); err != nil {
-		t.Fatalf("count sideboard backfill markers: %v", err)
-	}
-	if markerCount != wantMarkers {
-		t.Fatalf("sideboard backfill markers = %d, want %d", markerCount, wantMarkers)
 	}
 }

@@ -1,7 +1,7 @@
 import { useQueries } from "@tanstack/react-query";
 import { useMemo } from "react";
-import type { CardPreview } from "../scryfall";
-import { fetchCardPreview } from "../scryfall";
+import type { CardPreview } from "../cardPreviews";
+import { fetchCardPreview } from "../cardPreviews";
 import type {
   GameAnalytics,
   Match,

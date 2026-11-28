@@ -17,7 +17,7 @@ import {
   type DraftPickVerdictSummary,
 } from "../lib/draftReport";
 import { pct } from "../lib/format";
-import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
+import { fetchCardPreview, type CardPreview } from "../lib/cardPreviews";
 import type { DraftPick, DraftPickCard } from "../lib/types";
 
 type PickLogView = "rows" | "tiles";

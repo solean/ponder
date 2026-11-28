@@ -128,8 +128,9 @@ func TestMigrationBacksUpBeforeChangingDatabase(t *testing.T) {
 	}
 
 	backups := backupsOf(t, path)
-	if len(backups) != 1 || !strings.HasPrefix(backups[0], "ponder-") || !strings.HasSuffix(backups[0], "-v1.db") {
-		t.Fatalf("backups = %v, want one ponder-*-v1.db", backups)
+	wantSuffix := fmt.Sprintf("-v%d.db", SchemaVersion())
+	if len(backups) != 1 || !strings.HasPrefix(backups[0], "ponder-") || !strings.HasSuffix(backups[0], wantSuffix) {
+		t.Fatalf("backups = %v, want one ponder-*%s", backups, wantSuffix)
 	}
 	backup, err := Open(filepath.Join(filepath.Dir(path), "backups", backups[0]))
 	if err != nil {
@@ -140,7 +141,7 @@ func TestMigrationBacksUpBeforeChangingDatabase(t *testing.T) {
 	if err := backup.QueryRow(`SELECT COUNT(*) FROM matches`).Scan(&matches); err != nil {
 		t.Fatal(err)
 	}
-	if matches != 1 || schemaVersionOf(t, backup) != 1 {
+	if matches != 1 || schemaVersionOf(t, backup) != SchemaVersion() {
 		t.Fatalf("backup has %d matches at version %d, want the pre-migration database", matches, schemaVersionOf(t, backup))
 	}
 }
@@ -163,8 +164,8 @@ func TestFailedMigrationKeepsPreviousVersionAndData(t *testing.T) {
 	if err := migrateTo(ctx, database, steps); err == nil {
 		t.Fatal("migrateTo succeeded, want the step's error")
 	}
-	if got := schemaVersionOf(t, database); got != 1 {
-		t.Fatalf("schema version = %d, want 1", got)
+	if got := schemaVersionOf(t, database); got != SchemaVersion() {
+		t.Fatalf("schema version = %d, want %d", got, SchemaVersion())
 	}
 	var matches int
 	if err := database.QueryRow(`SELECT COUNT(*) FROM matches`).Scan(&matches); err != nil {
@@ -286,5 +287,29 @@ func TestInitLeavesUnfinishedLegacyDatabaseUntouched(t *testing.T) {
 				t.Fatal("refused database was changed: card_name_misses was created")
 			}
 		})
+	}
+}
+
+func TestVersion1DatabaseGainsCardPreviews(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	database, _ := openMigrationTestDB(t)
+	if err := migrateTo(ctx, database, migrations[:1]); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, database, `INSERT INTO matches (arena_match_id, created_at, updated_at) VALUES ('kept-match', 'now', 'now')`)
+
+	if err := Init(ctx, database); err != nil {
+		t.Fatal(err)
+	}
+	var matches, previews int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM matches`).Scan(&matches); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.QueryRow(`SELECT COUNT(*) FROM card_previews`).Scan(&previews); err != nil {
+		t.Fatalf("card_previews missing after upgrade: %v", err)
+	}
+	if matches != 1 || previews != 0 {
+		t.Fatalf("matches = %d, previews = %d after upgrade", matches, previews)
 	}
 }

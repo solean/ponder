@@ -12,7 +12,7 @@ import {
 } from "../../lib/replay";
 import { useReplayKeyboard } from "../../lib/replay/useReplayKeyboard";
 import { useReplayPlayer } from "../../lib/replay/useReplayPlayer";
-import type { CardPreview } from "../../lib/scryfall";
+import type { CardPreview } from "../../lib/cardPreviews";
 import type { MatchCardPlay } from "../../lib/types";
 import { ErrorState } from "../ErrorState";
 import { StatusMessage } from "../StatusMessage";

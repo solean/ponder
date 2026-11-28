@@ -5,7 +5,7 @@ import { useQueries } from "@tanstack/react-query";
 import { LoadingLabel } from "./LoadingMessage";
 import { CardStatLine, CardStatsSource, type DraftCardStats } from "./CardStats";
 import { draftAlternativeCards, sortPackByRarity, type DraftPickLogPick } from "../lib/draftReport";
-import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
+import { fetchCardPreview, type CardPreview } from "../lib/cardPreviews";
 import type { DraftPickCard } from "../lib/types";
 
 function DraftPackCard({ card, picked, preview, isPending, cardStats }: {

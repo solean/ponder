@@ -7,7 +7,7 @@ import { DeckCurve } from "./DeckCurve";
 import { StatusMessage } from "./StatusMessage";
 import { api } from "../lib/api";
 import type { CurveCard } from "../lib/deckCurve";
-import { fetchCardPreview, type CardPreview } from "../lib/scryfall";
+import { fetchCardPreview, type CardPreview } from "../lib/cardPreviews";
 import type { DeckSummary, DraftPick } from "../lib/types";
 import { ErrorState, QueryErrorState, RESTART_HINT } from "./ErrorState";
 import { useQueryError } from "../lib/useQueryError";

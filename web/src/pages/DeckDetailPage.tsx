@@ -26,7 +26,7 @@ import { copyTextToClipboard } from "../lib/clipboard";
 import { deckVersionChangeTotals, deckVersionChanges, type DeckVersionChange } from "../lib/deckVersionChanges";
 import { parseEventName } from "../lib/events";
 import { formatDateTime, formatDuration, formatGameFormat } from "../lib/format";
-import { fetchCardPreview, type CardPreview, type CardRarity } from "../lib/scryfall";
+import { fetchCardPreview, type CardPreview, type CardRarity } from "../lib/cardPreviews";
 import type { DeckVersion } from "../lib/types";
 import { useEventSets } from "../lib/useEventSets";
 

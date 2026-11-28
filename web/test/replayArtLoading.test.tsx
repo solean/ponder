@@ -3,7 +3,7 @@ import { Window } from "happy-dom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import * as scryfall from "../src/lib/scryfall";
+import * as cardPreviews from "../src/lib/cardPreviews";
 import { useMatchReplayView } from "../src/lib/replay/useMatchReplayView";
 import type { MatchCardPlay, MatchReplayFrameObject } from "../src/lib/types";
 
@@ -11,8 +11,8 @@ let root: Root;
 let dom: Window;
 let client: QueryClient;
 let container: HTMLDivElement;
-let fetchPreview: ReturnType<typeof spyOn<typeof scryfall, "fetchCardPreview">>;
-let settle: (value: scryfall.CardPreview | null) => void;
+let fetchPreview: ReturnType<typeof spyOn<typeof cardPreviews, "fetchCardPreview">>;
+let settle: (value: cardPreviews.CardPreview | null) => void;
 let reject: (reason: Error) => void;
 const originals = new Map<string, PropertyDescriptor | undefined>();
 
@@ -26,7 +26,7 @@ beforeEach(() => {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  fetchPreview = spyOn(scryfall, "fetchCardPreview").mockImplementation(() => new Promise((resolve, fail) => {
+  fetchPreview = spyOn(cardPreviews, "fetchCardPreview").mockImplementation(() => new Promise((resolve, fail) => {
     settle = resolve;
     reject = fail;
   }));

@@ -38,7 +38,7 @@ import {
   sideboardChangeCardTotal,
   summarizeReplayGame,
 } from "../src/lib/replay";
-import type { CardPreview } from "../src/lib/scryfall";
+import type { CardPreview } from "../src/lib/cardPreviews";
 import type {
   MatchReplayChange,
   MatchReplayFrame,

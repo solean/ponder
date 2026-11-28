@@ -2,8 +2,8 @@ import { GameLandAnalytics } from "./GameLandAnalytics";
 import { useQueries } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { cardDisplayName, cardFallbackHref } from "../../lib/replay";
-import type { CardPreview } from "../../lib/scryfall";
-import { fetchCardPreview } from "../../lib/scryfall";
+import type { CardPreview } from "../../lib/cardPreviews";
+import { fetchCardPreview } from "../../lib/cardPreviews";
 import { arenaTurnToFullTurn } from "../../lib/turns";
 import type {
   GameAnalytics,

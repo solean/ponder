@@ -1,6 +1,6 @@
 import { parseEventName } from "./events";
 import type { DraftPick, DraftPickCard, DraftSession } from "./types";
-import type { CardRarity } from "./scryfall";
+import type { CardRarity } from "./cardPreviews";
 
 export type DraftSessionStatus =
   | "complete"

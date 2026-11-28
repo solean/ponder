@@ -11,7 +11,7 @@ import {
   timelinePlayerLabel,
   type BoardZoneKind,
 } from "../../lib/replay";
-import type { CardPreview } from "../../lib/scryfall";
+import type { CardPreview } from "../../lib/cardPreviews";
 import type { MatchCardPlay, MatchReplayFrameObject } from "../../lib/types";
 import { MatchReplayCard, MatchReplayObjectCard } from "./CardPreviews";
 import type { MatchReplayZoneDialogState } from "./types";

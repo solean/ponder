@@ -33,7 +33,7 @@ import {
 import { scrubberTurnLabel } from "../../lib/replay/scrubberLabels";
 import { useReplayKeyboard } from "../../lib/replay/useReplayKeyboard";
 import { useReplayPlayer } from "../../lib/replay/useReplayPlayer";
-import type { CardPreview } from "../../lib/scryfall";
+import type { CardPreview } from "../../lib/cardPreviews";
 import type { MatchReplayFrame, MatchReplayFrameObject } from "../../lib/types";
 import { ResultPill } from "../ResultPill";
 import { ErrorState } from "../ErrorState";

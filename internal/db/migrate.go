@@ -26,6 +26,7 @@ type migrationStep func(ctx context.Context, tx *sql.Tx) error
 // never change one that has shipped.
 var migrations = []migrationStep{
 	applyBaselineSchema, // 0 → 1: the pre-1.0 development migrations, squashed.
+	addCardPreviews,     // 1 → 2
 }
 
 // SchemaVersion is the newest database schema this build understands.
@@ -161,6 +162,32 @@ func applyNextMigration(ctx context.Context, conn *sql.Conn, steps []migrationSt
 func applyBaselineSchema(ctx context.Context, tx *sql.Tx) error {
 	if _, err := tx.ExecContext(ctx, baselineSchema); err != nil {
 		return fmt.Errorf("apply baseline schema: %w", err)
+	}
+	return nil
+}
+
+// addCardPreviews stores the Scryfall details card previews show (image links,
+// mana cost, type line, rarity, colors), so they survive restarts and work
+// offline. name_normalized is NormalizeCardPreviewName(name).
+func addCardPreviews(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, `
+		CREATE TABLE card_previews (
+		  arena_id INTEGER PRIMARY KEY,
+		  name TEXT NOT NULL,
+		  name_normalized TEXT NOT NULL,
+		  image_url TEXT NOT NULL,
+		  art_crop_url TEXT NOT NULL DEFAULT '',
+		  scryfall_url TEXT NOT NULL DEFAULT '',
+		  mana_cost TEXT NOT NULL DEFAULT '',
+		  mana_value REAL,
+		  type_line TEXT NOT NULL DEFAULT '',
+		  rarity TEXT NOT NULL DEFAULT '',
+		  colors TEXT NOT NULL DEFAULT '',
+		  updated_at TEXT NOT NULL
+		);
+		CREATE INDEX idx_card_previews_name ON card_previews(name_normalized);
+	`); err != nil {
+		return fmt.Errorf("create card_previews: %w", err)
 	}
 	return nil
 }

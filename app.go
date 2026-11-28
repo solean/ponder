@@ -307,6 +307,7 @@ func (a *App) startup() {
 	a.store = store
 	a.mu.Unlock()
 	server.StartUpdateChecker(bgCtx)
+	server.StartCardPreviewSync(bgCtx)
 	a.startOverlayMonitor(bgCtx, store)
 
 	devAddr := strings.TrimSpace(os.Getenv(devAPIEnvVar))

@@ -406,6 +406,17 @@ func (s *Service) UpdateConfig(next Config) (Status, error) {
 	return s.Status(), err
 }
 
+// Errors from ParseNow and StartLive that users can fix themselves, by stopping
+// live tracking or changing the log path. The API reports them as bad requests
+// with their message; anything else is an internal failure.
+var (
+	ErrLiveTrackingRunning = errors.New("stop live tracking before running a manual import")
+	ErrNoDefaultLogs       = errors.New("no default MTGA logs found in ~/Library/Logs/Wizards Of The Coast/MTGA (use a custom log path)")
+	ErrNoLogPath           = errors.New("no active MTGA log path configured")
+	ErrLogNotFound         = errors.New("log file not found")
+	ErrLogPathIsDirectory  = errors.New("log path is a directory")
+)
+
 func (s *Service) ParseNow(ctx context.Context, resume bool) (OperationResult, error) {
 	s.mu.RLock()
 	cfg := s.config
@@ -413,7 +424,7 @@ func (s *Service) ParseNow(ctx context.Context, resume bool) (OperationResult, e
 	s.mu.RUnlock()
 
 	if liveRunning {
-		return OperationResult{}, fmt.Errorf("stop live tracking before running a manual import")
+		return OperationResult{}, ErrLiveTrackingRunning
 	}
 
 	logPaths, err := ResolveParseLogPaths(cfg.LogPath, cfg.IncludePrev)
@@ -425,6 +436,10 @@ func (s *Service) ParseNow(ctx context.Context, resume bool) (OperationResult, e
 	parser := ingest.NewParser(s.store)
 	statsByFile := make([]model.ParseStats, 0, len(logPaths))
 	for _, logPath := range logPaths {
+		if err := checkImportLogPath(logPath); err != nil {
+			s.setLastError(err.Error())
+			return OperationResult{}, err
+		}
 		stats, err := parser.ParseFile(ctx, logPath, resume)
 		if err != nil {
 			s.setLastError(err.Error())
@@ -465,9 +480,8 @@ func (s *Service) startLive() error {
 		activeLogPath = s.defaultLogPath
 	}
 	if activeLogPath == "" {
-		err := fmt.Errorf("no active MTGA log path configured")
-		s.setLastError(err.Error())
-		return err
+		s.setLastError(ErrNoLogPath.Error())
+		return ErrNoLogPath
 	}
 	if err := validateLiveLogPath(activeLogPath); err != nil {
 		s.setLastError(err.Error())
@@ -622,7 +636,23 @@ func validateLiveLogPath(path string) error {
 		return fmt.Errorf("check active log path: %w", err)
 	}
 	if info.IsDir() {
-		return fmt.Errorf("active log path is a directory: %s", path)
+		return fmt.Errorf("%w: %s", ErrLogPathIsDirectory, path)
+	}
+	return nil
+}
+
+// checkImportLogPath reports a manual-import log that's missing or a directory
+// as the user's mistake, before the parser turns it into an internal error.
+func checkImportLogPath(path string) error {
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("%w: %s", ErrLogNotFound, path)
+	}
+	if err != nil {
+		return fmt.Errorf("check log path: %w", err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("%w: %s", ErrLogPathIsDirectory, path)
 	}
 	return nil
 }

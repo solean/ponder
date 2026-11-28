@@ -372,11 +372,32 @@ func (s *Server) handleRuntimeImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := s.appState.ParseNow(r.Context(), resume)
-	if err != nil {
+	if isLogSetupError(err) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err != nil {
+		writeInternalError(w, "import the logs", err)
+		return
+	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// isLogSetupError reports whether an import or live-tracking error is one users
+// can fix, by stopping live tracking or changing the log path.
+func isLogSetupError(err error) bool {
+	for _, target := range []error{
+		appstate.ErrLiveTrackingRunning,
+		appstate.ErrNoDefaultLogs,
+		appstate.ErrNoLogPath,
+		appstate.ErrLogNotFound,
+		appstate.ErrLogPathIsDirectory,
+	} {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) handleRuntimeLiveStart(w http.ResponseWriter, r *http.Request) {
@@ -390,8 +411,12 @@ func (s *Server) handleRuntimeLiveStart(w http.ResponseWriter, r *http.Request) 
 	}
 
 	status, err := s.appState.StartLive()
-	if err != nil {
+	if isLogSetupError(err) {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err != nil {
+		writeInternalError(w, "start live tracking", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, status)

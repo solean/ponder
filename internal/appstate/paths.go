@@ -52,9 +52,7 @@ func ResolveParseLogPaths(explicitPath string, includePrev bool) ([]string, erro
 	}
 
 	if len(found) == 0 {
-		return nil, fmt.Errorf(
-			"no default MTGA logs found in ~/Library/Logs/Wizards Of The Coast/MTGA (use a custom log path)",
-		)
+		return nil, ErrNoDefaultLogs
 	}
 
 	return found, nil

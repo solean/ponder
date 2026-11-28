@@ -12242,9 +12242,9 @@ select option {
 /* ── Deck mana curve ───────────────────────
    One block per card, stacked by mana value. Blocks show card type (accent
    solid = creature, accent outline = everything else) or card color. */
-.deck-curve {
-  --deck-curve-block: 0.8rem;
-  --deck-curve-gap: 3px;
+.mana-curve {
+  --mana-curve-block: 0.8rem;
+  --mana-curve-gap: 3px;
   display: grid;
   gap: 1rem;
   padding: 0.95rem 1rem 1rem;
@@ -12253,7 +12253,7 @@ select option {
   background: var(--surface-faint);
 }
 
-.deck-curve-head {
+.mana-curve-head {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
@@ -12261,35 +12261,35 @@ select option {
   gap: 0.6rem 1rem;
 }
 
-.deck-curve-head h4 {
+.mana-curve-head h4 {
   margin: 0;
   font-family: var(--font-display);
   font-size: var(--text-lg);
   font-weight: 600;
 }
 
-.deck-curve-head p {
+.mana-curve-head p {
   margin: 0.2rem 0 0;
   color: var(--muted-strong);
   font-size: var(--text-sm);
 }
 
 /* A narrow curve on the left, the selected cost's cards beside it. */
-.deck-curve-body {
+.mana-curve-body {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 1.1rem 1.5rem;
 }
 
-.deck-curve-chart {
+.mana-curve-chart {
   display: grid;
   flex: 0 1 22rem;
   gap: 0.5rem;
   min-width: 0;
 }
 
-.deck-curve-columns {
+.mana-curve-columns {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   align-items: end;
@@ -12297,7 +12297,7 @@ select option {
 }
 
 /* appearance: none keeps WebKit from painting its native button face. */
-.deck-curve-column {
+.mana-curve-column {
   appearance: none;
   -webkit-appearance: none;
   display: flex;
@@ -12315,21 +12315,21 @@ select option {
   touch-action: manipulation;
 }
 
-.deck-curve-column:hover,
-.deck-curve-column.is-selected {
+.mana-curve-column:hover,
+.mana-curve-column.is-selected {
   background: var(--accent-soft);
 }
 
-.deck-curve-column.is-selected {
+.mana-curve-column.is-selected {
   box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 
-.deck-curve-column:focus-visible {
+.mana-curve-column:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.deck-curve-count {
+.mana-curve-count {
   min-height: 1.2em;
   color: var(--text-soft);
   font-family: var(--font-mono);
@@ -12338,60 +12338,60 @@ select option {
   font-weight: 600;
 }
 
-.deck-curve-stack {
+.mana-curve-stack {
   display: flex;
   flex-direction: column-reverse;
-  gap: var(--deck-curve-gap);
+  gap: var(--mana-curve-gap);
   width: 100%;
   max-width: 2.5rem;
-  height: calc(var(--deck-curve-rows, 6) * (var(--deck-curve-block) + var(--deck-curve-gap)));
+  height: calc(var(--mana-curve-rows, 6) * (var(--mana-curve-block) + var(--mana-curve-gap)));
   padding-bottom: 3px;
   border-bottom: 2px solid var(--line-strong);
 }
 
-.deck-curve-label {
+.mana-curve-label {
   color: var(--muted-strong);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
 }
 
-.deck-curve-column.is-selected .deck-curve-label {
+.mana-curve-column.is-selected .mana-curve-label {
   color: var(--accent);
   font-weight: 600;
 }
 
-:root[data-theme="light"] .deck-curve-column.is-selected .deck-curve-label {
+:root[data-theme="light"] .mana-curve-column.is-selected .mana-curve-label {
   color: var(--accent-strong);
 }
 
-.deck-curve-block {
+.mana-curve-block {
   display: block;
   flex: none;
-  height: var(--deck-curve-block);
+  height: var(--mana-curve-block);
   border-radius: 3px;
 }
 
-.deck-curve-block--creature {
+.mana-curve-block--creature {
   background: var(--accent);
   box-shadow: inset 0 0 0 1.5px var(--accent-strong);
 }
 
-.deck-curve-block--spell {
+.mana-curve-block--spell {
   background: var(--accent-soft);
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
 /* Card colors read the same in every theme; borders keep the light and dark
    blocks visible on either background. */
-.deck-curve-block--color-w { background: #ede3bf; box-shadow: inset 0 0 0 1px #a8955e; }
-.deck-curve-block--color-u { background: #3e78b8; box-shadow: inset 0 0 0 1px #2a5d96; }
-.deck-curve-block--color-b { background: #3a3330; box-shadow: inset 0 0 0 1px #8a7f78; }
-.deck-curve-block--color-r { background: #c8432b; box-shadow: inset 0 0 0 1px #9c3220; }
-.deck-curve-block--color-g { background: #2e7d4f; box-shadow: inset 0 0 0 1px #4f9a6d; }
-.deck-curve-block--color-m { background: #d4ae45; box-shadow: inset 0 0 0 1px #9c7c22; }
-.deck-curve-block--color-c { background: #c9c1b6; box-shadow: inset 0 0 0 1px #8f867a; }
+.mana-curve-block--color-w { background: #ede3bf; box-shadow: inset 0 0 0 1px #a8955e; }
+.mana-curve-block--color-u { background: #3e78b8; box-shadow: inset 0 0 0 1px #2a5d96; }
+.mana-curve-block--color-b { background: #3a3330; box-shadow: inset 0 0 0 1px #8a7f78; }
+.mana-curve-block--color-r { background: #c8432b; box-shadow: inset 0 0 0 1px #9c3220; }
+.mana-curve-block--color-g { background: #2e7d4f; box-shadow: inset 0 0 0 1px #4f9a6d; }
+.mana-curve-block--color-m { background: #d4ae45; box-shadow: inset 0 0 0 1px #9c7c22; }
+.mana-curve-block--color-c { background: #c9c1b6; box-shadow: inset 0 0 0 1px #8f867a; }
 
-.deck-curve-legend {
+.mana-curve-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem 1rem;
@@ -12402,20 +12402,20 @@ select option {
   font-size: var(--text-xs);
 }
 
-.deck-curve-legend li {
+.mana-curve-legend li {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
 }
 
-.deck-curve-legend .deck-curve-block {
+.mana-curve-legend .mana-curve-block {
   width: 0.9rem;
   height: 0.65rem;
   border-radius: 2px;
 }
 
 /* Headline numbers in one strip under the title. */
-.deck-curve-stats {
+.mana-curve-stats {
   display: flex;
   flex-wrap: wrap;
   margin: 0;
@@ -12423,7 +12423,7 @@ select option {
   border-block: 1px solid var(--line);
 }
 
-.deck-curve-stat {
+.mana-curve-stat {
   display: flex;
   flex: 1 1 9rem;
   flex-direction: column;
@@ -12435,12 +12435,12 @@ select option {
   box-shadow: -1px 0 0 var(--line), 0 -1px 0 var(--line);
 }
 
-.deck-curve-stat dt {
+.mana-curve-stat dt {
   color: var(--muted-strong);
   font-size: var(--text-xs);
 }
 
-.deck-curve-stat dd {
+.mana-curve-stat dd {
   margin: 0;
   white-space: nowrap;
   color: var(--text-soft);
@@ -12449,36 +12449,36 @@ select option {
   font-weight: 600;
 }
 
-.deck-curve-stat--split dd {
+.mana-curve-stat--split dd {
   display: flex;
   align-items: center;
   gap: 0.6rem;
 }
 
-.deck-curve-colors {
+.mana-curve-colors {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem 0.7rem;
 }
 
-.deck-curve-color {
+.mana-curve-color {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
   font-variant-numeric: tabular-nums;
 }
 
-.deck-curve-color .mana-symbol-icon {
+.mana-curve-color .mana-symbol-icon {
   width: 0.95rem;
   height: 0.95rem;
 }
 
-.deck-curve-stat-divider {
+.mana-curve-stat-divider {
   color: var(--muted);
   font-weight: 400;
 }
 
-.deck-curve-split {
+.mana-curve-split {
   display: flex;
   flex: 1;
   min-width: 2.5rem;
@@ -12489,12 +12489,12 @@ select option {
   box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 
-.deck-curve-split span {
+.mana-curve-split span {
   display: block;
   background: var(--accent);
 }
 
-.deck-curve-detail {
+.mana-curve-detail {
   display: grid;
   flex: 1 1 22rem;
   align-content: start;
@@ -12504,7 +12504,7 @@ select option {
   border-left: 1px solid var(--line);
 }
 
-.deck-curve-detail-head {
+.mana-curve-detail-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -12512,26 +12512,26 @@ select option {
   gap: 0.25rem 0.8rem;
 }
 
-.deck-curve-detail-head span {
+.mana-curve-detail-head span {
   color: var(--muted-strong);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
 
-.deck-curve-detail h5 {
+.mana-curve-detail h5 {
   margin: 0;
   color: var(--text-soft);
   font-size: var(--text-sm);
   font-weight: 600;
 }
 
-.deck-curve-empty {
+.mana-curve-empty {
   margin: 0;
   color: var(--muted-strong);
   font-size: var(--text-sm);
 }
 
-.deck-curve-cards {
+.mana-curve-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
   gap: 0.4rem 0.5rem;
@@ -12540,7 +12540,7 @@ select option {
   list-style: none;
 }
 
-.deck-curve-cards li {
+.mana-curve-cards li {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -12550,41 +12550,41 @@ select option {
   border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
 }
 
-.deck-curve-pips {
+.mana-curve-pips {
   display: inline-flex;
   flex: none;
   gap: 0.12rem;
 }
 
-.deck-curve-pips .mana-symbol-icon {
+.mana-curve-pips .mana-symbol-icon {
   width: 0.8rem;
   height: 0.8rem;
 }
 
-.deck-curve-cards .card-preview-anchor {
+.mana-curve-cards .card-preview-anchor {
   display: flex;
   flex: 1;
   min-width: 0;
 }
 
-.deck-curve-cards .card-preview-trigger {
+.mana-curve-cards .card-preview-trigger {
   min-width: 0;
   color: var(--text-soft);
 }
 
-.deck-curve-card-name {
+.mana-curve-card-name {
   font-size: var(--text-sm);
   font-weight: 600;
 }
 
-.deck-curve-copies {
+.mana-curve-copies {
   flex: none;
   color: var(--muted-strong);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
 }
 
-.deck-curve-type {
+.mana-curve-type {
   flex: none;
   padding: 0.05rem 0.4rem;
   border-radius: 3px;
@@ -12595,24 +12595,24 @@ select option {
   font-weight: 600;
 }
 
-.deck-curve-type.is-creature {
+.mana-curve-type.is-creature {
   background: var(--accent-soft);
   box-shadow: none;
   color: var(--accent);
 }
 
-:root[data-theme="light"] .deck-curve-type.is-creature {
+:root[data-theme="light"] .mana-curve-type.is-creature {
   color: var(--accent-strong);
 }
 
 /* Once the card list wraps under the curve, its divider moves to the top. */
 @media (max-width: 900px) {
-  .deck-curve-chart {
+  .mana-curve-chart {
     flex-basis: 100%;
     max-width: 26rem;
   }
 
-  .deck-curve-detail {
+  .mana-curve-detail {
     padding-top: 0.9rem;
     padding-left: 0;
     border-top: 1px solid var(--line);
@@ -12621,15 +12621,15 @@ select option {
 }
 
 @media (max-width: 640px) {
-  .deck-curve {
+  .mana-curve {
     padding: 0.8rem 0.75rem 0.85rem;
   }
 
-  .deck-curve-columns {
+  .mana-curve-columns {
     gap: 0.15rem;
   }
 
-  .deck-curve-column {
+  .mana-curve-column {
     padding-inline: 0.15rem;
   }
 }

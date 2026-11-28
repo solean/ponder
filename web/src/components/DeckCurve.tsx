@@ -32,8 +32,8 @@ function cardsLabel(count: number): string {
 
 function blockClass(entry: CurveEntry, mode: CurveMode): string {
   return mode === "type"
-    ? `deck-curve-block deck-curve-block--${entry.creature ? "creature" : "spell"}`
-    : `deck-curve-block deck-curve-block--color-${entry.colorKey.toLowerCase()}`;
+    ? `mana-curve-block mana-curve-block--${entry.creature ? "creature" : "spell"}`
+    : `mana-curve-block mana-curve-block--color-${entry.colorKey.toLowerCase()}`;
 }
 
 function orderedForMode(cards: CurveEntry[], mode: CurveMode): CurveEntry[] {
@@ -65,8 +65,8 @@ export function DeckCurve({ title, cards }: { title: string; cards: CurveCard[] 
   }
 
   return (
-    <section className="deck-curve" aria-labelledby={headingID} style={{ "--deck-curve-rows": rows } as CSSProperties}>
-      <div className="deck-curve-head">
+    <section className="mana-curve" aria-labelledby={headingID} style={{ "--mana-curve-rows": rows } as CSSProperties}>
+      <div className="mana-curve-head">
         <div>
           <h4 id={headingID}>{title}</h4>
           <p>
@@ -89,17 +89,17 @@ export function DeckCurve({ title, cards }: { title: string; cards: CurveCard[] 
         </div>
       </div>
 
-      <dl className="deck-curve-stats">
-        <div className="deck-curve-stat">
+      <dl className="mana-curve-stats">
+        <div className="mana-curve-stat">
           <dt>Average mana value</dt>
           <dd>{curve.averageManaValue == null ? "—" : curve.averageManaValue.toFixed(1)}</dd>
         </div>
         {curve.colorCounts.length > 0 ? (
-          <div className="deck-curve-stat">
+          <div className="mana-curve-stat">
             <dt>Colors</dt>
-            <dd className="deck-curve-colors">
+            <dd className="mana-curve-colors">
               {curve.colorCounts.map(({ color, count }) => (
-                <span key={color} className="deck-curve-color" role="img" aria-label={`${COLOR_NAMES[color]}: ${count}`}>
+                <span key={color} className="mana-curve-color" role="img" aria-label={`${COLOR_NAMES[color]}: ${count}`}>
                   <ManaSymbol token={color} />
                   <span aria-hidden="true">{count}</span>
                 </span>
@@ -107,18 +107,18 @@ export function DeckCurve({ title, cards }: { title: string; cards: CurveCard[] 
             </dd>
           </div>
         ) : null}
-        <div className="deck-curve-stat deck-curve-stat--split">
+        <div className="mana-curve-stat mana-curve-stat--split">
           <dt>Creatures / non-creature</dt>
           <dd>
             <span>
-              {curve.creatureCount} <span className="deck-curve-stat-divider">/</span> {nonCreatureCount}
+              {curve.creatureCount} <span className="mana-curve-stat-divider">/</span> {nonCreatureCount}
             </span>
-            <span className="deck-curve-split" aria-hidden="true">
+            <span className="mana-curve-split" aria-hidden="true">
               <span style={{ width: `${creatureShare}%` }} />
             </span>
           </dd>
         </div>
-        <div className="deck-curve-stat">
+        <div className="mana-curve-stat">
           <dt>Most common cost</dt>
           <dd>
             {curve.peakBucket == null
@@ -126,15 +126,15 @@ export function DeckCurve({ title, cards }: { title: string; cards: CurveCard[] 
               : `${curveBucketLabel(curve.peakBucket)} mana · ${curve.buckets[curve.peakBucket].count}`}
           </dd>
         </div>
-        <div className="deck-curve-stat">
+        <div className="mana-curve-stat">
           <dt>Top end (5+)</dt>
           <dd>{cardsLabel(curve.topEndCount)}</dd>
         </div>
       </dl>
 
-      <div className="deck-curve-body">
-        <div className="deck-curve-chart">
-          <div className="deck-curve-columns" role="group" aria-label="Mana values">
+      <div className="mana-curve-body">
+        <div className="mana-curve-chart">
+          <div className="mana-curve-columns" role="group" aria-label="Mana values">
             {curve.buckets.map((bucket) => {
               const label = curveBucketLabel(bucket.bucket);
               const isSelected = bucket.bucket === selected;
@@ -142,34 +142,34 @@ export function DeckCurve({ title, cards }: { title: string; cards: CurveCard[] 
                 <button
                   key={bucket.bucket}
                   type="button"
-                  className={`deck-curve-column${isSelected ? " is-selected" : ""}`}
+                  className={`mana-curve-column${isSelected ? " is-selected" : ""}`}
                   aria-pressed={isSelected}
                   aria-label={`${label} mana: ${cardsLabel(bucket.count)}, ${bucket.creatureCount} creatures, ${bucket.count - bucket.creatureCount} non-creature`}
                   onClick={() => setSelectedBucket(bucket.bucket)}
                 >
-                  <span className="deck-curve-count">{bucket.count > 0 ? bucket.count : ""}</span>
-                  <span className="deck-curve-stack" aria-hidden="true">
+                  <span className="mana-curve-count">{bucket.count > 0 ? bucket.count : ""}</span>
+                  <span className="mana-curve-stack" aria-hidden="true">
                     {orderedForMode(bucket.cards, mode).flatMap((card) =>
                       Array.from({ length: card.copies }, (_, copy) => (
                         <span key={`${card.cardId}-${copy}`} className={blockClass(card, mode)} />
                       )),
                     )}
                   </span>
-                  <span className="deck-curve-label">{label}</span>
+                  <span className="mana-curve-label">{label}</span>
                 </button>
               );
             })}
           </div>
-          <ul className="deck-curve-legend" aria-label="Legend">
+          <ul className="mana-curve-legend" aria-label="Legend">
             {mode === "type" ? (
               <>
-                <li><span className="deck-curve-block deck-curve-block--creature" />Creature</li>
-                <li><span className="deck-curve-block deck-curve-block--spell" />Non-creature</li>
+                <li><span className="mana-curve-block mana-curve-block--creature" />Creature</li>
+                <li><span className="mana-curve-block mana-curve-block--spell" />Non-creature</li>
               </>
             ) : (
               usedColorKeys.map((key) => (
                 <li key={key}>
-                  <span className={`deck-curve-block deck-curve-block--color-${key.toLowerCase()}`} />
+                  <span className={`mana-curve-block mana-curve-block--color-${key.toLowerCase()}`} />
                   {COLOR_KEY_NAMES[key]}
                 </li>
               ))
@@ -177,8 +177,8 @@ export function DeckCurve({ title, cards }: { title: string; cards: CurveCard[] 
           </ul>
         </div>
 
-        <div className="deck-curve-detail" aria-live="polite">
-          <div className="deck-curve-detail-head">
+        <div className="mana-curve-detail" aria-live="polite">
+          <div className="mana-curve-detail-head">
             <h5>
               {curveBucketLabel(selected)} mana <span aria-hidden="true">·</span> {cardsLabel(selectedEntry.count)}
             </h5>
@@ -190,15 +190,15 @@ export function DeckCurve({ title, cards }: { title: string; cards: CurveCard[] 
             ) : null}
           </div>
           {selectedEntry.cards.length === 0 ? (
-            <p className="deck-curve-empty">No cards at this cost.</p>
+            <p className="mana-curve-empty">No cards at this cost.</p>
           ) : (
-            <ul className="deck-curve-cards">
+            <ul className="mana-curve-cards">
               {selectedEntry.cards.map((card) => {
                 const colors = (card.colors ?? []).filter((color) => COLOR_NAMES[color]);
                 return (
                   <li key={card.cardId}>
                     {colors.length > 0 ? (
-                      <span className="deck-curve-pips" role="img" aria-label={colors.map((color) => COLOR_NAMES[color]).join(" and ")}>
+                      <span className="mana-curve-pips" role="img" aria-label={colors.map((color) => COLOR_NAMES[color]).join(" and ")}>
                         {colors.map((color) => <ManaSymbol key={color} token={color} />)}
                       </span>
                     ) : null}
@@ -206,10 +206,10 @@ export function DeckCurve({ title, cards }: { title: string; cards: CurveCard[] 
                       cardId={card.cardId}
                       cardName={card.name}
                       inline
-                      label={<span className="deck-curve-card-name">{card.name}</span>}
+                      label={<span className="mana-curve-card-name">{card.name}</span>}
                     />
-                    {card.copies > 1 ? <span className="deck-curve-copies">×{card.copies}</span> : null}
-                    <span className={`deck-curve-type${card.creature ? " is-creature" : ""}`}>{card.primaryType}</span>
+                    {card.copies > 1 ? <span className="mana-curve-copies">×{card.copies}</span> : null}
+                    <span className={`mana-curve-type${card.creature ? " is-creature" : ""}`}>{card.primaryType}</span>
                   </li>
                 );
               })}
